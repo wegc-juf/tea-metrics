@@ -81,7 +81,7 @@ def calc_tea_indicators(opts):
     # calculate decadal indicators and amplification factors
     if opts.decadal or opts.decadal_only or opts.recalc_decadal:
         if 'agr' in opts:
-            tea = TEAAgr()
+            tea = TEAAgr(mask=mask)
         else:
             tea = TEAIndicators()
 
@@ -159,7 +159,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
         # TODO: use this also for non-AGR and test
         if 'agr' in opts:
             data, mask, threshold = _reduce_region(opts, data, mask, threshold)
-        
+
         if opts.primary_threshold is not None:
             logger.info(f'Applying primary threshold of {opts.primary_threshold} to input data')
             if opts.low_extreme:
@@ -542,7 +542,7 @@ def _getopts():
                         action='version',
                         version=TEA_VERSION,
                         help='show version and exit')
-    
+
     myopts = parser.parse_args()
 
     return myopts
@@ -607,14 +607,24 @@ def _calc_agr_mean_and_spread(opts, tea):
     Returns:
 
     """
+    crop_to_shp = False
+    agr_lat_range = None
+    agr_lon_range = None
+
     if opts.agr_range is not None:
         agr_lat_range = opts.agr_range[:2]
         agr_lon_range = opts.agr_range[-2:]
-    else:
-        agr_lat_range = None
-        agr_lon_range = None
+    elif opts.agr != opts.region:
+        # use region shape for AGR calculation
+        # load mask for the specified region
+        agr_opts = deepcopy(opts)
+        agr_opts.region = opts.agr
+        mask_file = _load_mask_file(agr_opts)
+        tea.mask = mask_file
+        _load_or_generate_gr_grid(agr_opts, tea)
+        crop_to_shp = True
 
-    tea.calc_agr_vars(lat_range=agr_lat_range, lon_range=agr_lon_range, spreads=opts.spreads)
+    tea.calc_agr_vars(lat_range=agr_lat_range, lon_range=agr_lon_range, spreads=opts.spreads, crop_to_shp=crop_to_shp)
 
     # save results
     outpath_decadal = get_decadal_outpath(opts, opts.agr)
@@ -661,10 +671,8 @@ def _load_gr_grid_static(opts):
         gr_grid_areas = gr_grid_areas.area_grid
     except FileNotFoundError:
         if opts.decadal_only:
-            # TODO: make AGR code work without area grid (assuming all grid cells have same area)
-            raise FileNotFoundError(
-                f'No GR area grid found at {gr_grid_areas_file}. GR area grid is needed for '
-                f'AGR calculations.')
+            logger.info(
+                f'No GR area grid found at {gr_grid_areas_file}. Trying to generate one')
         gr_grid_areas = None
     return gr_grid_mask, gr_grid_areas
 
@@ -686,7 +694,7 @@ def run():
 
     # load CFG parameters
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
-    
+
     # download example file if specified in config
     if 'example' in opts.input_data_path:
         from .TEA_example import dl_example_file

@@ -51,7 +51,7 @@ class TEAIndicators:
             else:
                 raise ValueError("Either input_data grid or mask must be provided for using a fixed threshold!")
         self.threshold_grid = threshold
-        
+
         # set default x and y dim names
         self.xdim = 'lon'
         self.ydim = 'lat'
@@ -59,7 +59,7 @@ class TEAIndicators:
         self.mask = mask
         if mask is not None:
             self._find_dim_names(data=mask)
-        
+
         self.apply_mask = apply_mask
 
         self.use_dask = use_dask
@@ -73,11 +73,18 @@ class TEAIndicators:
                 self.gridded = True
             else:
                 self.gridded = False
+        elif mask is not None:
+            if mask.ndim > 1:
+                self.gridded = True
+            else:
+                self.gridded = False
 
         if area_grid is None:
             if input_data is not None and self.gridded:
                 self._create_area_grid(input_data)
-            else:
+            elif mask is not None and self.gridded:
+                self._create_area_grid(mask)
+            elif self.gridded is not None and not self.gridded:
                 self.area_grid = 1
         else:
             self.area_grid = area_grid
@@ -96,7 +103,7 @@ class TEAIndicators:
 
         self._calc_grid = True
         self._calc_gr = True
-        
+
         if input_data is not None:
             if self.threshold_grid is None:
                 raise ValueError("Threshold grid must be set together with input data")
@@ -1275,9 +1282,7 @@ class TEAIndicators:
         self._calc_decadal_compound_vars()
 
         # backup self.decadal_results.ED
-        self._decadal_ED = xr.Dataset(
-            {var: self.decadal_results[var] for var in self.decadal_results.data_vars if
-             'ED' in var})
+        self._backup_decadal_ED()
 
         # apply minimum duration to decadal results
         if min_duration_avg > 0:
@@ -1295,6 +1300,11 @@ class TEAIndicators:
             del self.ctp_results
             del self._CTP_resample_mean
             del self._CTP_resample_sum
+
+    def _backup_decadal_ED(self):
+        self._decadal_ED = xr.Dataset(
+            {var: self.decadal_results[var] for var in self.decadal_results.data_vars if
+             'ED' in var})
 
     def save_decadal_results(self, filepath):
         """
@@ -1315,6 +1325,7 @@ class TEAIndicators:
         self.decadal_results = xr.open_dataset(filepath)
         if 'CTP' in self.decadal_results.attrs:
             self.CTP = self.decadal_results.attrs['CTP']
+        self._backup_decadal_ED()
 
     def _calc_decadal_mean(self, decadal_window):
         """

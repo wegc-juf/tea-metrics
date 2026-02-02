@@ -229,7 +229,7 @@ class TEAAgr(TEAIndicators):
         """
         if lats is None:
             lats, lons = self._get_lats_lons()
-        
+
         valid_cells_found = False
         for ilat in trange(len(lats), desc='Processing AGR cells'):
             lat = lats[ilat]
@@ -237,6 +237,31 @@ class TEAAgr(TEAIndicators):
         if not valid_cells_found:
             logger.error('No valid cells found for annual CTP calculation. Try to decrease the land_frac_min '
                          'parameter or check the region definition. ')
+
+    def _crop_to_shp(self):
+        """
+        crop GeoRegion grid data to spatial extent of AGR shape
+
+        Returns:
+
+        """
+        self.gr_grid_areas = self.gr_grid_areas.where(self.gr_grid_mask > 0)
+        self._ref_mean = self._ref_mean.where(self.gr_grid_mask > 0)
+        self.decadal_results = self.decadal_results.where(self.gr_grid_mask > 0)
+        self.amplification_factors = self.amplification_factors.where(self.gr_grid_mask > 0)
+        self._crop_to_gr_mask_extents()
+
+    def _crop_to_gr_mask_extents(self):
+        """
+        crop GeoRegion grid data to spatial extent of aggregated GeoRegion mask
+
+        Returns:
+
+        """
+        mask_tmp = self.mask
+        self.mask = self.gr_grid_mask
+        self._crop_to_mask_extents()
+        self.mask = mask_tmp
 
     def _crop_to_rect(self, lat_range, lon_range):
         """
@@ -341,7 +366,7 @@ class TEAAgr(TEAIndicators):
         # find index of wgts_cumsum that is closest to 0.05 (but smaller or equal than 0.05)
         try:
             p005_index = np.nanargmin(wgts_diff_005)
-            if wgts_cumsum[p005_index] > 0.05:
+            if wgts_cumsum[p005_index] > 0.05 and p005_index > 0:
                 while wgts_cumsum[p005_index] > 0.05:
                     p005_index -= 1
             pval005 = avals_ordered[p005_index]
@@ -358,7 +383,7 @@ class TEAAgr(TEAIndicators):
             pval095 = np.nan
         return pval005, pval095
 
-    def calc_agr_vars(self, lat_range=None, lon_range=None, spreads=True):
+    def calc_agr_vars(self, lat_range=None, lon_range=None, spreads=True, crop_to_shp=False):
         """
         calculate AGR variables
 
@@ -366,10 +391,13 @@ class TEAAgr(TEAIndicators):
             lat_range: Latitude range (min, max). Default: Full region
             lon_range: Longitude range (min, max). Default: Full region
             spreads: if True, calculate spreads and percentiles for AGR variables
+            crop_to_shp: if True, crop data to shape of aggregated GeoRegion (default: False)
         """
         # filter data to spatial extent of aggregated GeoRegion
         if lat_range is not None or lon_range is not None:
             self._crop_to_rect(lat_range=lat_range, lon_range=lon_range)
+        elif crop_to_shp:
+            self._crop_to_shp()
 
         # drop old AGR values and spreads
         self._drop_agr_values_and_spreads()
@@ -645,7 +673,7 @@ class TEAAgr(TEAIndicators):
             tea_sub = self.select_sub_gr(lat=lat, lon=lon)
             if tea_sub is None:
                 continue
-                
+
             valid_cells_found = True
 
             # calculate daily basis variables

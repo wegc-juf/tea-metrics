@@ -62,7 +62,7 @@ def _get_default_opts(fname, opts):
     """
     if 'precip' not in opts:
         opts.precip = False
-    
+
     # GeoRegion options
     if 'region' not in opts:
         opts.region = 'AUT'
@@ -91,8 +91,7 @@ def _get_default_opts(fname, opts):
                 opts.agr_range = None
                 warnings.warn(f'agr_range not set for {opts.agr}, full {opts.region} will be used.')
             else:
-                raise ValueError(f'Unknown AGR {opts.agr}. '
-                                 f'Please set agr_range manually in options.')
+                opts.agr_range = None
 
     # Parameter options
     if 'parameter' not in opts:
@@ -134,7 +133,7 @@ def _get_default_opts(fname, opts):
         opts.perc_period = 'annual'
     if 'cc_period' not in opts:
         opts.cc_period = '2010-2024'
-    
+
     # paths
     if 'statpath' in opts and 'maskpath' not in opts:
         opts.maskpath = opts.statpath
@@ -143,11 +142,11 @@ def _get_default_opts(fname, opts):
     if 'input_data_path' not in opts:
         if 'data_path' in opts:
             opts.input_data_path = opts.data_path
-    
+
     # general options
     if 'use_dask' not in opts:
         opts.use_dask = False
-    
+
     # calc_TEA.py options
     if fname == 'calc_TEA':
         if 'gr_type' not in opts:
@@ -203,15 +202,15 @@ def _get_default_opts(fname, opts):
                 raise ValueError(f'Unknown dataset {opts.dataset}. Please set xy_name manually in options.')
         if 'altitude_threshold' not in opts:
             opts.altitude_threshold = 1500
-    
+
     # regrid_SPARTACUS_to_WEGNext.py options
     if fname == 'regrid_SPARTACUS_to_WEGNext':
         if 'orography' not in opts:
             opts.orography = False
-    
+
     if 'primary_threshold' not in opts:
         opts.primary_threshold = None
-    
+
     return opts
 
 
@@ -222,7 +221,7 @@ def check_type(key, value):
     types = {
         # input data
         'dataset': str,
-        
+
         # GeoRegion
         'region': str,
         'station': str,
@@ -231,7 +230,7 @@ def check_type(key, value):
         'agr_range': str,  # comma-separated string of floats
         'grg_grid_spacing': float,
         'land_frac_min': float,
-        
+
         # Parameters
         'parameter': str,
         'precip': bool,
@@ -243,7 +242,7 @@ def check_type(key, value):
         'low_extreme': bool,
         'min_exceedance_area': float,
         'min_duration': float,
-        
+
         # time parameters
         'start': int,
         'end': int,
@@ -253,7 +252,7 @@ def check_type(key, value):
         'cc_period': str,  # e.g. '2010-2024'
         'perc_period_yrs': str,  # e.g. '1961-1990'
         'decadal_window': str,
-        
+
         # paths
         'input_data_path': str,
         'raw_data_path': str,
@@ -261,7 +260,7 @@ def check_type(key, value):
         'maskpath': 'path',
         'mask_sub': str,
         'outpath': 'path',
-        
+
         # general options
         'use_dask': bool,
 
@@ -274,7 +273,7 @@ def check_type(key, value):
         'decadal_only': bool,
         'spreads': bool,
         'compare_to_ref': bool,
-        
+
         # create_region_masks.py
         'gr_type': str,
         'sw_corner': str,
@@ -289,7 +288,7 @@ def check_type(key, value):
         'orofile': 'path',
         'altitude_threshold': int,
         'lsmfile': 'path',
-        
+
         # regrid_SPARTACUS_to_WEGNext.py
         'raw_data_path': 'path',
         'regridded_data_path': 'path',
@@ -380,7 +379,7 @@ def check_config(opts_dict):
             choices(param=param, val=opts_dict[param], poss_vals=choice_vals[param])
         if param in ['start', 'end']:
             max_current_year(param=param, val=opts_dict[param])
-    
+
     if 'create_region_masks' not in opts_dict['script'] and 'regrid_SPARTACUS_to_WEGNext' not in opts_dict['script']:
         if 'input_data_path' not in opts_dict:
             raise ValueError('input_data_path not set in options. Please set it in the CFG file.')
@@ -410,7 +409,7 @@ def load_opts(fname, config_file='./config/TEA_CFG.yaml'):
     # add name of script and CFG file
     opts.script = f'{fname}.py'
     opts.cfg_file = config_file
-    
+
     opts = _get_default_opts(fname, opts)
     set_variables(opts_dict=vars(opts))
     check_config(opts_dict=vars(opts))
