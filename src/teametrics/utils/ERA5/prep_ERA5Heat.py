@@ -57,6 +57,17 @@ def reduce_file_size():
                      encoding={'utci': {'dtype': 'float32', 'zlib': True, 'complevel': 5}},)
 
 
+def convert_to_celsius():
+    files = sorted(glob.glob('/data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5Heat/ERA5Heat_*.nc'))
+    for file in files:
+        fname = file.split('/')[-1]
+        print(fname)
+        da = xr.open_dataarray(file)
+        da = da - 273.15
+        da.to_netcdf(f'/data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5Heat/degC/{fname}')
+        da.close()
+
 if __name__ == "__main__":
-    combine_daily_files()
+    # combine_daily_files()
     # reduce_file_size()
+    convert_to_celsius()
