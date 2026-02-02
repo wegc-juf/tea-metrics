@@ -13,9 +13,9 @@ Start by creating a new `virtualenv` for your project e.g. by using `virtualenvw
 mkvirtualenv <project_name>
 ```
 
-Then, install the package using `pip`:
+Then, install or upgrade the package using `pip`:
 ```bash
-pip install https://wegenernet.org/downloads/teametrics/teametrics-0.7.2-rc.1-py3-none-any.whl
+pip install https://wegenernet.org/downloads/teametrics/teametrics-0.7.2rc1-py3-none-any.whl
 ```
 
 ## Usage
