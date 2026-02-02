@@ -17,7 +17,8 @@ common_params:
   dataset: &DATA
     dataset: ERA5
   paths: &PATHS
-    data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/
+    data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/daily/
+    hourly_data_path: /data/arsclisys/normal/ERA5/AUT/hourly/
     statpath: &statpath /home/wegnet/results/static/
     maskpath: *statpath
     mask_sub: masks/

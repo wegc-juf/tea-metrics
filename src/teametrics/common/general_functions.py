@@ -54,7 +54,7 @@ def create_history_from_cfg(cfg_params, ds):
 def create_tea_history(cfg_params, tea, dataset):
     """
     add history and version to dataset
-    
+
     :param cfg_params: yaml config parameters
     :param tea: TEA object
     :param dataset: dataset (e.g. 'CTP_results')
@@ -148,7 +148,7 @@ def compare_to_ref(tea_result, tea_ref, relative=False):
             print(f'{vvar} not found in reference file.')
 
 
-def get_input_filenames(start, end, inpath, param_str, ds_name, period='annual', hourly=False):
+def get_input_filenames(start, end, inpath, param_str, ds_name, period='annual', hourly=False, hourly_path=None):
     """
     get input filenames
 
@@ -163,6 +163,7 @@ def get_input_filenames(start, end, inpath, param_str, ds_name, period='annual',
     :type period: str
     :param hourly: if True, return hourly data filenames
     :type hourly: bool
+    :param hourly_path: path to hourly data
 
     :return: list of filenames
     """
@@ -178,10 +179,7 @@ def get_input_filenames(start, end, inpath, param_str, ds_name, period='annual',
             return sorted(glob.glob(inpath))
 
         if hourly:
-            inpath = f'{inpath}/hourly/'
-            h_string = 'hourly_'
-        else:
-            h_string = ''
+            inpath = hourly_path
 
         # select only files of interest, if chosen period is 'seasonal' append one year in the
         # beginning to have the first winter fully included
@@ -191,7 +189,7 @@ def get_input_filenames(start, end, inpath, param_str, ds_name, period='annual',
         else:
             yrs = np.arange(start, end + 1)
         for yr in yrs:
-            file_mask = f'{inpath}/*{param_str}_{h_string}{yr}*.nc'
+            file_mask = f'{inpath}/*{param_str}*{yr}*.nc'
             year_files = sorted(glob.glob(file_mask))
             if not year_files:
                 logger.warning(f'No input files found for year {yr} with mask {file_mask}.')
@@ -270,19 +268,20 @@ def get_gridded_data(start, end, opts, period='annual', hourly=False):
 
     filenames = get_input_filenames(period=period, start=start, end=end,
                                     inpath=opts.input_data_path,
-                                    param_str=param_str, hourly=hourly, ds_name=opts.dataset)
+                                    param_str=param_str, hourly=hourly, ds_name=opts.dataset,
+                                    hourly_path=opts.hourly_data_path)
 
     # load relevant years
     if filenames == []:
         raise FileNotFoundError(f'No input files found for {param_str} in {opts.input_data_path}. Please check '
                                 f'input_data_path and parameter settings.')
-    
+
     logger.info(f'Loading data from {filenames}...')
     try:
-        ds = xr.open_mfdataset(filenames, combine='by_coords')
+        ds = xr.open_mfdataset(filenames, combine='by_coords', data_vars='all')
     except ValueError as e:
         logger.warning(f'Error loading data: {e} Trying again with combine="nested"')
-        ds = xr.open_mfdataset(filenames, combine='nested')
+        ds = xr.open_mfdataset(filenames, combine='nested', data_vars='all')
 
     # select variable
     if opts.dataset == 'SPARTACUS' and parameter == 'P24h_7to7':

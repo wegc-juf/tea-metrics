@@ -10,11 +10,16 @@ import pandas as pd
 import yaml
 import cfunits
 import warnings
+from pathlib import Path
 
 import teametrics
 
 
 def is_dir_path(path):
+    if path is None:
+        return True
+    if isinstance(path, Path):
+        path = str(path)
     if os.path.isdir(path) or os.path.exists(path) or glob.glob(path):
         return True
     else:
@@ -142,6 +147,8 @@ def _get_default_opts(fname, opts):
     if 'input_data_path' not in opts:
         if 'data_path' in opts:
             opts.input_data_path = opts.data_path
+    if 'hourly_data_path' not in opts:
+        opts.hourly_data_path = None
 
     # general options
     if 'use_dask' not in opts:
@@ -255,7 +262,7 @@ def check_type(key, value):
 
         # paths
         'input_data_path': str,
-        'raw_data_path': str,
+        'hourly_data_path': str,
         'statpath': 'path',
         'maskpath': 'path',
         'mask_sub': str,
@@ -366,7 +373,7 @@ def check_config(opts_dict):
 
     for param in opts_dict.keys():
         if 'path' in param or 'file' in param:
-            if 'example' in opts_dict[param]:
+            if 'example' in str(opts_dict[param]):
                 continue
             is_dir_path(opts_dict[param])
         else:
