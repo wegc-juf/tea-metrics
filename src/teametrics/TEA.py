@@ -395,7 +395,7 @@ class TEAIndicators:
 
         """
         if self._low_extreme:
-            tem = self.threshold_grid - self.input_data
+            tem = -self.input_data + self.threshold_grid
         else:
             tem = self.input_data - self.threshold_grid
         tem = xr.where(tem <= 0, 0, tem)
