@@ -571,7 +571,7 @@ class TEAIndicators:
             input_data: gridded input data (e.g. temperature, precipitation) in hourly resolution
         """
         # calculate hourly exceedance magnitude
-        self.input_data = input_data
+        self._set_input_data_grid(input_data_grid=input_data)
         htem = self._calc_TEM()
         self._hourly_results['HTEM'] = htem
 

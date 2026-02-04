@@ -568,32 +568,9 @@ def _calc_hourly_indicators(tea, opts, start, end):
         # reduce data to the region of interest
         data, _, _ = _reduce_region(opts, data, tea.mask, full_region=True)
 
-    if not _check_data_extent(data, tea.input_data):
-        logger.warning('Hourly data extent is not the same as daily data extent. '
-                       'Please check your data and the region you want to calculate.')
-
     logger.info('Calculating hourly basis variables.')
     # calculate hourly indicators
     tea.calc_hourly_indicators(input_data=data)
-
-
-def _check_data_extent(data, ref_data):
-    """
-    check if data extent is the same as the TEA data extent
-    Args:
-        data: input data
-        ref_data: reference data
-
-    Returns:
-        True if data extent is the same, False otherwise
-
-    """
-    if not np.array_equal(data.lat.values, ref_data.lat.values) or not np.array_equal(
-            data.lon.values,
-            ref_data.lon.values):
-        return False
-    else:
-        return True
 
 
 def _calc_agr_mean_and_spread(opts, tea):
