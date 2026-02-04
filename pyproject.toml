@@ -79,4 +79,4 @@ persistent-substitution = true
 [tool.poetry]
 include = ["src/teametrics/config/*.yaml", "src/teametrics/data/examples/ERA5_Tx_1956-2024_CH.nc", "README.md",
     "LICENSE"]
-version = "0.7.2rc2.dev2+1bc3b93"
+version = "0.7.2rc2.dev3+99a0527"
