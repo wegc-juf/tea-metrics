@@ -56,6 +56,8 @@ def get_attrs(vname=None, dec=False, spread=None, period='', data_unit=''):
                'metric_type': 'compound'},
         'EM_avg': {'long_name': 'average exceedance magnitude', 'units': data_unit,
                    'metric_type': 'basic'},
+        'threshold_avg': {'long_name': 'average threshold value', 'units': data_unit,
+                          'metric_type': 'basic'},
         'EM_avg_Md': {'long_name': 'average daily-median exceedance magnitude',
                       'units': data_unit, 'metric_type': 'basic'},
         'EM_Md': {'long_name': 'cumulative daily-median exceedance magnitude',

@@ -189,11 +189,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
 
         # computation of daily basis variables (Methods chapter 3)
         if gridded:
-            gr = opts.hourly
-            if opts.primary_threshold is not None:
-                gr = True
-            else:
-                gr = opts.hourly
+            gr = True
         else:
             gr = False
         tea.calc_daily_basis_vars(gr=gr)

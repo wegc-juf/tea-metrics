@@ -10,6 +10,7 @@ import os
 import xarray as xr
 import pandas as pd
 import numpy as np
+from xarray import Dataset
 
 from .common.var_attrs import get_attrs, equal_vars
 from .common.TEA_logger import logger
@@ -432,6 +433,8 @@ class TEAIndicators:
         dtec_gr = dtec_gr.where(dtec_gr > 0, np.nan)
         if self.area_grid is None:
             self._create_area_grid(dtem)
+
+        # calculate area-weighted mean of DTEM for GR (equation 08)
         area_fac = self.area_grid / dtea_gr
         dtem_gr = (dtem * area_fac).sum(dim=(self.xdim, self.ydim), skipna=True)
         dtem_gr = dtem_gr.where(dtec_gr == 1, self.null_val)
@@ -441,6 +444,29 @@ class TEAIndicators:
         dtema_gr.attrs = get_attrs(vname='DTEMA_GR', data_unit=self.unit)
         self.daily_results['DTEM_GR'] = dtem_gr
         self.daily_results['DTEMA_GR'] = dtema_gr
+
+    def _calc_avg_threshold_GR(self):
+        """
+        calculate area-weighted mean of threshold for GR (equation 08 scheme)
+        """
+        if self.threshold_grid is None:
+            raise ValueError("Threshold grid must be set to calculate mean threshold for GR")
+
+        if 'DTEA_GR' not in self.daily_results:
+            self._calc_DTEA_GR()
+        if self.mask is not None and self.apply_mask:
+            threshold = self.threshold_grid.where(self.mask > 0, np.nan)
+        else:
+            threshold = self.threshold_grid
+        if self.area_grid is None:
+            self._create_area_grid(dtem)
+        # calculate area-weighted mean of threshold for GR (using equation 08 scheme)
+        area_fac = self.area_grid / self.gr_size
+        threshold_gr = (threshold * area_fac).sum(dim=(self.xdim, self.ydim), skipna=True)
+
+        threshold_gr = threshold_gr.rename(f'threshold_avg_GR')
+        threshold_gr.attrs = get_attrs(vname='threshold_avg_GR', data_unit=self.unit)
+        self.daily_results['threshold_avg_GR'] = threshold_gr
 
     def calc_daily_basis_vars(self, grid=True, gr=True):
         """
@@ -462,6 +488,7 @@ class TEAIndicators:
             self._calc_DTEA_GR()
             self._calc_DTEC_GR()
             self._calc_DTEM_GR()
+            self._calc_avg_threshold_GR()
             self._calc_DTEM_Max_GR()
             self._calc_DTEEC_GR()
             self._calc_DET_GR()
@@ -1204,6 +1231,12 @@ class TEAIndicators:
         self._calc_annual_event_severity()
         self._calc_annual_hourly_event_severity()
         self._calc_annual_exceedance_heat_content()
+
+        # copy average threshold value from daily results to ctp results
+        if 'threshold_avg_GR' in self.daily_results:
+            self.ctp_results['threshold_avg_GR'] = self.daily_results.threshold_avg_GR.copy()
+            self.ctp_results['threshold_avg_GR'].attrs = get_attrs(vname='threshold_avg', data_unit=self.unit)
+
         if drop_daily_results:
             self.daily_results.close()
             del self._daily_results_filtered
