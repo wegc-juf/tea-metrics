@@ -122,12 +122,17 @@ class TEAAgr(TEAIndicators):
                                             lon=slice(lon - lon_off, lon + lon_off - lat_res))
         cell_area_grid = cell_area_grid / area_frac
 
+        # select threshold grid for cell
+        cell_threshold_grid = self.threshold_grid.sel(lat=slice(lat + lat_off, lat - lat_off + lat_res),
+                                                      lon=slice(lon - lon_off, lon + lon_off - lat_res))
+
         if len(cell_area_grid.lat) == 0:
             raise ValueError('No valid cell found, check why this happens')
 
         # TODO: two options: either return data itself and stack to xarray then calculate TEA or return individual TEA
         # objects
-        tea_sub_gr = TEAIndicators(area_grid=cell_area_grid, min_area=self._min_area, unit=self.unit, ctp=self.CTP)
+        tea_sub_gr = TEAIndicators(area_grid=cell_area_grid, min_area=self._min_area, unit=self.unit, ctp=self.CTP,
+                                   threshold=cell_threshold_grid)
         tea_sub_gr.set_daily_results(cell_data)
         return tea_sub_gr
 
@@ -147,9 +152,14 @@ class TEAAgr(TEAIndicators):
             var_dict = {}
             lats, lons = self._get_lats_lons()
             for var in data_vars:
-                var_dict[var] = (['time', 'lat', 'lon'], np.nan * np.ones((len(ctp_results.time),
-                                                                           len(lats),
-                                                                           len(lons))))
+                if 'time' in ctp_results[var].dims:
+                    var_dict[var] = (['time', 'lat', 'lon'], np.nan * np.ones((len(ctp_results.time),
+                                                                               len(lats),
+                                                                               len(lons))))
+                elif len(ctp_results[var].dims) == 0:
+                    var_dict[var] = (['lat', 'lon'], np.nan * np.ones((len(lats), len(lons))))
+                else:
+                    raise ValueError(f'Unsupported variable dimensions for variable {var}: {ctp_results[var].dims}')
             self.ctp_results = xr.Dataset(coords=dict(time=ctp_results.time,
                                                       lon=lons,
                                                       lat=lats),
@@ -422,9 +432,13 @@ class TEAAgr(TEAIndicators):
         x_s_agr = self._calc_compound_vars(x_s_agr)
         x_ref_agr = self._calc_compound_vars(x_ref_agr)
 
-        # set values to nan for first and last 5/4 years
-        x_s_agr[dict(time=slice(0, 5))] = np.nan
-        x_s_agr[dict(time=slice(-4, None))] = np.nan
+        # set values to nan for first and last 5/4 years for all variables with dimension 'time' to avoid edge
+        # effects of decadal averaging
+        for var in x_s_agr.data_vars:
+            ds = x_s_agr[var]
+            if 'time' in ds.dims:
+                ds[dict(time=slice(0, 5))] = np.nan
+                ds[dict(time=slice(-4, None))] = np.nan
 
         # calculate spread estimates (equation 38)
         if spreads:
@@ -471,7 +485,7 @@ class TEAAgr(TEAIndicators):
         u_earth = 2 * np.pi * r_earth
         # # size of grid cell in 100 km^2
         A_GR_full = (u_earth / 360 * self.cell_size_lat) ** 2 / 100
-        N_dof = int(A_AGR / A_GR_full)
+        N_dof = max(A_AGR / A_GR_full, 1)
 
         if spreads:
             # add p5 and p95 values (equation 41TODEFINE)

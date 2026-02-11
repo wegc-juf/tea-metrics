@@ -1289,7 +1289,8 @@ class TEAIndicators:
         load all CTP results from filepath
         """
         logger.info(f"Loading CTP results from {filepath}")
-        self.ctp_results = xr.open_mfdataset(filepath, data_vars='all', combine='by_coords',
+        self.ctp_results = xr.open_mfdataset(filepath, data_vars='minimal', combine='by_coords',
+                                             coords='minimal', compat='override', join='exact',
                                              chunks='auto' if use_dask else None)
         # TODO: optimize code in TEA._calc_spread_estimators
         if not use_dask:
@@ -1401,13 +1402,16 @@ class TEAIndicators:
                 "decade of data")
         for var in self.ctp_results.data_vars:
             if self.ctp_results[var].attrs['metric_type'] == 'basic':
-                self.decadal_results[var] = self.ctp_results[var].rolling(time=decadal_window[0],
-                                                                          center=True,
-                                                                          min_periods=1).mean(
-                    skipna=True)
-                # set first and last 5 years to nan
-                self.decadal_results[var][:decadal_window[1]] = np.nan
-                self.decadal_results[var][-decadal_window[2]:] = np.nan
+                if 'time' in self.ctp_results[var].dims:
+                    self.decadal_results[var] = self.ctp_results[var].rolling(time=decadal_window[0],
+                                                                              center=True,
+                                                                              min_periods=1).mean(
+                        skipna=True)
+                    # set first and last 5 years to nan
+                    self.decadal_results[var][:decadal_window[1]] = np.nan
+                    self.decadal_results[var][-decadal_window[2]:] = np.nan
+                else:
+                    self.decadal_results[var] = self.ctp_results[var]
                 self.decadal_results[var].attrs = get_attrs(vname=var, dec=True,
                                                             data_unit=self.unit)
 
@@ -1538,6 +1542,12 @@ class TEAIndicators:
         """
         annual_data = self.ctp_results
         dec_data = self.decadal_results
+
+        # drop data without time dimension
+        annual_data = annual_data.drop_vars([var for var in annual_data.data_vars if 'time' not in annual_data[
+            var].dims])
+        dec_data = dec_data.drop_vars([var for var in dec_data.data_vars if 'time' not in dec_data[var].dims])
+
         supp, slow = xr.full_like(dec_data, np.nan), xr.full_like(dec_data, np.nan)
         for icy, cy in enumerate(annual_data.time):
             # skip first and last 5 years
@@ -1681,7 +1691,7 @@ class TEAIndicators:
             duration_data: optional Xarray dataset with cumulative event duration data (e.g. decadal ED)
         """
         for vvar in ds.data_vars:
-            if len(ds[vvar].dims) > 1:
+            if len(ds[vvar].dims) > 1 and 'time' in ds[vvar].dims and 'ED' in ds and ds.ED is not None:
                 duration = duration_data.ED if duration_data is not None else ds.ED
                 ds[vvar] = ds[vvar].where(duration >= min_duration)
             elif ds[vvar].dims == ('time',) and 'ED_GR' in ds and ds.ED_GR is not None:
