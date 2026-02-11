@@ -15,6 +15,7 @@ common_params:
     threshold: 99
     unit: degC
     low_extreme: false
+    significant_digits: 3
   time_params: &TIME
     start: 1961
     end: 2024

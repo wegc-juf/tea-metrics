@@ -81,9 +81,9 @@ def calc_tea_indicators(opts):
     # calculate decadal indicators and amplification factors
     if opts.decadal or opts.decadal_only or opts.recalc_decadal:
         if 'agr' in opts:
-            tea = TEAAgr(mask=mask)
+            tea = TEAAgr(mask=mask, significant_digits=opts.significant_digits)
         else:
-            tea = TEAIndicators()
+            tea = TEAIndicators(significant_digits=opts.significant_digits)
 
         # calculate decadal-mean ctp indicator variables
         calc_decadal_indicators(opts=opts, tea=tea)
@@ -181,11 +181,12 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 min_area=min_area, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                cell_size_lat=opts.agr_cell_size, land_frac_min=opts.land_frac_min)
+                                cell_size_lat=opts.agr_cell_size, land_frac_min=opts.land_frac_min,
+                                significant_digits=opts.significant_digits)
         else:
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 min_area=min_area, low_extreme=opts.low_extreme,
-                                unit=opts.unit, land_sea_mask=lsm)
+                                unit=opts.unit, land_sea_mask=lsm, significant_digits=opts.significant_digits)
 
         # computation of daily basis variables (Methods chapter 3)
         if gridded:
@@ -206,11 +207,12 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
         if 'agr' in opts:
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                cell_size_lat=opts.agr_cell_size, land_frac_min=opts.land_frac_min)
+                                cell_size_lat=opts.agr_cell_size, land_frac_min=opts.land_frac_min,
+                                significant_digits=opts.significant_digits)
         else:
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
                                 unit=opts.unit,
-                                land_sea_mask=lsm)
+                                land_sea_mask=lsm, significant_digits=opts.significant_digits)
         logger.info(
             f'Loading daily basis variables from {dbv_filename}; if you want to recalculate them, '
             'set --recalc-daily.')

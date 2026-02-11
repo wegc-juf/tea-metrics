@@ -122,6 +122,8 @@ def _get_default_opts(fname, opts):
         opts.low_extreme = False
     if 'min_exceedance_area' not in opts:
         opts.min_exceedance_area = 1
+    if 'significant_digits' not in opts:
+        opts.significant_digits = 3
 
     # time_params options
     if 'start' not in opts:
@@ -249,6 +251,7 @@ def check_type(key, value):
         'low_extreme': bool,
         'min_exceedance_area': float,
         'min_duration': float,
+        'significant_digits': int,
 
         # time parameters
         'start': int,

@@ -29,7 +29,7 @@ class TEAIndicators:
 
     def __init__(self, input_data=None, threshold=None, min_area=1., area_grid=None,
                  low_extreme=False,
-                 unit='', mask=None, apply_mask=True, ctp=None, use_dask=False, **kwargs):
+                 unit='', mask=None, apply_mask=True, ctp=None, use_dask=False, significant_digits: int = 2, **kwargs):
         """
         Initialize TEAIndicators object
         Args:
@@ -43,6 +43,8 @@ class TEAIndicators:
             mask: mask grid for input data containing nan values for cells that should be masked. Default: None
             ctp: Climatic Time Period (CTP) to resample to. For allowed values see set_ctp method. Default: None
             use_dask: use dask for calculations. Default: False
+            significant_digits: least significant digits for netCDF output compression. If -1, no rounding is
+            applied. Default: 2
         """
         if threshold is not None and isinstance(threshold, (int, float)):
             if input_data is not None:
@@ -52,6 +54,8 @@ class TEAIndicators:
             else:
                 raise ValueError("Either input_data grid or mask must be provided for using a fixed threshold!")
         self.threshold_grid = threshold
+
+        self.significant_digits = significant_digits
 
         # set default x and y dim names
         self.xdim = 'lon'
@@ -450,7 +454,7 @@ class TEAIndicators:
         calculate area-weighted mean of threshold for GR (equation 08 scheme)
         """
         if self.threshold_grid is None:
-            raise ValueError("Threshold grid must be set to calculate mean threshold for GR")
+            return
 
         if 'DTEA_GR' not in self.daily_results:
             self._calc_DTEA_GR()
@@ -503,13 +507,38 @@ class TEAIndicators:
         Args:
             filepath: path to save the results.
         """
-
         with warnings.catch_warnings():
-            # TODO: implement compression for all netCDF files and use float instead of double if possible
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
             logger.info(f"Saving daily results to {filepath}")
-            self.daily_results.to_netcdf(filepath)
+
+            self._to_netcdf(dataset=self.daily_results, filepath=filepath)
+
+    def _to_netcdf(self, dataset: Dataset, filepath):
+        """
+        save dataset to netCDF with compression and rounding to reduce file size
+
+        Args:
+            dataset: xarray Dataset to save
+            filepath: path to save the dataset
+
+        Returns:
+
+        """
+        digits = self.significant_digits
+
+        # save to netCDF with compression and rounding to reduce file size
+        if digits >= 0:
+            encoding = {
+                v: {
+                    "zlib": True,
+                    "complevel": 4,
+                }
+                for v in dataset.data_vars
+            }
+            dataset.round(decimals=digits).to_netcdf(filepath, encoding=encoding)
+        else:
+            dataset.to_netcdf(filepath)
 
     def load_daily_results(self, filepath):
         """
@@ -1253,14 +1282,15 @@ class TEAIndicators:
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
-            self.ctp_results.to_netcdf(filepath)
+            self._to_netcdf(self.ctp_results, filepath)
 
     def load_ctp_results(self, filepath, use_dask=True):
         """
         load all CTP results from filepath
         """
         logger.info(f"Loading CTP results from {filepath}")
-        self.ctp_results = xr.open_mfdataset(filepath)
+        self.ctp_results = xr.open_mfdataset(filepath, data_vars='all', combine='by_coords',
+                                             chunks='auto' if use_dask else None)
         # TODO: optimize code in TEA._calc_spread_estimators
         if not use_dask:
             # avoid using dask when calculating spreads
@@ -1349,7 +1379,7 @@ class TEAIndicators:
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
-            self.decadal_results.to_netcdf(filepath)
+            self._to_netcdf(self.decadal_results, filepath)
 
     def load_decadal_results(self, filepath):
         """
@@ -1742,7 +1772,7 @@ class TEAIndicators:
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
-            self.amplification_factors.to_netcdf(filepath)
+            self._to_netcdf(self.amplification_factors, filepath)
 
     def load_amplification_factors(self, filepath):
         """

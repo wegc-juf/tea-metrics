@@ -179,7 +179,7 @@ class TEAAgr(TEAIndicators):
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
-            self.ctp_results.to_netcdf(filepath)
+            self._to_netcdf(self.ctp_results, filepath)
 
     def _apply_gr_grid_mask(self):
         """
