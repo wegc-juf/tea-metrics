@@ -13,7 +13,6 @@ import numpy as np
 import os
 import xarray as xr
 
-
 from config import load_opts
 
 def _getopts():
@@ -150,7 +149,7 @@ def plot_eur_tex(opts):
     if not os.path.exists(dbv_outpath):
         os.makedirs(dbv_outpath)
     plt.savefig(f'{opts.outpath}/plots/TEX-map_{opts.param_str}_{gr_str}_{opts.period}_{opts.dataset}'
-                           f'_{opts.start}to{opts.end}.png', dpi=300, bbox_inches='tight')
+                           f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
 
 
 if __name__ == '__main__':
