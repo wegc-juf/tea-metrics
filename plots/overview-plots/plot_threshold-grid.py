@@ -89,7 +89,7 @@ def plot_eur(opts):
              backgroundcolor='whitesmoke', fontsize=10)
 
     plt.savefig(f'{opts.outpath}/plots/threshold-map_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
-                f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=300)
+                f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=150)
 
 
 def plot_single_country(opts):
@@ -137,49 +137,39 @@ def plot_single_country(opts):
     axs.set_title(f'{opts.dataset}-{opts.param_str}-Ref{opts.ref_period[0]}-{opts.ref_period[1]}', fontsize=12)
 
     plt.savefig(f'{opts.outpath}/plots/threshold-map_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
-                f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=300)
+                f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=150)
 
 
-def plot_spartacus():
+def plot_spartacus(opts):
     """
-    ExtDataFig 1 c & d
-    :return:
+    plot threshold map for SPARTACUS
+    Returns:
+
     """
-    param = ['Tx', 'P24h_7to7']
-    # TODO: adjust labels
     props = {'Tx': {'levels': np.arange(19, 34, 1), 'cb_lbl': 'Ref-p99ANN Temperature (°C)',
                     'cmap': 'Reds', 'ext': 'neither', 'pstr': 'Tx99.0p'},
              'P24h_7to7': {'levels': np.arange(18, 44, 2),
                            'cb_lbl': 'Ref-p95WAS Precipitation (mm)', 'cmap': 'Blues',
                            'ext': 'neither', 'pstr': 'P24h_7to7_95.0p'}}
 
-    for par in param:
-        # TODO: adjust input
-        thr = xr.open_dataset(STATIC_PATH / f'static_{props[par]["pstr"]}_SEA_SPARTACUS.nc')
-        thr = thr.threshold
+    thr = xr.open_dataset(f'{opts.statpath}static_{opts.param_str}_{opts.region}_{opts.dataset}.nc')
+    thr = thr.threshold
 
-        fig, axs = plt.subplots(1, 1, figsize=(4.5, 3))
-        perc = axs.contourf(thr, cmap=props[par]['cmap'], levels=props[par]['levels'],
-                            extend=props[par]['ext'])
+    fig, axs = plt.subplots(1, 1, figsize=(4.5, 3))
+    perc = axs.contourf(thr, cmap='Reds', levels=np.arange(np.floor(thr.min().values), np.ceil(thr.max().values)))
 
-        divider = make_axes_locatable(axs)
-        cax = divider.append_axes('right', size='5%', pad=0.05)
-        cb = fig.colorbar(perc, cax=cax, orientation='vertical', extend=props[par]['ext'],
-                          shrink=0.83, ticks=props[par]['levels'][::2])
-        cb.set_label(props[par]['cb_lbl'])
+    divider = make_axes_locatable(axs)
+    cax = divider.append_axes('right', size='5%', pad=0.05)
+    cb = fig.colorbar(perc, cax=cax, orientation='vertical', shrink=0.83)
+    cb.set_label(f'Ref-{opts.param_str} ({opts.unit})')
 
-        # TODO: adjust labels
-        if par == 'Tx':
-            title = 'SPCUS-TMax-Ref1961-1990'
-        else:
-            title = 'SPCUS-P24H-Ref1961-1990'
-        axs.set_title(title, fontsize=12)
+    axs.set_title(f'{opts.dataset}-{opts.param_str}-Ref{opts.ref_period[0]}-{opts.ref_period[1]}', fontsize=12)
 
-        axs.axis('off')
+    axs.axis('off')
 
-        # TODO: adjust outname
-        plt.savefig(f'./threshold.png', bbox_inches='tight', dpi=300)
-        plt.close()
+    plt.savefig(f'{opts.outpath}/plots/threshold-map_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
+                f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=150)
+    plt.close()
 
 
 if __name__ == '__main__':
@@ -194,4 +184,4 @@ if __name__ == '__main__':
     elif opts.dataset != 'SPARTACUS':
         plot_single_country(opts=opts)
     else:
-        plot_spartacus()
+        plot_spartacus(opts=opts)
