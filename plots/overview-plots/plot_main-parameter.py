@@ -4,10 +4,10 @@ Plot main parameter (GR and CC map)
 import argparse
 import matplotlib.pyplot as plt
 import pandas as pd
-from pathlib import Path
 from matplotlib.ticker import FormatStrFormatter, FixedLocator
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
+import os
 from scipy.stats import gmean
 import xarray as xr
 
@@ -368,4 +368,8 @@ def plot_main_parameter(opts):
 if __name__ == '__main__':
     cmd_opts = _getopts()
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
+    # check and create output path
+    plt_outpath = f'{opts.outpath}/plots'
+    if not os.path.exists(plt_outpath):
+        os.makedirs(plt_outpath)
     plot_main_parameter(opts)

@@ -144,10 +144,7 @@ def plot_eur_tex(opts):
     axs.tick_params(axis='both', which='major', labelsize=12)
     plt.title('Total Events Extremity (TEX) amplification', fontsize=16)
 
-    # check and create output path
-    dbv_outpath = f'{opts.outpath}/plots'
-    if not os.path.exists(dbv_outpath):
-        os.makedirs(dbv_outpath)
+
     plt.savefig(f'{opts.outpath}/plots/TEX-map_{opts.param_str}_{gr_str}_{opts.period}_{opts.dataset}'
                            f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
 
@@ -155,4 +152,8 @@ def plot_eur_tex(opts):
 if __name__ == '__main__':
     cmd_opts = _getopts()
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
+    # check and create output path
+    plt_outpath = f'{opts.outpath}/plots'
+    if not os.path.exists(plt_outpath):
+        os.makedirs(plt_outpath)
     plot_eur_tex(opts)
