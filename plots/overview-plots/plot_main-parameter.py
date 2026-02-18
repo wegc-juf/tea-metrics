@@ -348,10 +348,6 @@ def plot_main_parameter(opts):
     plot_tex_es(opts=opts, ax=axs[3, 1], data=data[['TEX_GR_AF', 'ES_avg_GR_AF', f'TEX_GR_AF_CC', f'ES_avg_GR_AF_CC']],
                 ddata=dec_data[['TEX_GR', 'ES_avg_GR']])
 
-    axs[2, 1].text(0, 0, 'Data at z > 1500m excluded.',
-                   horizontalalignment='left', verticalalignment='center',
-                   transform=axs[2, 1].transAxes, backgroundcolor='mistyrose',
-                   fontsize=8)
 
     # iterate over each subplot and add a text label
     labels = ['a)', 'e)', 'b)', 'f)', 'c)', 'g)', 'd)', 'h)']
