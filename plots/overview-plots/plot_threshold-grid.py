@@ -61,7 +61,10 @@ def plot_eur(opts):
     thr = thr.assign_coords(lon=thr.lon + pix_size / 2)
 
     levels = np.arange(10, 42.5, 2.5)
-    cmap = sns.color_palette('Reds', len(levels))
+    palette = 'Reds'
+    if opts.precip:
+        palette='Blues'
+    cmap = sns.color_palette(palette, len(levels))
 
     fig = plt.figure(figsize=(10, 7))
     proj = ccrs.LambertConformal(central_longitude=13.5, central_latitude=53.5, cutoff=30)
@@ -111,10 +114,13 @@ def plot_single_country(opts):
     proj = ccrs.LambertConformal(central_longitude=cen_lon.values, central_latitude=cen_lat.values)
     axs = plt.axes(projection=proj)
     axs.contourf(cntry.lon, cntry.lat, cntry.nw_mask, colors='gainsboro', transform=ccrs.PlateCarree())
+    cmap = 'Reds'
+    if opts.precip:
+        cmap='Blues'
     vals = axs.contourf(thr.lon, thr.lat, thr.threshold,
                         levels=np.arange(np.floor(thr.threshold.min().values),
                                          np.ceil(thr.threshold.max().values), 1),
-                        transform=ccrs.PlateCarree(), cmap='Reds')
+                        transform=ccrs.PlateCarree(), cmap=cmap)
     axs.add_feature(cfea.BORDERS)
     axs.coastlines()
 
@@ -146,17 +152,15 @@ def plot_spartacus(opts):
     Returns:
 
     """
-    props = {'Tx': {'levels': np.arange(19, 34, 1), 'cb_lbl': 'Ref-p99ANN Temperature (°C)',
-                    'cmap': 'Reds', 'ext': 'neither', 'pstr': 'Tx99.0p'},
-             'P24h_7to7': {'levels': np.arange(18, 44, 2),
-                           'cb_lbl': 'Ref-p95WAS Precipitation (mm)', 'cmap': 'Blues',
-                           'ext': 'neither', 'pstr': 'P24h_7to7_95.0p'}}
 
     thr = xr.open_dataset(f'{opts.statpath}static_{opts.param_str}_{opts.region}_{opts.dataset}.nc')
     thr = thr.threshold
 
     fig, axs = plt.subplots(1, 1, figsize=(4.5, 3))
-    perc = axs.contourf(thr, cmap='Reds', levels=np.arange(np.floor(thr.min().values), np.ceil(thr.max().values)))
+    cmap = 'Reds'
+    if opts.precip:
+        cmap='Blues'
+    perc = axs.contourf(thr, cmap=cmap, levels=np.arange(np.floor(thr.min().values), np.ceil(thr.max().values)))
 
     divider = make_axes_locatable(axs)
     cax = divider.append_axes('right', size='5%', pad=0.05)

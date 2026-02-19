@@ -41,7 +41,7 @@ def _getopts():
     return myopts
 
 
-def create_cmap_tex():
+def create_cmap_tex(opts):
     """
     create custom color map for TEX plot
     Returns:
@@ -49,6 +49,8 @@ def create_cmap_tex():
     """
     cmax = 35
     cmap = plt.cm.Reds
+    if opts.precip:
+        cmap = plt.cm.Blues
     cmaplist = [cmap(i) for i in range(cmap.N)]
     col_idx = np.arange(np.floor(256 / (cmax / 2.5)), 256, np.floor((256 / (cmax / 2.5))))
     cmaplist = [col for icol, col in enumerate(cmaplist) if icol in col_idx]
@@ -91,9 +93,6 @@ def plot_eur_tex(opts):
     Returns:
 
     """
-
-    # data = xr.open_dataset('INPUT_PATH' / 'dec_indicator_variables' /
-    #                        'amplification/AF_Tx99.0p_AGR-EUR_annual_ERA5_1961to2024.nc')
     if opts.agr:
         gr_str = f'AGR-{opts.agr}'
     else:
@@ -107,7 +106,7 @@ def plot_eur_tex(opts):
     pix_size = data.lon[1] - data.lon[0]
     data = data.assign_coords(lon=data.lon + pix_size / 2)
 
-    cmap_tex = create_cmap_tex()
+    cmap_tex = create_cmap_tex(opts=opts)
     cmax_tex = 30
 
     fw, fh, dpi = scale_figsize(figwidth=10, figheight=7, figdpi=300)
