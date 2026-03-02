@@ -514,7 +514,7 @@ def _reduce_region(opts, data, mask, threshold=None, full_region=False):
 
     proc_data = data.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
     proc_mask = mask.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
-    if threshold is not None:
+    if threshold is not None and opts.threshold_type != 'abs':
         threshold = threshold.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
 
     return proc_data, proc_mask, threshold
