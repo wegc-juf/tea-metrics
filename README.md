@@ -13,9 +13,9 @@ Start by creating a new `virtualenv` for your project e.g. by using `virtualenvw
 mkvirtualenv <project_name>
 ```
 
-Then, install the package using `pip`:
+Then, install or upgrade the package using `pip`:
 ```bash
-pip install https://wegenernet.org/downloads/teametrics/teametrics-0.7.2-rc.1-py3-none-any.whl
+pip install https://wegenernet.org/downloads/teametrics/teametrics-0.8.0rc3-py3-none-any.whl
 ```
 
 ## Usage
@@ -93,7 +93,7 @@ If you use this code, please cite:
 **This repository:**
 Fuchsberger, J., Kirchengast, G., and Haas, S. J. (2026). TEAmetrics software for _A new class of climate hazard 
 metrics and its demonstration: revealing a ten-fold increase of extreme heat over Europe_ and other applications. 
-Version 0.7.2-pre.2+7a7d53f. Zenodo. 
+Version 0.8. Zenodo. 
 https://doi.org/10.5281/zenodo.17210239
 
 **The related paper:**

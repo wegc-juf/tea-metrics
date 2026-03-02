@@ -8,6 +8,7 @@ common_params:
     threshold_type: perc
     unit: degC
     low_extreme: false
+    significant_digits: 3
   time_params: &TIME
     start: 1961
     end: 2024
@@ -32,9 +33,9 @@ calc_TEA:
   outpath: /home/wegnet/results/TEA_indicators_test
   recalc_threshold: false
   recalc_daily: true
-  hourly: true
-  decadal: false
-  recalc_decadal: false
+  hourly: false
+  decadal: true
+  recalc_decadal: true
   decadal_only: false
   spreads: true
 
