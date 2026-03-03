@@ -17,7 +17,7 @@ common_params:
   dataset: &DATA
     dataset: SPARTACUS
   paths: &PATHS
-    data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS/
+    data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS/reproj_UTM33N/v2.1/
     statpath: &statpath /home/wegnet/results/static/
     maskpath: *statpath
     mask_sub: masks/
@@ -30,11 +30,12 @@ calc_TEA:
   <<: *PATHS
   outpath: /home/wegnet/results/TEA_indicators_test/
   recalc_threshold: false
-  recalc_daily: false
+  recalc_daily: true
   decadal: true
   spreads: false
   decadal_only: false
   recalc_decadal: true
+  use_dask: false
 
 create_region_masks:
   <<: *GR
