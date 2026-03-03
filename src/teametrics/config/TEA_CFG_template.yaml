@@ -3,8 +3,12 @@ common_params:
   input_data: &DATA
     dataset: ERA5
   GeoRegion: &GR
-    region: AUT
-    # agr: EUR
+    region: "AUT"
+    # # note: quote country codes to avoid parsing issues with "NO" for
+    # # Norway, which is also a valid YAML boolean value (no) and parsed as False
+    # # a.k.a. "the Norway problem".
+
+    # agr: "EUR"
     # land_frac_min: 0.5
     # agr_cell_size: 2
     # grg_grid_spacing: 0.5

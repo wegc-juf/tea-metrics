@@ -28,6 +28,7 @@ dependencies = [
     "metpy (>=1.7.0,<2.0.0)",
     "cartopy (>=0.25.0,<0.26.0)",
     "seaborn (>=0.13.2,<0.14.0)",
+    "ipdb (>=0.13.13,<0.14.0)",
 ]
 
 dynamic = ["version", "classifiers"]
@@ -79,4 +80,4 @@ persistent-substitution = true
 [tool.poetry]
 include = ["src/teametrics/config/*.yaml", "src/teametrics/data/examples/ERA5_Tx_1956-2024_CH.nc", "README.md",
     "LICENSE"]
-version = "0.8.0rc3"
+version = "0.8.0rc5"
