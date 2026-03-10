@@ -103,14 +103,14 @@ def plot_single_country(opts):
 
     """
     reg_str = opts.region
-    if opts.agr:
+    if 'agr' in opts:
         reg_str = opts.agr
     thr = xr.open_dataarray(f'{opts.statpath}threshold_{opts.param_str}_{opts.period}_{reg_str}_{opts.dataset}.nc')
     cntry = xr.open_dataarray(f'{opts.maskpath}{opts.mask_sub}{reg_str}_mask_{opts.dataset}_1500.nc')
 
     thr = thr.where(cntry == 1)
 
-    cntry_coords = cntry.where(cntry == 1, drop=True)
+    cntry_coords = cntry.where(cntry > 0, drop=True)
     cen_lon = cntry_coords.lon.min() + (cntry_coords.lon.max() - cntry_coords.lon.min()) / 2
     cen_lat = cntry_coords.lat.min() + (cntry_coords.lat.max() - cntry_coords.lat.min()) / 2
 
@@ -157,11 +157,12 @@ def plot_spartacus(opts):
     Returns:
 
     """
-    reg_str = opts.region
-    if opts.agr:
-        reg_str = f'AGR-{opts.agr}'
-    thr = xr.open_dataset(f'{opts.statpath}static_{opts.param_str}_{reg_str}_{opts.dataset}.nc')
-    thr = thr.threshold
+    reg_str, reg_str2 = opts.region, opts.region
+    if 'agr' in opts:
+        reg_str, reg_str2 = f'AGR-{opts.agr}', opts.agr
+    thr = xr.open_dataarray(f'{opts.statpath}threshold_{opts.param_str}_{opts.period}_{reg_str}_{opts.dataset}.nc')
+    cntry = xr.open_dataarray(f'{opts.statpath}{opts.mask_sub}{reg_str2}_mask_{opts.dataset}_1500.nc')
+    thr = thr.where(cntry > 0)
 
     fig, axs = plt.subplots(1, 1, figsize=(4.5, 3))
     cmap = 'Reds'
@@ -180,7 +181,11 @@ def plot_spartacus(opts):
 
     axs.axis('off')
 
-    plt.savefig(f'{opts.outpath}/plots/threshold-map_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
+    # plt.savefig(f'{opts.outpath}/plots/threshold-map_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
+    #             f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=150)
+
+    plt.savefig(f'/data/users/hst/TEA/TEA/testy_data/plots/'
+                f'threshold-map_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
                 f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=150)
     plt.close()
 

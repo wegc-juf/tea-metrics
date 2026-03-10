@@ -43,7 +43,7 @@ def _getopts():
 def get_data(opts):
 
     reg_str = opts.region
-    if opts.agr:
+    if 'agr' in opts and opts.agr:
         reg_str = f'AGR-{opts.agr}'
 
     af = xr.open_dataset(f'{opts.outpath}dec_indicator_variables/amplification/'
@@ -56,7 +56,7 @@ def get_data(opts):
 
 
 def gr_plot_params(opts, vname):
-    if opts.agr:
+    if 'agr' in opts:
         vname = vname.replace('AGR', 'GR')
     params = {'EF_GR_AF': {'col': 'tab:blue',
                            'ylbl': r'EF amplification $(\mathcal{A}^\mathrm{F})$',
@@ -213,7 +213,7 @@ def plot_tex_es(opts, ax, data, ddata):
     xticks = np.arange(opts.start, opts.end + 1)
 
     es_var, tex_var = 'ES_avg_GR_AF', 'TEX_GR_AF'
-    if opts.agr:
+    if 'agr' in opts:
         es_var = es_var.replace('GR', 'AGR')
         tex_var = tex_var.replace('GR', 'AGR')
 
@@ -245,9 +245,9 @@ def plot_tex_es(opts, ax, data, ddata):
 
     ymin = 0
     if data[tex_var].max().values > data[es_var].max().values:
-        ymax = round_to_next(rval=data[tex_var].max().values, limit=1)
+        ymax = round_to_next(rval=data[tex_var].max().values, limit=1) + 1
     else:
-        ymax = round_to_next(rval=data[es_var].max().values, limit=1)
+        ymax = round_to_next(rval=data[es_var].max().values, limit=1) + 1
     ax.set_yticks(np.arange(ymin, ymax + 1, 1))
     ax.set_ylim(ymin, ymax)
 
@@ -287,7 +287,7 @@ def plot_tex_es(opts, ax, data, ddata):
             + f'{data[f"{tex_var}_CC"]:.2f}',
             horizontalalignment='left',
             verticalalignment='center', transform=ax.transAxes, backgroundcolor='whitesmoke',
-            fontsize=9, zorder=1)
+            fontsize=9, zorder=2)
 
 
 def plot_map(opts, fig, ax, data):
@@ -317,6 +317,9 @@ def plot_map(opts, fig, ax, data):
     gt0_data = data.where(data > 0)
     val_min, val_max = gt0_data.min().values, gt0_data.max().values
     range_vals = [val_min, val_max]
+
+    if 'lat' in data.dims and data.lat[0] > data.lat[1]:
+        data = data.sortby('lat')
 
     map_vals = ax.contourf(data, cmap=props['cmap'], extend=ext, levels=lvls, vmin=cn, vmax=cx)
 
@@ -369,7 +372,7 @@ def plot_main_parameter(opts):
 
     gr_vars = ['EF_GR_AF', 'ED_avg_GR_AF', 'EM_avg_GR_AF', 'EA_avg_GR_AF']
     for irow, gr_var in enumerate(gr_vars):
-        if opts.agr:
+        if 'agr' in opts:
             gr_var = gr_var.replace('GR', 'AGR')
         plot_gr_data(opts=opts, ax=axs[irow, 0], data=data[[gr_var, f'{gr_var}_CC']], vname=gr_var,
                      ddata=dec_data[gr_var.split('_AF')[0]])
@@ -379,7 +382,7 @@ def plot_main_parameter(opts):
         plot_map(opts=opts, fig=fig, ax=axs[irow, 1], data=data[map_var])
 
 
-    if opts.agr:
+    if 'agr' in opts:
         plot_tex_es(opts=opts, ax=axs[3, 1],
                    data=data[['TEX_AGR_AF', 'ES_avg_AGR_AF', f'TEX_AGR_AF_CC', f'ES_avg_AGR_AF_CC']],
                    ddata=dec_data[['TEX_AGR', 'ES_avg_AGR']])
@@ -398,7 +401,7 @@ def plot_main_parameter(opts):
     fig.subplots_adjust(wspace=0.2, hspace=0.33)
 
     reg_str = opts.region
-    if opts.agr:
+    if 'agr' in opts:
         reg_str = f'AGR-{opts.agr}'
     # plt.savefig(f'{opts.outpath}/plots/main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
     #             f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
