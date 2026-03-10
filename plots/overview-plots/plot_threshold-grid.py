@@ -113,7 +113,7 @@ def plot_single_country(opts):
     fig = plt.figure(figsize=(5, 3))
     proj = ccrs.LambertConformal(central_longitude=cen_lon.values, central_latitude=cen_lat.values)
     axs = plt.axes(projection=proj)
-    axs.contourf(cntry.lon, cntry.lat, cntry.nw_mask, colors='gainsboro', transform=ccrs.PlateCarree())
+    axs.contourf(cntry.lon, cntry.lat, cntry.nw_mask, colors='whitesmoke', transform=ccrs.PlateCarree())
     cmap = 'Reds'
     if opts.precip:
         cmap='Blues'
@@ -156,11 +156,15 @@ def plot_spartacus(opts):
     thr = xr.open_dataset(f'{opts.statpath}static_{opts.param_str}_{opts.region}_{opts.dataset}.nc')
     thr = thr.threshold
 
+    cntry = xr.open_dataset(f'{opts.maskpath}{opts.mask_sub}{opts.region}_masks_{opts.dataset}.nc')
+
     fig, axs = plt.subplots(1, 1, figsize=(4.5, 3))
     cmap = 'Reds'
     if opts.precip:
         cmap='Blues'
-    perc = axs.contourf(thr, cmap=cmap, levels=np.arange(np.floor(thr.min().values), np.ceil(thr.max().values)))
+    axs.contourf(cntry.x, cntry.y, cntry.nw_mask, colors='whitesmoke')
+    perc = axs.contourf(thr.x, thr.y, thr, cmap=cmap,
+                        levels=np.arange(np.floor(thr.min().values), np.ceil(thr.max().values)))
 
     divider = make_axes_locatable(axs)
     cax = divider.append_axes('right', size='5%', pad=0.05)

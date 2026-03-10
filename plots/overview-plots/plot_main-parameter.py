@@ -233,6 +233,8 @@ def plot_tex_es(opts, ax, data, ddata):
     ax.xaxis.set_minor_locator(FixedLocator(np.arange(syr, eyr)))
 
     ymin, ymax = 0, 10
+    while data['TEX_GR_AF'].max() > ymax:
+        ymax += 1
     ax.set_yticks(np.arange(ymin, ymax + 1, 1))
     ax.set_ylim(ymin, ymax)
 
@@ -289,7 +291,7 @@ def plot_map(opts, fig, ax, data):
     """
     props = map_plot_params(opts=opts, vname=data.name)
 
-    cntry = xr.open_dataset(f'{opts.maskpath}{opts.region}_masks_{opts.dataset}.nc')
+    cntry = xr.open_dataset(f'{opts.maskpath}{opts.mask_sub}{opts.region}_masks_{opts.dataset}.nc')
     if 'x' in data.dims:
         cntry = cntry.sel(x=data.x, y=data.y)
     else:
@@ -298,7 +300,7 @@ def plot_map(opts, fig, ax, data):
             # flip lat values to ascending order
             data = data.sortby('lat')
             cntry = cntry.sortby('lat')
-    ax.contourf(cntry.nw_mask, colors='mistyrose')
+    ax.contourf(cntry.nw_mask, colors='whitesmoke')
 
     lvls = np.arange(1, 4.25, 0.25)
     if data.max() > lvls[-1] and data.min() > lvls[0]:
