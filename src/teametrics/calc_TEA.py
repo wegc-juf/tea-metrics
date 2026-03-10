@@ -81,9 +81,9 @@ def calc_tea_indicators(opts):
     # calculate decadal indicators and amplification factors
     if opts.decadal or opts.decadal_only or opts.recalc_decadal:
         if 'agr' in opts:
-            tea = TEAAgr(mask=mask)
+            tea = TEAAgr(mask=mask, significant_digits=opts.significant_digits)
         else:
-            tea = TEAIndicators()
+            tea = TEAIndicators(significant_digits=opts.significant_digits)
 
         # calculate decadal-mean ctp indicator variables
         calc_decadal_indicators(opts=opts, tea=tea)
@@ -181,19 +181,16 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 min_area=min_area, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                cell_size_lat=opts.agr_cell_size, land_frac_min=opts.land_frac_min)
+                                cell_size_lat=opts.agr_cell_size, land_frac_min=opts.land_frac_min,
+                                significant_digits=opts.significant_digits)
         else:
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 min_area=min_area, low_extreme=opts.low_extreme,
-                                unit=opts.unit, land_sea_mask=lsm)
+                                unit=opts.unit, land_sea_mask=lsm, significant_digits=opts.significant_digits)
 
         # computation of daily basis variables (Methods chapter 3)
         if gridded:
-            gr = opts.hourly
-            if opts.primary_threshold is not None:
-                gr = True
-            else:
-                gr = opts.hourly
+            gr = True
         else:
             gr = False
         tea.calc_daily_basis_vars(gr=gr)
@@ -210,11 +207,12 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
         if 'agr' in opts:
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                cell_size_lat=opts.agr_cell_size, land_frac_min=opts.land_frac_min)
+                                cell_size_lat=opts.agr_cell_size, land_frac_min=opts.land_frac_min,
+                                significant_digits=opts.significant_digits)
         else:
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
                                 unit=opts.unit,
-                                land_sea_mask=lsm)
+                                land_sea_mask=lsm, significant_digits=opts.significant_digits)
         logger.info(
             f'Loading daily basis variables from {dbv_filename}; if you want to recalculate them, '
             'set --recalc-daily.')
@@ -516,7 +514,7 @@ def _reduce_region(opts, data, mask, threshold=None, full_region=False):
 
     proc_data = data.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
     proc_mask = mask.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
-    if threshold is not None:
+    if threshold is not None and opts.threshold_type != 'abs':
         threshold = threshold.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
 
     return proc_data, proc_mask, threshold
@@ -568,32 +566,9 @@ def _calc_hourly_indicators(tea, opts, start, end):
         # reduce data to the region of interest
         data, _, _ = _reduce_region(opts, data, tea.mask, full_region=True)
 
-    if not _check_data_extent(data, tea.input_data):
-        logger.warning('Hourly data extent is not the same as daily data extent. '
-                       'Please check your data and the region you want to calculate.')
-
     logger.info('Calculating hourly basis variables.')
     # calculate hourly indicators
     tea.calc_hourly_indicators(input_data=data)
-
-
-def _check_data_extent(data, ref_data):
-    """
-    check if data extent is the same as the TEA data extent
-    Args:
-        data: input data
-        ref_data: reference data
-
-    Returns:
-        True if data extent is the same, False otherwise
-
-    """
-    if not np.array_equal(data.lat.values, ref_data.lat.values) or not np.array_equal(
-            data.lon.values,
-            ref_data.lon.values):
-        return False
-    else:
-        return True
 
 
 def _calc_agr_mean_and_spread(opts, tea):
