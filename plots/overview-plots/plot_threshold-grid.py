@@ -102,25 +102,26 @@ def plot_single_country(opts):
     Returns:
 
     """
-    thr = xr.open_dataset(f'{opts.statpath}static_{opts.param_str}_{opts.region}_{opts.dataset}.nc')
-    cntry = xr.open_dataset(f'{opts.maskpath}{opts.mask_sub}{opts.region}_masks_{opts.dataset}.nc')
+    reg_str = opts.region
+    if opts.agr:
+        reg_str = opts.agr
+    thr = xr.open_dataarray(f'{opts.statpath}threshold_{opts.param_str}_{opts.period}_{reg_str}_{opts.dataset}.nc')
+    cntry = xr.open_dataarray(f'{opts.maskpath}{opts.mask_sub}{reg_str}_mask_{opts.dataset}_1500.nc')
 
-    thr = thr.where(cntry.nw_mask == 1)
+    thr = thr.where(cntry == 1)
 
-    cntry_coords = cntry.where(cntry.nw_mask == 1, drop=True)
+    cntry_coords = cntry.where(cntry == 1, drop=True)
     cen_lon = cntry_coords.lon.min() + (cntry_coords.lon.max() - cntry_coords.lon.min()) / 2
     cen_lat = cntry_coords.lat.min() + (cntry_coords.lat.max() - cntry_coords.lat.min()) / 2
 
     fig = plt.figure(figsize=(5, 3))
     proj = ccrs.LambertConformal(central_longitude=cen_lon.values, central_latitude=cen_lat.values)
     axs = plt.axes(projection=proj)
-    axs.contourf(cntry.lon, cntry.lat, cntry.nw_mask, colors='whitesmoke', transform=ccrs.PlateCarree())
     cmap = 'Reds'
     if opts.precip:
         cmap='Blues'
-    vals = axs.contourf(thr.lon, thr.lat, thr.threshold,
-                        levels=np.arange(np.floor(thr.threshold.min().values),
-                                         np.ceil(thr.threshold.max().values), 1),
+    vals = axs.contourf(thr.lon, thr.lat, thr,
+                        levels=np.arange(np.floor(thr.min().values), np.ceil(thr.max().values), 1),
                         transform=ccrs.PlateCarree(), cmap=cmap)
     axs.add_feature(cfea.BORDERS)
     axs.coastlines()
@@ -143,10 +144,10 @@ def plot_single_country(opts):
 
     axs.set_title(f'{opts.dataset}-{opts.param_str}-Ref{opts.ref_period[0]}-{opts.ref_period[1]}', fontsize=12)
 
-    # plt.savefig(f'{opts.outpath}/plots/threshold-map_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
+    # plt.savefig(f'{opts.outpath}/plots/threshold-map_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
     #             f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=150)
     plt.savefig(f'/data/users/hst/TEA/TEA/testy_data/plots/'
-                f'threshold-map_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
+                f'threshold-map_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
                 f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=150)
 
 
@@ -156,8 +157,10 @@ def plot_spartacus(opts):
     Returns:
 
     """
-
-    thr = xr.open_dataset(f'{opts.statpath}static_{opts.param_str}_{opts.region}_{opts.dataset}.nc')
+    reg_str = opts.region
+    if opts.agr:
+        reg_str = f'AGR-{opts.agr}'
+    thr = xr.open_dataset(f'{opts.statpath}static_{opts.param_str}_{reg_str}_{opts.dataset}.nc')
     thr = thr.threshold
 
     fig, axs = plt.subplots(1, 1, figsize=(4.5, 3))
@@ -177,7 +180,7 @@ def plot_spartacus(opts):
 
     axs.axis('off')
 
-    plt.savefig(f'{opts.outpath}/plots/threshold-map_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
+    plt.savefig(f'{opts.outpath}/plots/threshold-map_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
                 f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=150)
     plt.close()
 
@@ -195,7 +198,7 @@ if __name__ == '__main__':
     # if not os.path.exists(plt_outpath):
     #     os.makedirs(plt_outpath)
 
-    if opts.region == 'EUR': # or opts.agr == 'EUR'
+    if opts.region == 'EUR' and opts.agr == 'EUR':
         plot_eur(opts=opts)
     elif opts.dataset != 'SPARTACUS':
         plot_single_country(opts=opts)
