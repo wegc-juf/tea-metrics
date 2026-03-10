@@ -151,15 +151,14 @@ def plot_gr_data(opts, ax, data, ddata, vname):
     ax.set_xlim(syr, eyr)
     ax.xaxis.set_minor_locator(FixedLocator(np.arange(syr, eyr)))
 
-    ymin, ymax = 0.5, 2
-    while data[vname].max() > ymax:
-        ymax += 0.5
+    ymin = round_to_next(rval=data[vname].min().values, limit=0.5, lower=True)
+    ymax = round_to_next(rval=data[vname].max().values, limit=0.5)
     ax.set_yticks(np.arange(ymin, ymax + 0.5, 0.5))
     ax.set_ylim(ymin, ymax)
 
     ax.set_title(props['title'], fontsize=14)
 
-    ypos_ref = 0.4
+    ypos_ref = ((1 - ymin) / (ymax - ymin)) + 0.05
     ypos_cc = ((data[f'{vname}_CC'].values - ymin) / (ymax - ymin)) + 0.05
     ax.text(0.02, ypos_ref, r'$\mathcal{A}_\mathrm{Ref}$',
             horizontalalignment='left',
@@ -244,16 +243,18 @@ def plot_tex_es(opts, ax, data, ddata):
     ax.set_xlim(syr, eyr)
     ax.xaxis.set_minor_locator(FixedLocator(np.arange(syr, eyr)))
 
-    ymin, ymax = 0, 10
-    while data[tex_var].max() > ymax:
-        ymax += 1
+    ymin = 0
+    if data[tex_var].max().values > data[es_var].max().values:
+        ymax = round_to_next(rval=data[tex_var].max().values, limit=1)
+    else:
+        ymax = round_to_next(rval=data[es_var].max().values, limit=1)
     ax.set_yticks(np.arange(ymin, ymax + 1, 1))
     ax.set_ylim(ymin, ymax)
 
     ax.set_title('Avg. Event Severity and Total Events Extremity', fontsize=14)
     ax.set_xlabel('Time (core year of decadal-mean value)', fontsize=10)
 
-    ypos_ref = 0.12
+    ypos_ref = ((1 - ymin) / (ymax - ymin)) + 0.05
     ypos_cc_tex = ((data[f'{tex_var}_CC'].values - ymin) / (ymax - ymin)) + 0.05
     ypos_cc_es = ((data[f'{es_var}_CC'].values - ymin) / (ymax - ymin)) + 0.05
     ax.text(0.02, ypos_ref, r'$\mathcal{A}_\mathrm{Ref}$',
@@ -286,7 +287,7 @@ def plot_tex_es(opts, ax, data, ddata):
             + f'{data[f"{tex_var}_CC"]:.2f}',
             horizontalalignment='left',
             verticalalignment='center', transform=ax.transAxes, backgroundcolor='whitesmoke',
-            fontsize=9)
+            fontsize=9, zorder=1)
 
 
 def plot_map(opts, fig, ax, data):
@@ -303,7 +304,9 @@ def plot_map(opts, fig, ax, data):
     """
     props = map_plot_params(opts=opts, vname=data.name)
 
-    lvls = np.arange(1, 4.25, 0.25)
+    cn = round_to_next(rval=data.min().values, limit=0.5, lower=True)
+    cx = round_to_next(rval=data.max().values, limit=0.5)
+    lvls = np.arange(cn, cx + 0.25, 0.25)
     if data.max() > lvls[-1] and data.min() > lvls[0]:
         ext = 'max'
     elif data.max() < lvls[-1] and data.min() > lvls[0]:
@@ -315,7 +318,7 @@ def plot_map(opts, fig, ax, data):
     val_min, val_max = gt0_data.min().values, gt0_data.max().values
     range_vals = [val_min, val_max]
 
-    map_vals = ax.contourf(data, cmap=props['cmap'], extend=ext, levels=lvls, vmin=1, vmax=4)
+    map_vals = ax.contourf(data, cmap=props['cmap'], extend=ext, levels=lvls, vmin=cn, vmax=cx)
 
     ax.axis('off')
     divider = make_axes_locatable(ax)
@@ -323,13 +326,32 @@ def plot_map(opts, fig, ax, data):
     cb = fig.colorbar(map_vals, cax=cax, orientation='vertical')
     cb.set_label(label=f'{opts.param_str}-{opts.period}-{props["lbl"]}', fontsize=12)
     cb.ax.tick_params(labelsize=10)
-    cb.ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+    cb.ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
     ax.set_title(props["title"], fontsize=14)
 
     ax.text(0.02, 0.92, props['lbl'] + f'(i,j) [{range_vals[0]:.2f}, {range_vals[1]:.2f}]',
             horizontalalignment='left',
             verticalalignment='center', transform=ax.transAxes, backgroundcolor='whitesmoke',
             fontsize=9)
+
+
+def round_to_next(rval, limit, lower=False):
+    """
+    round number to next number
+    Args:
+        rval: value to round
+        limit: limit to which one should round
+        lower: set if floor should be used instead of ceil
+
+    Returns:
+
+    """
+
+    rounded = np.ceil(rval / limit) * limit
+    if lower:
+        rounded = np.floor(rval / limit) * limit
+
+    return rounded
 
 
 def plot_main_parameter(opts):
@@ -375,10 +397,13 @@ def plot_main_parameter(opts):
 
     fig.subplots_adjust(wspace=0.2, hspace=0.33)
 
-    # plt.savefig(f'{opts.outpath}/plots/main-parameter_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
+    reg_str = opts.region
+    if opts.agr:
+        reg_str = f'AGR-{opts.agr}'
+    # plt.savefig(f'{opts.outpath}/plots/main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
     #             f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
     plt.savefig(f'/data/users/hst/TEA/TEA/testy_data/plots/'
-                f'main-parameter_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
+                f'main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
                 f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
 
 
