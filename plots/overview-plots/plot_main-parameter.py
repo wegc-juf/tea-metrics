@@ -145,6 +145,8 @@ def plot_gr_data(opts, ax, data, ddata, vname):
     ax.xaxis.set_minor_locator(FixedLocator(np.arange(syr, eyr)))
 
     ymin, ymax = 0.5, 2
+    while data[vname].max() > ymax:
+        ymax += 0.5
     ax.set_yticks(np.arange(ymin, ymax + 0.5, 0.5))
     ax.set_ylim(ymin, ymax)
 
@@ -291,7 +293,11 @@ def plot_map(opts, fig, ax, data):
     if 'x' in data.dims:
         cntry = cntry.sel(x=data.x, y=data.y)
     else:
-        cntry = cntry.sel(x=data.lon, y=data.lat)
+        cntry = cntry.sel(lon=data.lon, lat=data.lat)
+        if data.lat[1] < data.lat[0]:
+            # flip lat values to ascending order
+            data = data.sortby('lat')
+            cntry = cntry.sortby('lat')
     ax.contourf(cntry.nw_mask, colors='mistyrose')
 
     lvls = np.arange(1, 4.25, 0.25)
