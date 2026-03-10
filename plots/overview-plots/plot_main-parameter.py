@@ -41,16 +41,23 @@ def _getopts():
 
 
 def get_data(opts):
+
+    reg_str = opts.region
+    if opts.agr:
+        reg_str = f'AGR-{opts.agr}'
+
     af = xr.open_dataset(f'{opts.outpath}dec_indicator_variables/amplification/'
-                         f'AF_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}_{opts.start}to{opts.end}.nc')
+                         f'AF_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}_{opts.start}to{opts.end}.nc')
 
     dec = xr.open_dataset(f'{opts.outpath}dec_indicator_variables/'
-                          f'DEC_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}_{opts.start}to{opts.end}.nc')
+                          f'DEC_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}_{opts.start}to{opts.end}.nc')
 
     return af, dec
 
 
 def gr_plot_params(opts, vname):
+    if opts.agr:
+        vname = vname.replace('AGR', 'GR')
     params = {'EF_GR_AF': {'col': 'tab:blue',
                            'ylbl': r'EF amplification $(\mathcal{A}^\mathrm{F})$',
                            'title': 'Event Frequency (Annual)',
@@ -171,7 +178,7 @@ def plot_gr_data(opts, ax, data, ddata, vname):
     ref_abs = gmean(ddata.sel(time=slice(ref_cy_syr_ts, ref_cy_eyr_ts)))
     cc_abs = gmean(ddata.sel(time=slice(cc_cy_syr_ts, cc_cy_eyr_ts)))
 
-    if vname == 'EA_avg_GR_AF':
+    if vname in ['EA_avg_GR_AF', 'EA_avg_AGR_AF']:
         ax.text(0.02, 0.9, f'{opts.param_str}-{opts.period}-{vname[:2]}' + r'$_\mathrm{Ref | CC}$ = '
                 + f'{ref_abs:.1f}' + r'$\,$|$\,$'
                 + f'{cc_abs:.1f} {props["unit"]} \n'
@@ -206,8 +213,13 @@ def plot_tex_es(opts, ax, data, ddata):
     xvals = data.time
     xticks = np.arange(opts.start, opts.end + 1)
 
-    ax.plot(xticks, data['ES_avg_GR_AF'], 'o-', color='tab:grey', markersize=3, linewidth=2)
-    ax.plot(xticks, data['TEX_GR_AF'], 'o-', color='tab:red', markersize=3, linewidth=2)
+    es_var, tex_var = 'ES_avg_GR_AF', 'TEX_GR_AF'
+    if opts.agr:
+        es_var = es_var.replace('GR', 'AGR')
+        tex_var = tex_var.replace('GR', 'AGR')
+
+    ax.plot(xticks, data[es_var], 'o-', color='tab:grey', markersize=3, linewidth=2)
+    ax.plot(xticks, data[tex_var], 'o-', color='tab:red', markersize=3, linewidth=2)
 
     # find indices of ref/cc period
     ref_sidx, ref_eidx = np.where(xticks == opts.ref_period[0])[0][0], np.where(xticks == opts.ref_period[1])[0][0]
@@ -215,9 +227,9 @@ def plot_tex_es(opts, ax, data, ddata):
 
     ax.plot(xticks[ref_sidx:ref_eidx + 1], np.ones(len(xvals[ref_sidx:ref_eidx + 1])), alpha=0.5, color='tab:grey',
             linewidth=2)
-    ax.plot(xticks[cc_sidx:cc_eidx + 1], np.ones(len(xvals[cc_sidx:cc_eidx + 1])) * data['ES_avg_GR_AF_CC'].values,
+    ax.plot(xticks[cc_sidx:cc_eidx + 1], np.ones(len(xvals[cc_sidx:cc_eidx + 1])) * data[f'{es_var}_CC'].values,
             alpha=0.5, color='tab:grey', linewidth=2)
-    ax.plot(xticks[cc_sidx:cc_eidx + 1], np.ones(len(xvals[cc_sidx:cc_eidx + 1])) * data['TEX_GR_AF_CC'].values,
+    ax.plot(xticks[cc_sidx:cc_eidx + 1], np.ones(len(xvals[cc_sidx:cc_eidx + 1])) * data[f'{tex_var}_CC'].values,
             alpha=0.5, color='tab:red', linewidth=2)
 
     ax.set_ylabel(r'ES|TEX amplification $(\mathcal{A}^\mathrm{S}, \mathcal{A}^\mathrm{T})$',
@@ -233,7 +245,7 @@ def plot_tex_es(opts, ax, data, ddata):
     ax.xaxis.set_minor_locator(FixedLocator(np.arange(syr, eyr)))
 
     ymin, ymax = 0, 10
-    while data['TEX_GR_AF'].max() > ymax:
+    while data[tex_var].max() > ymax:
         ymax += 1
     ax.set_yticks(np.arange(ymin, ymax + 1, 1))
     ax.set_ylim(ymin, ymax)
@@ -242,8 +254,8 @@ def plot_tex_es(opts, ax, data, ddata):
     ax.set_xlabel('Time (core year of decadal-mean value)', fontsize=10)
 
     ypos_ref = 0.12
-    ypos_cc_tex = ((data['TEX_GR_AF_CC'].values - ymin) / (ymax - ymin)) + 0.05
-    ypos_cc_es = ((data['ES_avg_GR_AF_CC'].values - ymin) / (ymax - ymin)) + 0.05
+    ypos_cc_tex = ((data[f'{tex_var}_CC'].values - ymin) / (ymax - ymin)) + 0.05
+    ypos_cc_es = ((data[f'{es_var}_CC'].values - ymin) / (ymax - ymin)) + 0.05
     ax.text(0.02, ypos_ref, r'$\mathcal{A}_\mathrm{Ref}$',
             horizontalalignment='left', verticalalignment='center', transform=ax.transAxes, fontsize=11)
     ax.text(0.93, ypos_cc_es, r'$\mathcal{A}_\mathrm{CC}^\mathrm{S}$',
@@ -256,10 +268,10 @@ def plot_tex_es(opts, ax, data, ddata):
         f'{opts.ref_period[1] - 5}-01-01')
     cc_cy_syr_ts, cc_cy_eyr_ts = pd.Timestamp(f'{opts.cc_period[0] + 5}-01-01'), pd.Timestamp(
         f'{opts.cc_period[1] - 5}-01-01')
-    ref_abs_tex = gmean(ddata['TEX_GR'].sel(time=slice(ref_cy_syr_ts, ref_cy_eyr_ts)))
-    cc_abs_tex = gmean(ddata['TEX_GR'].sel(time=slice(cc_cy_syr_ts, cc_cy_eyr_ts)))
-    ref_abs_es = gmean(ddata['ES_avg_GR'].sel(time=slice(ref_cy_syr_ts, ref_cy_eyr_ts)))
-    cc_abs_es = gmean(ddata['ES_avg_GR'].sel(time=slice(cc_cy_syr_ts, cc_cy_eyr_ts)))
+    ref_abs_tex = gmean(ddata[tex_var[:-3]].sel(time=slice(ref_cy_syr_ts, ref_cy_eyr_ts)))
+    cc_abs_tex = gmean(ddata[tex_var[:-3]].sel(time=slice(cc_cy_syr_ts, cc_cy_eyr_ts)))
+    ref_abs_es = gmean(ddata[es_var[:-3]].sel(time=slice(ref_cy_syr_ts, ref_cy_eyr_ts)))
+    cc_abs_es = gmean(ddata[es_var[:-3]].sel(time=slice(cc_cy_syr_ts, cc_cy_eyr_ts)))
 
     ax.text(0.02, 0.85,
             f'{opts.param_str}-{opts.period}-TEX' + r'$_\mathrm{Ref | CC}$'
@@ -270,8 +282,8 @@ def plot_tex_es(opts, ax, data, ddata):
             + f'{cc_abs_es:.0f} ' + r'areal$\,$' + opts.unit + r'$\,$days$\,$'
             + '\n'
             + r'$\mathcal{A}_\mathrm{CC}^\mathrm{S} | \mathcal{A}_\mathrm{CC}^\mathrm{T}$ = '
-            + f'{data["ES_avg_GR_AF_CC"]:.2f}' + r'$\,$|$\,$'
-            + f'{data["TEX_GR_AF_CC"]:.2f}',
+            + f'{data[f"{es_var}_CC"]:.2f}' + r'$\,$|$\,$'
+            + f'{data[f"{tex_var}_CC"]:.2f}',
             horizontalalignment='left',
             verticalalignment='center', transform=ax.transAxes, backgroundcolor='whitesmoke',
             fontsize=9)
@@ -290,17 +302,6 @@ def plot_map(opts, fig, ax, data):
 
     """
     props = map_plot_params(opts=opts, vname=data.name)
-
-    cntry = xr.open_dataset(f'{opts.maskpath}{opts.mask_sub}{opts.region}_masks_{opts.dataset}.nc')
-    if 'x' in data.dims:
-        cntry = cntry.sel(x=data.x, y=data.y)
-    else:
-        cntry = cntry.sel(lon=data.lon, lat=data.lat)
-        if data.lat[1] < data.lat[0]:
-            # flip lat values to ascending order
-            data = data.sortby('lat')
-            cntry = cntry.sortby('lat')
-    ax.contourf(cntry.nw_mask, colors='whitesmoke')
 
     lvls = np.arange(1, 4.25, 0.25)
     if data.max() > lvls[-1] and data.min() > lvls[0]:
@@ -346,6 +347,8 @@ def plot_main_parameter(opts):
 
     gr_vars = ['EF_GR_AF', 'ED_avg_GR_AF', 'EM_avg_GR_AF', 'EA_avg_GR_AF']
     for irow, gr_var in enumerate(gr_vars):
+        if opts.agr:
+            gr_var = gr_var.replace('GR', 'AGR')
         plot_gr_data(opts=opts, ax=axs[irow, 0], data=data[[gr_var, f'{gr_var}_CC']], vname=gr_var,
                      ddata=dec_data[gr_var.split('_AF')[0]])
 
@@ -353,8 +356,15 @@ def plot_main_parameter(opts):
     for irow, map_var in enumerate(map_vars):
         plot_map(opts=opts, fig=fig, ax=axs[irow, 1], data=data[map_var])
 
-    plot_tex_es(opts=opts, ax=axs[3, 1], data=data[['TEX_GR_AF', 'ES_avg_GR_AF', f'TEX_GR_AF_CC', f'ES_avg_GR_AF_CC']],
-                ddata=dec_data[['TEX_GR', 'ES_avg_GR']])
+
+    if opts.agr:
+        plot_tex_es(opts=opts, ax=axs[3, 1],
+                   data=data[['TEX_AGR_AF', 'ES_avg_AGR_AF', f'TEX_AGR_AF_CC', f'ES_avg_AGR_AF_CC']],
+                   ddata=dec_data[['TEX_AGR', 'ES_avg_AGR']])
+    else:
+        plot_tex_es(opts=opts, ax=axs[3, 1],
+                    data=data[['TEX_GR_AF', 'ES_avg_GR_AF', f'TEX_GR_AF_CC', f'ES_avg_GR_AF_CC']],
+                    ddata=dec_data[['TEX_GR', 'ES_avg_GR']])
 
 
     # iterate over each subplot and add a text label
@@ -365,7 +375,10 @@ def plot_main_parameter(opts):
 
     fig.subplots_adjust(wspace=0.2, hspace=0.33)
 
-    plt.savefig(f'{opts.outpath}/plots/main-parameter_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
+    # plt.savefig(f'{opts.outpath}/plots/main-parameter_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
+    #             f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
+    plt.savefig(f'/data/users/hst/TEA/TEA/testy_data/plots/'
+                f'main-parameter_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
                 f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
 
 
@@ -373,7 +386,7 @@ if __name__ == '__main__':
     cmd_opts = _getopts()
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
     # check and create output path
-    plt_outpath = f'{opts.outpath}/plots'
-    if not os.path.exists(plt_outpath):
-        os.makedirs(plt_outpath)
+    # plt_outpath = f'{opts.outpath}/plots'
+    # if not os.path.exists(plt_outpath):
+    #     os.makedirs(plt_outpath)
     plot_main_parameter(opts)

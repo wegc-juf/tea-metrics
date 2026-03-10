@@ -12,6 +12,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 import os
 import seaborn as sns
+import sys
 import xarray as xr
 
 from config import load_opts
@@ -142,7 +143,10 @@ def plot_single_country(opts):
 
     axs.set_title(f'{opts.dataset}-{opts.param_str}-Ref{opts.ref_period[0]}-{opts.ref_period[1]}', fontsize=12)
 
-    plt.savefig(f'{opts.outpath}/plots/threshold-map_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
+    # plt.savefig(f'{opts.outpath}/plots/threshold-map_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
+    #             f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=150)
+    plt.savefig(f'/data/users/hst/TEA/TEA/testy_data/plots/'
+                f'threshold-map_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
                 f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=150)
 
 
@@ -156,13 +160,11 @@ def plot_spartacus(opts):
     thr = xr.open_dataset(f'{opts.statpath}static_{opts.param_str}_{opts.region}_{opts.dataset}.nc')
     thr = thr.threshold
 
-    cntry = xr.open_dataset(f'{opts.maskpath}{opts.mask_sub}{opts.region}_masks_{opts.dataset}.nc')
-
     fig, axs = plt.subplots(1, 1, figsize=(4.5, 3))
     cmap = 'Reds'
     if opts.precip:
         cmap='Blues'
-    axs.contourf(cntry.x, cntry.y, cntry.nw_mask, colors='whitesmoke')
+
     perc = axs.contourf(thr.x, thr.y, thr, cmap=cmap,
                         levels=np.arange(np.floor(thr.min().values), np.ceil(thr.max().values)))
 
@@ -183,9 +185,15 @@ def plot_spartacus(opts):
 if __name__ == '__main__':
     cmd_opts = _getopts()
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
-    plt_outpath = f'{opts.outpath}/plots'
-    if not os.path.exists(plt_outpath):
-        os.makedirs(plt_outpath)
+
+    if opts.threshold_type == 'abs':
+        print(f'Threshold is set to an absoulte value of {opts.threshold} {opts.unit} for all grid cells. '
+              f'Threshold map will not be plotted.')
+        sys.exit()
+
+    # plt_outpath = f'{opts.outpath}/plots'
+    # if not os.path.exists(plt_outpath):
+    #     os.makedirs(plt_outpath)
 
     if opts.region == 'EUR': # or opts.agr == 'EUR'
         plot_eur(opts=opts)
