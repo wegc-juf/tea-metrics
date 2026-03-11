@@ -43,6 +43,7 @@ def _getopts():
 
     return myopts
 
+
 def plot_eur(opts):
     """
     plot EUR map of threshold grid
@@ -52,7 +53,7 @@ def plot_eur(opts):
     Returns:
 
     """
-    thr = xr.open_dataset(f'{opts.statpath}static_{opts.param_str}_EUR_{opts.dataset}.nc')
+    thr = xr.open_dataset(f'{opts.statpath}threshold_{opts.param_str}_{opts.period}_EUR_{opts.dataset}.nc')
 
     thr = thr.threshold
     thr = thr.sel(lat=slice(72, 35), lon=slice(-10, 40))
@@ -92,7 +93,8 @@ def plot_eur(opts):
              horizontalalignment='left', verticalalignment='center', transform=axs.transAxes,
              backgroundcolor='whitesmoke', fontsize=10)
 
-    plt.savefig(f'{opts.outpath}/plots/threshold-map_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
+    plt.savefig(f'{opts.outpath}/plots/'
+                f'threshold-map_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
                 f'_{opts.start}to{opts.end}.png', bbox_inches='tight', dpi=150)
 
 
@@ -193,11 +195,11 @@ if __name__ == '__main__':
               f'Threshold map will not be plotted.')
         sys.exit()
 
-    plt_outpath = f'{opts.outpath}/plots'
-    if not os.path.exists(plt_outpath):
-        os.makedirs(plt_outpath)
+    # plt_outpath = f'{opts.outpath}/plots'
+    # if not os.path.exists(plt_outpath):
+    #     os.makedirs(plt_outpath)
 
-    if opts.region == 'EUR' and opts.agr == 'EUR':
+    if opts.region == 'EUR':# and opts.agr == 'EUR':
         plot_eur(opts=opts)
     elif opts.dataset != 'SPARTACUS':
         plot_single_country(opts=opts)
