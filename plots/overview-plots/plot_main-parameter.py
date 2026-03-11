@@ -403,10 +403,7 @@ def plot_main_parameter(opts):
     reg_str = opts.region
     if 'agr' in opts:
         reg_str = f'AGR-{opts.agr}'
-    # plt.savefig(f'{opts.outpath}/plots/main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
-    #             f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
-    plt.savefig(f'/data/users/hst/TEA/TEA/testy_data/plots/'
-                f'main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
+    plt.savefig(f'{opts.outpath}/plots/main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
                 f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
 
 
@@ -414,7 +411,7 @@ if __name__ == '__main__':
     cmd_opts = _getopts()
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
     # check and create output path
-    # plt_outpath = f'{opts.outpath}/plots'
-    # if not os.path.exists(plt_outpath):
-    #     os.makedirs(plt_outpath)
+    plt_outpath = f'{opts.outpath}/plots'
+    if not os.path.exists(plt_outpath):
+        os.makedirs(plt_outpath)
     plot_main_parameter(opts)
