@@ -21,3 +21,4 @@ __pycache__
 /plots/paper-figs/*.png
 /plots/paper-figs/misc/*.png
 /internal/config/WEGC/ERA5_AT_Tx25.yaml
+/internal/config/WEGC/ERA5H_COMMON_UTCI26.yaml
