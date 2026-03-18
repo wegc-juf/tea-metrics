@@ -103,6 +103,8 @@ def _get_default_opts(fname, opts):
         opts.parameter = 'Tx'
     if 'threshold_type' not in opts:
         opts.threshold_type = 'perc'
+    if 'aggregation_method' not in opts:
+        opts.aggregation_method = None
     if 'threshold' not in opts:
         if opts.precip:
             opts.threshold = 95
@@ -244,6 +246,7 @@ def check_type(key, value):
         'parameter': str,
         'precip': bool,
         'threshold_type': str,
+        'aggregation_method': str,
         'threshold': float,
         'primary_threshold': float,
         'smoothing_radius': float,

@@ -315,7 +315,11 @@ def get_gridded_data(start, end, opts, period='annual', hourly=False):
 
     # resample to daily data if hourly data is loaded but daily data is wanted
     if subdaily and not hourly:
-        if opts.parameter == 'Tx':
+        if opts.aggregation_method is not None:
+            agg_method = opts.aggregation_method
+            resampled = data.resample(time='1D')
+            data = getattr(resampled, agg_method)()
+        elif opts.parameter == 'Tx':
             data = data.resample(time='1D').max()
         elif opts.parameter == 'Tn':
             data = data.resample(time='1D').min()
