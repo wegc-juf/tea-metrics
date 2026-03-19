@@ -180,6 +180,8 @@ def _get_default_opts(fname, opts):
             opts.compare_to_ref = False
         if 'spreads' not in opts:
             opts.spreads = False
+        if 'annual_spreads' not in opts:
+            opts.annual_spreads = False
         if 'min_duration' not in opts:
             opts.min_duration = 7
         if 'altitude_threshold' not in opts:
@@ -285,6 +287,7 @@ def check_type(key, value):
         'recalc_decadal': bool,
         'decadal_only': bool,
         'spreads': bool,
+        'annual_spreads': bool,
         'compare_to_ref': bool,
 
         # create_region_masks.py
