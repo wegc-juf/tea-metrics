@@ -181,7 +181,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 min_area=min_area, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                cell_size_lat=opts.agr_cell_size, land_frac_min=opts.land_frac_min)
+                                cell_size_y=opts.agr_cell_size, land_frac_min=opts.land_frac_min)
         else:
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 min_area=min_area, low_extreme=opts.low_extreme,
@@ -208,9 +208,11 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
     else:
         # load existing results
         if 'agr' in opts:
+            # TODO: use this also for non-AGR and test
+            data, mask, threshold = _reduce_region(opts, None, mask, threshold)
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                cell_size_lat=opts.agr_cell_size, land_frac_min=opts.land_frac_min)
+                                cell_size_y=opts.agr_cell_size, land_frac_min=opts.land_frac_min)
         else:
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
                                 unit=opts.unit,
@@ -446,38 +448,48 @@ def _load_or_generate_gr_grid(opts, tea):
         tea.gr_grid_areas = gr_grid_areas
 
     # set cell_size
-    tea.cell_size_lat = opts.agr_cell_size
+    tea.cell_size_y = opts.agr_cell_size
 
 
-def _calc_lat_lon_range(cell_size_lat, mask):
+def _calc_x_y_range(cell_size_y, mask):
     """
-    calculate latitude and longitude range for selected region
+    calculate x and y coord range for selected region
     Args:
-        cell_size_lat: size of the grid cell in latitude
+        cell_size_y: size of the grid cell in latitude/y direction
         mask: mask grid
 
     Returns:
-        min_lat: minimum latitude
-        min_lon: minimum longitude
-        max_lat: maximum latitude
-        max_lon: maximum longitude
+        y_min: minimum y coordinate
+        x_min: minimum x coordinate
+        y_max: maximum y coordinate
+        x_max: maximum x coordinate
 
     """
+    x_dim, y_dim = TEAIndicators.find_dim_names(mask)
     valid_cells = mask.where(mask > 0, drop=True)
-    min_lat = math.floor(valid_cells.lat.min().values - cell_size_lat / 2)
-    if min_lat < mask.lat.min().values:
-        min_lat = float(mask.lat.min().values)
-    max_lat = math.ceil(valid_cells.lat.max().values + cell_size_lat / 2)
-    if max_lat > mask.lat.max().values:
-        max_lat = float(mask.lat.max().values)
-    cell_size_lon = 1 / np.cos(np.deg2rad(max_lat)) * cell_size_lat
-    min_lon = math.floor(valid_cells.lon.min().values - cell_size_lon / 2)
-    if min_lon < mask.lon.min().values:
-        min_lon = float(mask.lon.min().values)
-    max_lon = math.ceil(valid_cells.lon.max().values + cell_size_lon / 2)
-    if max_lon > mask.lon.max().values:
-        max_lon = float(mask.lon.max().values)
-    return min_lat, min_lon, max_lat, max_lon
+
+    y_min = math.floor(valid_cells[y_dim].min().values - cell_size_y / 2)
+    if y_min < float(mask[y_dim].min().values):
+        y_min = float(mask[y_dim].min().values)
+    y_max = math.ceil(valid_cells[y_dim].max().values + cell_size_y / 2)
+    if y_max > float(mask[y_dim].max().values):
+        y_max = float(mask[y_dim].max().values)
+
+    if x_dim == 'x' and y_dim == 'y':
+        # if coordinates are named x and y, we assume they are in a projected coordinate system and use the same
+        # cell size for both dimensions
+        cell_size_x = cell_size_y
+    else:
+        cell_size_x = 1 / np.cos(np.deg2rad(y_max)) * cell_size_y
+
+    x_min = math.floor(valid_cells[x_dim].min().values - cell_size_x / 2)
+    if x_min < float(mask[x_dim].min().values):
+        x_min = float(mask[x_dim].min().values)
+    x_max = math.ceil(valid_cells[x_dim].max().values + cell_size_x / 2)
+    if x_max > float(mask[x_dim].max().values):
+        x_max = float(mask[x_dim].max().values)
+
+    return x_min, y_min, x_max, y_max
 
 
 def _reduce_region(opts, data, mask, threshold=None, full_region=False):
@@ -494,30 +506,37 @@ def _reduce_region(opts, data, mask, threshold=None, full_region=False):
         data: reduced data
         mask: reduced mask grid
         threshold: reduced threshold grid
-
     """
-    cell_size_lat = opts.agr_cell_size
+    cell_size_y = opts.agr_cell_size
+    xdim, ydim = TEAIndicators.find_dim_names(mask)
 
     # preselect region to reduce computation time (incl. some margins to avoid boundary effects)
     if full_region:
-        min_lat = mask.lat.min().values
-        max_lat = mask.lat.max().values
-        min_lon = mask.lon.min().values
-        max_lon = mask.lon.max().values
+        y_min = float(mask[ydim].min().values)
+        y_max = float(mask[ydim].max().values)
+        x_min = float(mask[xdim].min().values)
+        x_max = float(mask[xdim].max().values)
     else:
-        min_lat, min_lon, max_lat, max_lon = _calc_lat_lon_range(cell_size_lat, mask)
+        x_min, y_min, x_max, y_max = _calc_x_y_range(cell_size_y, mask)
 
     if opts.region == 'EUR':
         # hardcoded extent for EUR region
         lons = np.arange(-12, 40.5, opts.grg_grid_spacing)
-        cell_size_lon = 1 / np.cos(np.deg2rad(max_lat)) * cell_size_lat
-        min_lon = math.floor(lons[0] - cell_size_lon / 2)
-        max_lon = math.ceil(lons[-1] + cell_size_lon / 2)
+        cell_size_lon = 1 / np.cos(np.deg2rad(y_max)) * cell_size_y
+        x_min = math.floor(lons[0] - cell_size_lon / 2)
+        x_max = math.ceil(lons[-1] + cell_size_lon / 2)
 
-    proc_data = data.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
-    proc_mask = mask.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
+    # get order of y coordinates
+    y_ascending = mask[ydim][1] > mask[ydim][0]
+    if not y_ascending:
+        # swap min and max if values are in descending order
+        y_min, y_max = y_max, y_min
+    proc_data = None
+    if data is not None:
+        proc_data = data.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
+    proc_mask = mask.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
     if threshold is not None:
-        threshold = threshold.sel(lat=slice(max_lat, min_lat), lon=slice(min_lon, max_lon))
+        threshold = threshold.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
 
     return proc_data, proc_mask, threshold
 
@@ -585,12 +604,12 @@ def _calc_agr_mean_and_spread(opts, tea):
 
     """
     crop_to_shp = False
-    agr_lat_range = None
-    agr_lon_range = None
+    agr_x_range = None
+    agr_y_range = None
 
     if opts.agr_range is not None:
-        agr_lat_range = opts.agr_range[:2]
-        agr_lon_range = opts.agr_range[-2:]
+        agr_x_range = opts.agr_range[-2:]
+        agr_y_range = opts.agr_range[:2]
     elif opts.agr != opts.region:
         # use region shape for AGR calculation
         # load mask for the specified region
@@ -601,7 +620,7 @@ def _calc_agr_mean_and_spread(opts, tea):
         _load_or_generate_gr_grid(agr_opts, tea)
         crop_to_shp = True
 
-    tea.calc_agr_vars(lat_range=agr_lat_range, lon_range=agr_lon_range, spreads=opts.spreads, crop_to_shp=crop_to_shp)
+    tea.calc_agr_vars(y_range=agr_y_range, x_range=agr_x_range, spreads=opts.spreads, crop_to_shp=crop_to_shp)
 
     # save results
     outpath_decadal = get_decadal_outpath(opts, opts.agr)
@@ -645,8 +664,7 @@ def _load_gr_grid_static(opts):
     logger.info(f'Loading GR area grid from {gr_grid_areas_file}')
     try:
         gr_grid_areas = xr.open_dataset(gr_grid_areas_file)
-        gr_grid_areas = gr_grid_areas.area_grid
-    except FileNotFoundError:
+    except FileNotFoundError, AttributeError:
         if opts.decadal_only:
             logger.info(
                 f'No GR area grid found at {gr_grid_areas_file}. Trying to generate one')

@@ -1,8 +1,7 @@
 """
 Threshold Exceedance Amount (TEA) indicators Class implementation
-Based on: https://doi.org/10.48550/arXiv.2504.18964
-# TODO: update doi when final version is published
-Equation numbers refer to Supplementary Notes
+Based on: https://doi.org/10.1016/j.wace.2026.100855
+Equation numbers refer to Supplementary Notes therin
 """
 import warnings
 import os
@@ -59,6 +58,9 @@ class TEAIndicators:
         self.mask = mask
         if mask is not None:
             self._find_dim_names(data=mask)
+        elif area_grid is not None:
+            self._find_dim_names(data=area_grid)
+            
 
         self.apply_mask = apply_mask
 
@@ -141,38 +143,25 @@ class TEAIndicators:
 
         self.null_val = 0
 
-    def _crop_to_rect(self, lat_range, lon_range):
+    def _crop_to_rect(self, x_range, y_range):
         """
         crop all grids to a rectangular area
         Args:
-            lat_range: Latitude range (min, max)
-            lon_range: Longitude range (min, max)
+            x_range: x coordinate range (min, max)
+            y_range: y coordinate range (min, max)
 
         Returns:
 
         """
-        rename_dict_inv = {}
-        if 'lon' not in self.input_data.dims:
-            rename_dict = {self.xdim: 'lon', self.ydim: 'lat'}
-            self.input_data = self.input_data.rename(rename_dict)
-            self.area_grid = self.area_grid.rename(rename_dict)
-            self.mask = self.mask.rename(rename_dict)
-            self.threshold_grid = self.threshold_grid.rename(rename_dict)
-            rename_dict_inv = {'lon': self.xdim, 'lat': self.ydim}
-
-        self.input_data = self.input_data.sel(lat=slice(lat_range[1], lat_range[0]),
-                                              lon=slice(lon_range[0], lon_range[1]))
-        self.area_grid = self.area_grid.sel(lat=slice(lat_range[1], lat_range[0]),
-                                            lon=slice(lon_range[0], lon_range[1]))
-        self.mask = self.mask.sel(lat=slice(lat_range[1], lat_range[0]),
-                                  lon=slice(lon_range[0], lon_range[1]))
-        self.threshold_grid = self.threshold_grid.sel(lat=slice(lat_range[1], lat_range[0]),
-                                                      lon=slice(lon_range[0], lon_range[1]))
-        if rename_dict_inv:
-            self.input_data = self.input_data.rename(rename_dict_inv)
-            self.area_grid = self.area_grid.rename(rename_dict_inv)
-            self.mask = self.mask.rename(rename_dict_inv)
-            self.threshold_grid = self.threshold_grid.rename(rename_dict_inv)
+        # y order of slice coordinates already correct from y_range
+        slice_x = slice(x_range[0], x_range[1])
+        slice_y = slice(y_range[1], y_range[0])
+        
+        # select using the current dimension names
+        self.input_data = self.input_data.sel({self.ydim: slice_y, self.xdim: slice_x})
+        self.area_grid = self.area_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
+        self.mask = self.mask.sel({self.ydim: slice_y, self.xdim: slice_x})
+        self.threshold_grid = self.threshold_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
 
     def _crop_to_mask_extents(self):
         """
@@ -180,32 +169,44 @@ class TEAIndicators:
         """
         mask = self.mask
         idx_with_data = np.where(mask > 0)
-        lon_min = mask[self.xdim][idx_with_data[1]].min().values
-        lon_max = mask[self.xdim][idx_with_data[1]].max().values
-        lat_min = mask[self.ydim][idx_with_data[0]].min().values
-        lat_max = mask[self.ydim][idx_with_data[0]].max().values
+        x_min = mask[self.xdim][idx_with_data[1]].min().values
+        x_max = mask[self.xdim][idx_with_data[1]].max().values
+        y_min = mask[self.ydim][idx_with_data[0]].min().values
+        y_max = mask[self.ydim][idx_with_data[0]].max().values
         if 'lon' in self.mask.dims:
-            lat_range = [lat_min, lat_max]
+            y_range = [y_min, y_max]
         else:
-            lat_range = [lat_max, lat_min]
-        lon_range = [lon_min, lon_max]
-        self._crop_to_rect(lat_range, lon_range)
+            y_range = [y_max, y_min]
+        x_range = [x_min, x_max]
+        self._crop_to_rect(x_range=x_range, y_range=y_range)
 
     def _find_dim_names(self, data):
+        self.xdim, self.ydim = self.find_dim_names(data)
+        
+    @staticmethod
+    def find_dim_names(data):
+        """
+        find x and y dim names for data
+        Args:
+            data: xarray dataset or data array
+        
+        Returns:
+            xdim: x dimension name
+            ydim: y dimension name
+
+        """
         # TODO: make this more dynamic, maybe add x and y names in CFG
         try:
             spatial_dims = [dim for dim in data.dims if dim != 'time']
-
+            
             dim_mapping = {'x': ('x', 'y'),
                            'X': ('X', 'Y'),
                            'lon': ('lon', 'lat'),
                            'longitude': ('longitude', 'latitude'),
                            'Longitude': ('Longitude', 'Latitude')}
-
+            
             for key, (xdim, ydim) in dim_mapping.items():
                 if key in spatial_dims:
-                    self.xdim = xdim
-                    self.ydim = ydim
                     break
             else:
                 raise ValueError("Names of x- and y-dim of input data could not be determined. "
@@ -214,6 +215,7 @@ class TEAIndicators:
         except:
             raise ValueError("Name of time dim of input data could not be determined. "
                              "Please provide data with common time names (time, days).")
+        return xdim, ydim
 
     def _set_input_data_grid(self, input_data_grid):
         """
@@ -1647,8 +1649,7 @@ class TEAIndicators:
         ref_mean = self._ref_mean
         if min_duration > 0:
             # get ED in d/year for ref period (1 d/y = 10 d/decade)
-            ed = self._decadal_ED.sel(
-                time=slice(f'{ref_period[0] + 5}-01-01', f'{ref_period[1] - 4}-12-31'))
+            ed = self._decadal_ED.sel(time=slice(f'{ref_period[0] + 5}-01-01', f'{ref_period[1] - 4}-12-31'))
             ed_min = ed.min(dim='time', skipna=True)
             self._apply_min_duration(ref_mean, min_duration_avg, duration_data=ed_min)
         amplification_factors = self.decadal_results / ref_mean
@@ -1800,8 +1801,7 @@ class TEAIndicators:
             return
 
         months = self.CTP_months[self.CTP]
-        self._daily_results_filtered = self.daily_results.sel(
-            time=self.daily_results.time.dt.month.isin(months))
+        self._daily_results_filtered = self.daily_results.sel(time=self.daily_results.time.dt.month.isin(months))
 
     def _resample_to_CTP(self, ctp=None):
         """
@@ -1877,7 +1877,14 @@ class TEAIndicators:
             capitalized: if True, use capitalized names for x and y dimensions
         """
 
-        area_grid = xr.full_like(template_grid[0, :, :], 1)
+        # get number of dimensions
+        ndims = len(template_grid.dims)
+        if ndims == 3:
+            area_grid = xr.full_like(template_grid[0, :, :], 1)
+        elif ndims == 2:
+            area_grid = xr.full_like(template_grid[:, :], 1)
+        else:
+            raise ValueError("Template grid must be 2D for regular cartesian area grid creation")
         # get size of one grid cell (in km2)
         x_size = abs(template_grid[self.xdim][1] - template_grid[self.xdim][0]) / 1000
         y_size = abs(template_grid[self.ydim][1] - template_grid[self.ydim][0]) / 1000

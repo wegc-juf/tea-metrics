@@ -1,8 +1,7 @@
 """
 Threshold Exceedance Amount (TEA) indicators Class implementation for aggregated georegions (AGR)
-Based on: https://doi.org/10.48550/arXiv.2504.18964
-# TODO: change doi when final version is available
-Equation numbers refer to Supplementary Notes
+Based on: https://doi.org/10.1016/j.wace.2026.100855
+Equation numbers refer to Supplementary Notes therin
 """
 import warnings
 import time
@@ -29,7 +28,7 @@ class TEAAgr(TEAIndicators):
     """
     def __init__(self, input_data=None, threshold=None, mask=None, min_area=0.0001,
                  gr_grid_res=0.5, land_sea_mask=None, gr_grid_mask=None, gr_grid_areas=None,
-                 land_frac_min=0.5, cell_size_lat=2, **kwargs):
+                 land_frac_min=0.5, cell_size_y=2, **kwargs):
         """
         initialize TEA object
 
@@ -41,7 +40,7 @@ class TEAAgr(TEAIndicators):
             gr_grid_res: resolution for grid of GeoRegions (in degrees)
             land_sea_mask: land-sea mask if needed
             land_frac_min: minimum fraction of land below 1500m. Default: 0.5
-            cell_size_lat: size of GR grid cell in latitudinal direction (in degrees). Default: 2
+            cell_size_y: size of GR grid cell in latitudinal/y direction. Default: 2
             gr_grid_mask: mask for GR grid (will be automatically generated if not provided)
             gr_grid_areas: areas for GR grid (will be automatically generated if not provided)
         """
@@ -57,15 +56,15 @@ class TEAAgr(TEAIndicators):
             ref_grid = None
 
         if ref_grid is not None:
-            self._lat_resolution_in = round(abs(ref_grid.lat.values[0] - ref_grid.lat.values[1]), 4)
+            self._y_resolution_in = round(abs(ref_grid[self.ydim].values[0] - ref_grid[self.ydim].values[1]), 4)
         else:
-            self._lat_resolution_in = None
+            self._y_resolution_in = None
         self.gr_grid_res = gr_grid_res
         self.gr_grid_mask = None
         self.gr_grid_areas = None
         self.land_sea_mask = land_sea_mask
         self.land_frac_min = land_frac_min
-        self.cell_size_lat = cell_size_lat
+        self.cell_size_y = cell_size_y
 
         self.gr_grid_mask = gr_grid_mask
         self.gr_grid_areas = gr_grid_areas
@@ -80,31 +79,42 @@ class TEAAgr(TEAIndicators):
         """
         super().calc_daily_basis_vars(grid=grid, gr=gr)
 
-    def select_sub_gr(self, lat, lon):
+    def select_sub_gr(self, ycoord, xcoord):
         """
         select data of GeoRegion sub-cell and weight edges
         Args:
-            lat: center latitude of cell (in degrees)
-            lon: center longitude of cell (in degrees)
+            ycoord: center value of cell for ycoord
+            xcoord: center value of cell for xcoord
 
         Returns:
             cell_data: data of cell
             cell_static: static data of cell
         """
 
-        lat_res = self._lat_resolution_in
-        lat_off = self.cell_size_lat / 2
-        lon_off_exact = 1 / np.cos(np.deg2rad(lat)) * lat_off
-        size_exact = lon_off_exact * lat_off
+        y_res = self._y_resolution_in
+        y_off = self.cell_size_y / 2
+        
+        if self.ydim == 'lat':
+            lon_off_exact = 1 / np.cos(np.deg2rad(ycoord)) * y_off
+            size_exact = lon_off_exact * y_off
 
-        lon_off = np.round(lon_off_exact * 4, 0) / 4.
-        size_real = lon_off * lat_off
-        area_frac = size_real / size_exact
-
+            x_off = np.round(lon_off_exact * 4, 0) / 4.
+            size_real = x_off * y_off
+            area_frac = size_real / size_exact
+        else:
+            x_off = y_off
+            area_frac = 1
+            
+        # take care of y coordinate order (different for lat/lon and y/x grids)
+        if self.daily_results[self.ydim][0] > self.daily_results[self.ydim][-1]:
+            slice_y = slice(ycoord + y_off, ycoord - y_off + y_res)
+        else:
+            slice_y = slice(ycoord - y_off + y_res, ycoord + y_off)
+        slice_x = slice(xcoord - x_off, xcoord + x_off - y_res)
+        
         if self.land_frac_min > 0:
             # get land-sea mask
-            cell_lsm = self.land_sea_mask.sel(lat=slice(lat + lat_off, lat - lat_off + lat_res),
-                                              lon=slice(lon - lon_off, lon + lon_off - lat_res))
+            cell_lsm = self.land_sea_mask.sel({self.ydim: slice_y, self.xdim: slice_x})
 
             # calculate fraction covered by valid cells (land below 1500 m)
             land_frac = cell_lsm.sum().values / np.size(cell_lsm)
@@ -112,17 +122,15 @@ class TEAAgr(TEAIndicators):
                 return None
 
         # select data for cell
-        cell_data = self.daily_results.sel(lat=slice(lat + lat_off, lat - lat_off + lat_res),
-                                           lon=slice(lon - lon_off, lon + lon_off - lat_res))
+        cell_data = self.daily_results.sel({self.ydim: slice_y, self.xdim: slice_x})
+        # select static data for cell
+        cell_area_grid = self.area_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
+
         # compensate rounding errors
         cell_data['DTEA'] = cell_data['DTEA'] / area_frac
-
-        # select static data for cell
-        cell_area_grid = self.area_grid.sel(lat=slice(lat + lat_off, lat - lat_off + lat_res),
-                                            lon=slice(lon - lon_off, lon + lon_off - lat_res))
         cell_area_grid = cell_area_grid / area_frac
 
-        if len(cell_area_grid.lat) == 0:
+        if len(cell_area_grid[self.ydim]) == 0:
             raise ValueError('No valid cell found, check why this happens')
 
         # TODO: two options: either return data itself and stack to xarray then calculate TEA or return individual TEA
@@ -131,12 +139,12 @@ class TEAAgr(TEAIndicators):
         tea_sub_gr.set_daily_results(cell_data)
         return tea_sub_gr
 
-    def set_ctp_results(self, lat, lon, ctp_results):
+    def set_ctp_results(self, xcoord, ycoord, ctp_results):
         """
         set CTP variables for point
         Args:
-            lat: latitude
-            lon: longitude
+            xcoord: x coordinate value
+            ycoord: y coordinate value
             ctp_results: CTP GR data for point
         """
         # remove GR from variable names
@@ -145,18 +153,18 @@ class TEAAgr(TEAIndicators):
         if self.ctp_results is None or not len(self.ctp_results.data_vars):
             data_vars = [var for var in ctp_results.data_vars]
             var_dict = {}
-            lats, lons = self._get_lats_lons()
+            xcoords, ycoords = self._get_xy()
             for var in data_vars:
-                var_dict[var] = (['time', 'lat', 'lon'], np.nan * np.ones((len(ctp_results.time),
-                                                                           len(lats),
-                                                                           len(lons))))
-            self.ctp_results = xr.Dataset(coords=dict(time=ctp_results.time,
-                                                      lon=lons,
-                                                      lat=lats),
+                var_dict[var] = (['time', self.ydim, self.xdim], np.nan * np.ones((len(ctp_results.time),
+                                                                                   len(ycoords),
+                                                                                   len(xcoords))))
+            self.ctp_results = xr.Dataset(coords={'time': ctp_results.time,
+                                                  self.xdim: xcoords,
+                                                  self.ydim: ycoords},
                                           data_vars=var_dict,
                                           attrs=ctp_results.attrs)
 
-        self.ctp_results.loc[dict(lat=lat, lon=lon)] = ctp_results
+        self.ctp_results.loc[{self.ydim: ycoord, self.xdim: xcoord}] = ctp_results
 
         # set attributes for variables
         for var in ctp_results.data_vars:
@@ -188,7 +196,7 @@ class TEAAgr(TEAIndicators):
         if self.ctp_results is not None:
             self.ctp_results = self.ctp_results.where(self.gr_grid_mask > 0)
 
-    def calc_annual_ctp_indicators(self, ctp=None, drop_daily_results=False, lats=None, lons=None):
+    def calc_annual_ctp_indicators(self, ctp=None, drop_daily_results=False):
         """
         calculate annual CTP indicators for all GeoRegions in GeoRegion grid
         Args:
@@ -200,8 +208,6 @@ class TEAAgr(TEAIndicators):
                 'DJF': winter season (December to February)
                 'EWS': extended winter season (November to March)
             drop_daily_results: if True, drop daily results after calculation
-            lats: Latitudes (default: get automatically)
-            lons: Longitudes (default: get automatically)
 
         Returns:
 
@@ -209,7 +215,7 @@ class TEAAgr(TEAIndicators):
         if ctp is not None:
             self._set_ctp(ctp)
 
-        self._calc_annual_gr_grid(lats=lats, lons=lons)
+        self._calc_annual_gr_grid()
         self._apply_gr_grid_mask()
 
         if drop_daily_results:
@@ -217,23 +223,20 @@ class TEAAgr(TEAIndicators):
             del self._daily_results_filtered
             del self.daily_results
 
-    def _calc_annual_gr_grid(self, lats=None, lons=None):
+    def _calc_annual_gr_grid(self):
         """
         calculate annual CTP TEA indicators for all GeoRegions in GeoRegion grid
         Args:
-            lats: Latitudes (default: get automatically)
-            lons: Longitudes (default: get automatically)
 
         Returns:
 
         """
-        if lats is None:
-            lats, lons = self._get_lats_lons()
+        xcoords, ycoords = self._get_xy()
 
         valid_cells_found = False
-        for ilat in trange(len(lats), desc='Processing AGR cells'):
-            lat = lats[ilat]
-            valid_cells_found |= self._calc_tea_ctp_lat(lat, lons=lons)
+        for i_y in trange(len(ycoords), desc='Processing AGR cells'):
+            ycoord = ycoords[i_y]
+            valid_cells_found |= self._calc_tea_ctp_at_ycoord(ycoord, xcoords=xcoords)
         if not valid_cells_found:
             logger.error('No valid cells found for annual CTP calculation. Try to decrease the land_frac_min '
                          'parameter or check the region definition. ')
@@ -263,29 +266,32 @@ class TEAAgr(TEAIndicators):
         self._crop_to_mask_extents()
         self.mask = mask_tmp
 
-    def _crop_to_rect(self, lat_range, lon_range):
+    def _crop_to_rect(self, x_range, y_range):
         """
         crop GeoRegion grid data to spatial extent of aggregated GeoRegion
         Args:
-            lat_range: Latitude range (min, max)
-            lon_range: Longitude range (min, max)
+            x_range: x coordinate range (min, max)
+            y_range: y coordinate range (min, max)
 
         Returns:
 
         """
-        if lat_range is None:
-            lat_range = (self.gr_grid_areas.lat.min(), self.gr_grid_areas.lat.max())
-        if lon_range is None:
-            lon_range = (self.gr_grid_areas.lon.min(), self.gr_grid_areas.lon.max())
+        if y_range is None:
+            y_range = (self.gr_grid_areas[self.ydim].min(), self.gr_grid_areas[self.ydim].max())
+        if x_range is None:
+            x_range = (self.gr_grid_areas[self.xdim].min(), self.gr_grid_areas[self.xdim].max())
 
-        self.gr_grid_areas = self.gr_grid_areas.sel(lat=slice(lat_range[1], lat_range[0]),
-                                                    lon=slice(lon_range[0], lon_range[1]))
-        self._ref_mean = self._ref_mean.sel(lat=slice(lat_range[1], lat_range[0]),
-                                            lon=slice(lon_range[0], lon_range[1]))
-        self.decadal_results = self.decadal_results.sel(lat=slice(lat_range[1], lat_range[0]),
-                                                        lon=slice(lon_range[0], lon_range[1]))
-        self.amplification_factors = self.amplification_factors.sel(lat=slice(lat_range[1], lat_range[0]),
-                                                                    lon=slice(lon_range[0], lon_range[1]))
+        # use correct slice order for lat/lon and xy grids
+        if self.gr_grid_areas[self.ydim][0] > self.gr_grid_areas[self.ydim][-1]:
+            y_slice = slice(y_range[1], y_range[0])
+        else:
+            y_slice = slice(y_range[0], y_range[1])
+        x_slice = slice(x_range[0], x_range[1])
+
+        self.gr_grid_areas = self.gr_grid_areas.sel({self.ydim: y_slice, self.xdim: x_slice})
+        self._ref_mean = self._ref_mean.sel({self.ydim: y_slice, self.xdim: x_slice})
+        self.decadal_results = self.decadal_results.sel({self.ydim: y_slice, self.xdim: x_slice})
+        self.amplification_factors = self.amplification_factors.sel({self.ydim: y_slice, self.xdim: x_slice})
 
     def _drop_agr_values_and_spreads(self):
         """
@@ -313,7 +319,7 @@ class TEAAgr(TEAIndicators):
         areas_3d = xr.full_like(data, 1) * areas
         areas_3d = areas_3d.where(np.isfinite(data))
 
-        wgts = areas_3d / areas_3d.sum(dim=('lat', 'lon'))
+        wgts = areas_3d / areas_3d.sum(dim=(self.ydim, self.xdim))
 
         if 'time' not in data.dims:
             pval005, pval095 = TEAAgr._calc_weighted_perc_single(data.values, wgts.values)
@@ -383,19 +389,19 @@ class TEAAgr(TEAIndicators):
             pval095 = np.nan
         return pval005, pval095
 
-    def calc_agr_vars(self, lat_range=None, lon_range=None, spreads=True, crop_to_shp=False):
+    def calc_agr_vars(self, y_range=None, x_range=None, spreads=True, crop_to_shp=False):
         """
         calculate AGR variables
 
         Args:
-            lat_range: Latitude range (min, max). Default: Full region
-            lon_range: Longitude range (min, max). Default: Full region
+            x_range: x coordinate range (min, max). Default: Full region
+            y_range: y coordinate range (min, max). Default: Full region
             spreads: if True, calculate spreads and percentiles for AGR variables
             crop_to_shp: if True, crop data to shape of aggregated GeoRegion (default: False)
         """
         # filter data to spatial extent of aggregated GeoRegion
-        if lat_range is not None or lon_range is not None:
-            self._crop_to_rect(lat_range=lat_range, lon_range=lon_range)
+        if y_range is not None or x_range is not None:
+            self._crop_to_rect(x_range=x_range, y_range=y_range)
         elif crop_to_shp:
             self._crop_to_shp()
 
@@ -410,7 +416,7 @@ class TEAAgr(TEAIndicators):
 
         # calc X_Ref^AGR and X_s^AGR (equation 34_1 and equation 34_2)
         x_ref_agr = (awgts * self._ref_mean).sum()
-        xt_s_agr = (awgts * self.decadal_results).sum(dim=('lat', 'lon'))
+        xt_s_agr = (awgts * self.decadal_results).sum(dim=(self.ydim, self.xdim))
 
         # calc Xt_ref_db and Xt_ref_agr (equation 34_3)
         xt_ref_agr = self._calc_gmean_decadal(start_year=self.ref_period[0], end_year=self.ref_period[1], data=xt_s_agr)
@@ -470,7 +476,7 @@ class TEAAgr(TEAIndicators):
         r_earth = 6371
         u_earth = 2 * np.pi * r_earth
         # # size of grid cell in 100 km^2
-        A_GR_full = (u_earth / 360 * self.cell_size_lat) ** 2 / 100
+        A_GR_full = (u_earth / 360 * self.cell_size_y) ** 2 / 100
         N_dof = int(A_AGR / A_GR_full)
 
         if spreads:
@@ -530,16 +536,16 @@ class TEAAgr(TEAIndicators):
         c_upp = xr.where(data >= ref, 1, 0)
 
         # equation 38_2 and 38_5
-        c_upp_sum = (c_upp * areas).sum(dim=('lat', 'lon'))
+        c_upp_sum = (c_upp * areas).sum(dim=(self.ydim, self.xdim))
         # replace 0 values with nan to avoid division by zero
         c_upp_sum = c_upp_sum.where(c_upp_sum > 0)
-        s_upp = np.sqrt(1 / c_upp_sum * (c_upp * areas * (data - ref) ** 2).sum(dim=('lat', 'lon')))
+        s_upp = np.sqrt(1 / c_upp_sum * (c_upp * areas * (data - ref) ** 2).sum(dim=(self.ydim, self.xdim)))
 
         # equation 38_3 and 38_6
-        c_low_sum = ((1 - c_upp) * areas).sum(dim=('lat', 'lon'))
+        c_low_sum = ((1 - c_upp) * areas).sum(dim=(self.ydim, self.xdim))
         # replace 0 values with nan to avoid division by zero
         c_low_sum = c_low_sum.where(c_low_sum > 0, c_low_sum)
-        s_low = np.sqrt(1 / c_low_sum * ((1 - c_upp) * areas * (data - ref) ** 2).sum(dim=('lat', 'lon')))
+        s_low = np.sqrt(1 / c_low_sum * ((1 - c_upp) * areas * (data - ref) ** 2).sum(dim=(self.ydim, self.xdim)))
 
         # get attributes for variables and rename them
         for vvar in s_upp.data_vars:
@@ -570,8 +576,8 @@ class TEAAgr(TEAIndicators):
             # calculate 5th and 95th percentiles for each variable
 
             # standard method (gives only slightly different results to weighted method)
-            # p5_std = data[var].quantile(0.05, dim=('lat', 'lon'))
-            # p95_std = data[var].quantile(0.95, dim=('lat', 'lon'))
+            # p5_std = data[var].quantile(0.05, dim=(self.ydim, self.xdim))
+            # p95_std = data[var].quantile(0.95, dim=(self.ydim, self.xdim))
 
             p5, p95 = self._calc_weighted_perc(data[var], areas)
 
@@ -584,12 +590,12 @@ class TEAAgr(TEAIndicators):
             data[f'{var}_p05'].attrs = get_attrs(vname=f'{var}', spread='5th percentile')
             data[f'{var}_p95'].attrs = get_attrs(vname=f'{var}', spread='95th percentile')
 
-    def _get_lats_lons(self, margin=None):
+    def _get_xy(self, margin=None):
         """
-        get latitudes and longitudes for GeoRegion grid
+        get x and y coords for GeoRegion grid
         """
         if margin is None:
-            margin = self.cell_size_lat / 2
+            margin = self.cell_size_y / 2
 
         if self.input_data is not None:
             ref_grid = self.input_data
@@ -599,19 +605,35 @@ class TEAAgr(TEAIndicators):
             raise ValueError('No input data or area grid provided. Please provide a valid input data grid or area '
                              'grid.')
 
-        lats = np.arange(ref_grid.lat.max() - margin,
-                         ref_grid.lat.min() - self.gr_grid_res + margin,
-                         -self.gr_grid_res)
-        margin_lon = 1 / np.cos(np.deg2rad(lats[0])) * margin
-        # round margin_lon to resolution of gr grid
-        margin_lon = np.round(np.round(margin_lon / self.gr_grid_res, 0) * self.gr_grid_res, 2)
-        lons = np.arange(ref_grid.lon.min() + margin_lon,
-                         ref_grid.lon.max() + self.gr_grid_res - margin_lon,
-                         self.gr_grid_res)
-        if len(lats) == 0 or len(lons) == 0:
+        xcoord = ref_grid[self.xdim]
+        ycoord = ref_grid[self.ydim]
+
+        if ycoord[0] > ycoord[-1]:
+            ycoords = np.arange(ycoord.max().values - margin,
+                                ycoord.min().values - self.gr_grid_res + margin,
+                                -self.gr_grid_res)
+        else:
+            ycoords = np.arange(ycoord.min().values + margin,
+                                ycoord.max().values + self.gr_grid_res - margin,
+                                self.gr_grid_res)
+
+        if self.ydim == 'y':
+            margin_lon = margin
+        else:
+            # compute x margin taking y coord of first grid row
+            y_0 = ycoords[0] if len(ycoords) > 0 else ycoord.max().values
+            margin_lon = 1 / np.cos(np.deg2rad(y_0)) * margin
+            # round margin_lon to resolution of gr grid
+            margin_lon = np.round(np.round(margin_lon / self.gr_grid_res, 0) * self.gr_grid_res, 2)
+            
+        xcoords = np.arange(xcoord.min().values + margin_lon,
+                            xcoord.max().values + self.gr_grid_res - margin_lon,
+                            self.gr_grid_res)
+        if len(ycoords) == 0 or len(xcoords) == 0:
             raise ValueError(f'Not enough valid cells found for margin {margin} - check size of input data grid and '
                              f'static files')
-        return lats, lons
+        
+        return xcoords, ycoords
 
     def generate_gr_grid_mask(self):
         """
@@ -619,58 +641,75 @@ class TEAAgr(TEAIndicators):
         """
         logger.info(f'Generating GR grid mask with resolution {self.gr_grid_res} degrees')
         grg_res = self.gr_grid_res
-        lats, lons = self._get_lats_lons()
         mask_orig = self.mask
         area_orig = self.area_grid
-        res_orig = self._lat_resolution_in
+        res_orig = self._y_resolution_in
 
-        gr_grid_mask = xr.DataArray(data=np.ones((len(lats), len(lons))) * np.nan,
-                                    coords={'lat': (['lat'], lats), 'lon': (['lon'], lons)},
-                                    dims={'lat': (['lat'], lats), 'lon': (['lon'], lons)})
-        gr_grid_mask = gr_grid_mask.rename('mask')
+        if self.xdim == 'x':
+            # try to aggregate using coarsen (vectorized)
+            factor = int(round(grg_res / res_orig)) if res_orig is not None else None
+            if factor is None or factor < 1:
+                raise ValueError('Invalid grid resolution ratio for cartesian grid')
+            # mask_orig is expected to have dims (y, x)
+            mask_valid = (mask_orig > 0).astype(int)
+            # sum valid cells and area per block
+            valid_count = mask_valid.coarsen({self.ydim: factor, self.xdim: factor}, boundary='trim').sum()
+            cell_area_sum = area_orig.coarsen({self.ydim: factor, self.xdim: factor}, boundary='trim').sum()
+            total_cells = factor * factor
+            vcell_frac = valid_count / total_cells
+            cell_area_sum = cell_area_sum.where(vcell_frac > 0)  # set area to nan for cells with no valid original
+            
+            gr_grid_mask = vcell_frac.rename('mask')
+            gr_grid_areas = cell_area_sum.rename('area_grid')
+        else:
+            xcoords, ycoords = self._get_xy()
+            gr_grid_mask = xr.DataArray(data=np.ones((len(ycoords), len(xcoords))) * np.nan,
+                                        coords={self.ydim: ([self.ydim], ycoords), self.xdim: ([self.xdim], xcoords)},
+                                        dims={self.ydim: ([self.ydim], ycoords), self.xdim: ([self.xdim], xcoords)})
+            gr_grid_mask = gr_grid_mask.rename('mask')
 
-        gr_grid_areas = xr.DataArray(data=np.ones((len(lats), len(lons))) * np.nan,
-                                     coords={'lat': (['lat'], lats), 'lon': (['lon'], lons)},
-                                     dims={'lat': (['lat'], lats), 'lon': (['lon'], lons)})
-        gr_grid_areas = gr_grid_areas.rename('area_grid')
+            gr_grid_areas = xr.DataArray(data=np.ones((len(ycoords), len(xcoords))) * np.nan,
+                                         coords={self.ydim: ([self.ydim], ycoords), self.xdim: ([self.xdim], xcoords)},
+                                         dims={self.ydim: ([self.ydim], ycoords), self.xdim: ([self.xdim], xcoords)})
+            gr_grid_areas = gr_grid_areas.rename('area_grid')
 
-        for llat in gr_grid_mask.lat:
-            for llon in gr_grid_mask.lon:
-                cell_orig = mask_orig.sel(lat=slice(llat, llat - grg_res + res_orig),
-                                          lon=slice(llon, llon + grg_res - res_orig))
-                cell_area = area_orig.sel(lat=slice(llat, llat - grg_res + res_orig),
-                                          lon=slice(llon, llon + grg_res - res_orig))
-                valid_cells = cell_orig.sum()
-                if valid_cells == 0:
-                    continue
-                vcell_frac = valid_cells / cell_orig.size
-                gr_grid_mask.loc[llat, llon] = vcell_frac.values
-                gr_grid_areas.loc[llat, llon] = cell_area.sum().values
+            for llat in gr_grid_mask.lat:
+                for llon in gr_grid_mask.lon:
+                    cell_orig = mask_orig.sel(lat=slice(llat, llat - grg_res + res_orig),
+                                              lon=slice(llon, llon + grg_res - res_orig))
+                    cell_area = area_orig.sel(lat=slice(llat, llat - grg_res + res_orig),
+                                              lon=slice(llon, llon + grg_res - res_orig))
+                    valid_cells = cell_orig.sum()
+                    if valid_cells == 0:
+                        continue
+                    vcell_frac = valid_cells / cell_orig.size
+                    gr_grid_mask.loc[llat, llon] = vcell_frac.values
+                    gr_grid_areas.loc[llat, llon] = cell_area.sum().values
 
         self.gr_grid_mask = gr_grid_mask
         self.gr_grid_areas = gr_grid_areas
 
-    def _calc_tea_ctp_lat(self, lat, lons=None):
+    def _calc_tea_ctp_at_ycoord(self, ycoord, xcoords=None):
         """
-        calculate TEA indicators of GeoRegion grid cell for all longitudes of a latitude
+        calculate TEA indicators of GeoRegion grid cell for all x coords of a y coord
         Args:
-            lat: Latitude
-            lons: Longitudes (default: get automatically)
+            ycoord: y coordinate value
+            xcoords: x coordinate values (default: get automatically)
 
         Returns:
             valid_cells_found: True if at least one valid cell was found, False otherwise
 
         """
-        if lons is None:
-            lats, lons = self._get_lats_lons()
+        if xcoords is None:
+            xcoords, ycoords = self._get_xy()
 
         valid_cells_found = False
-        # step through all longitudes
-        for ilon, lon in enumerate(lons):
-            # this comment is necessary to suppress an unnecessary PyCharm warning for lon
+        # step through all x coordinate values
+        for i_x, xcoord in enumerate(xcoords):
+            # this comment is necessary to suppress an unnecessary PyCharm warning
             # noinspection PyTypeChecker
             start_time = time.time()
-            tea_sub = self.select_sub_gr(lat=lat, lon=lon)
+            tea_sub = self.select_sub_gr(ycoord=ycoord, xcoord=xcoord)
             if tea_sub is None:
                 continue
 
@@ -684,10 +723,10 @@ class TEAAgr(TEAIndicators):
                 warnings.filterwarnings('ignore', message='invalid value encountered in multiply')
                 tea_sub.calc_annual_ctp_indicators(drop_daily_results=True)
 
-                # set agr_results for lat and lon
+                # set agr_results for position
                 ctp_results = tea_sub.get_ctp_results(gr=True, grid=False).compute()
 
-            self.set_ctp_results(lat, lon, ctp_results)
+            self.set_ctp_results(xcoord, ycoord, ctp_results)
             end_time = time.time()
-            logger.debug(f'Lat {lat}, lon {lon} processed in {end_time - start_time} seconds')
+            logger.debug(f'{self.xdim} {xcoord}, {self.ydim} {ycoord} processed in {end_time - start_time} seconds')
         return valid_cells_found
