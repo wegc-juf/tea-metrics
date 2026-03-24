@@ -81,7 +81,7 @@ def calc_tea_indicators(opts):
     # calculate decadal indicators and amplification factors
     if opts.decadal or opts.decadal_only or opts.recalc_decadal:
         if 'agr' in opts:
-            tea = TEAAgr(mask=mask)
+            tea = TEAAgr(mask=mask, gr_grid_res=opts.grg_grid_spacing)
         else:
             tea = TEAIndicators()
 

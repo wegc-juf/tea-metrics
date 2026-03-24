@@ -174,9 +174,11 @@ class TEAIndicators:
         y_min = mask[self.ydim][idx_with_data[0]].min().values
         y_max = mask[self.ydim][idx_with_data[0]].max().values
         if 'lon' in self.mask.dims:
-            y_range = [y_min, y_max]
-        else:
+            # lon must be max to min
             y_range = [y_max, y_min]
+        else:
+            # xy must be min to max
+            y_range = [y_min, y_max]
         x_range = [x_min, x_max]
         self._crop_to_rect(x_range=x_range, y_range=y_range)
 
@@ -455,18 +457,28 @@ class TEAIndicators:
         self._calc_grid = False
         self._calc_gr = False
         if grid:
+            logger.debug("Calculating DTEM")
             self._calc_DTEM()
+            logger.debug("Calculating DTEC")
             self._calc_DTEC()
+            logger.debug("Calculating DTEA")
             self._calc_DTEA()
+            logger.debug("Calculating DTEEC")
             self._calc_DTEEC()
             self._calc_grid = True
         if gr:
+            logger.debug("Calculating DTEA_GR")
             self._calc_DTEA_GR()
+            logger.debug("Calculating DTEC_GR")
             self._calc_DTEC_GR()
+            logger.debug("Calculating DTEM_GR")
             self._calc_DTEM_GR()
             self._calc_DTEM_Max_GR()
+            logger.debug("Calculating DTEEC_GR")
             self._calc_DTEEC_GR()
+            logger.debug("Calculating DET_GR")
             self._calc_DET_GR()
+            logger.debug("Calculating DEH_GR")
             self._calc_DEH_GR()
             self._calc_gr = True
         if not self.use_dask:
@@ -1593,11 +1605,12 @@ class TEAIndicators:
             period_mean['h_rise_avg_GR'].values = h_rise_gr
             period_mean['h_set_avg_GR'].values = h_set_gr
 
-        doy_first, doy_last = self._calc_doy_adjustment(doy_first=period_mean.doy_first.values,
-                                                        doy_last=period_mean.doy_last.values,
-                                                        aep=period_mean.AEP.values)
-        period_mean['doy_first'].values = doy_first
-        period_mean['doy_last'].values = doy_last
+        if 'doy_first' in period_mean and 'doy_last' in period_mean:
+            doy_first, doy_last = self._calc_doy_adjustment(doy_first=period_mean.doy_first.values,
+                                                            doy_last=period_mean.doy_last.values,
+                                                            aep=period_mean.AEP.values)
+            period_mean['doy_first'].values = doy_first
+            period_mean['doy_last'].values = doy_last
 
         if 'doy_first_GR' in period_mean:
             doy_first_gr, doy_last_gr = self._calc_doy_adjustment(

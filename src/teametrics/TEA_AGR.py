@@ -133,8 +133,8 @@ class TEAAgr(TEAIndicators):
         if len(cell_area_grid[self.ydim]) == 0:
             raise ValueError('No valid cell found, check why this happens')
 
-        # TODO: two options: either return data itself and stack to xarray then calculate TEA or return individual TEA
-        # objects
+        # TODO: optimize for x y grids (xarray method)
+        # two options: either return data itself and stack to xarray then calculate TEA or return individual TEA objects
         tea_sub_gr = TEAIndicators(area_grid=cell_area_grid, min_area=self._min_area, unit=self.unit, ctp=self.CTP)
         tea_sub_gr.set_daily_results(cell_data)
         return tea_sub_gr
@@ -249,10 +249,10 @@ class TEAAgr(TEAIndicators):
 
         """
         self.gr_grid_areas = self.gr_grid_areas.where(self.gr_grid_mask > 0)
+        self._crop_to_gr_mask_extents()
         self._ref_mean = self._ref_mean.where(self.gr_grid_mask > 0)
         self.decadal_results = self.decadal_results.where(self.gr_grid_mask > 0)
         self.amplification_factors = self.amplification_factors.where(self.gr_grid_mask > 0)
-        self._crop_to_gr_mask_extents()
 
     def _crop_to_gr_mask_extents(self):
         """
@@ -411,8 +411,8 @@ class TEAAgr(TEAIndicators):
         # calculate area weights (equation 34_0)
         if self.gr_grid_areas is None:
             raise ValueError('No GR area grid provided. Please provide a valid GR area grid.')
-        A_AGR = self.gr_grid_areas.sum()
-        awgts = self.gr_grid_areas / A_AGR
+        A_AGR = self.gr_grid_areas.area_grid.sum()
+        awgts = self.gr_grid_areas.area_grid / A_AGR
 
         # calc X_Ref^AGR and X_s^AGR (equation 34_1 and equation 34_2)
         x_ref_agr = (awgts * self._ref_mean).sum()
@@ -476,7 +476,10 @@ class TEAAgr(TEAIndicators):
         r_earth = 6371
         u_earth = 2 * np.pi * r_earth
         # # size of grid cell in 100 km^2
-        A_GR_full = (u_earth / 360 * self.cell_size_y) ** 2 / 100
+        if self.xdim == 'lon':
+            A_GR_full = (u_earth / 360 * self.cell_size_y) ** 2 / 100
+        else:
+            A_GR_full = (self.cell_size_y / 1000) ** 2 / 100
         N_dof = int(A_AGR / A_GR_full)
 
         if spreads:
@@ -594,6 +597,12 @@ class TEAAgr(TEAIndicators):
         """
         get x and y coords for GeoRegion grid
         """
+        # TODO also test for latlon grids
+        if self.xdim != 'lon' and self.gr_grid_mask is not None:
+            xcoord = self.gr_grid_mask[self.xdim]
+            ycoord = self.gr_grid_mask[self.ydim]
+            return xcoord, ycoord
+        
         if margin is None:
             margin = self.cell_size_y / 2
 
