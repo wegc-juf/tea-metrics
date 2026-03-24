@@ -81,9 +81,10 @@ def calc_tea_indicators(opts):
     # calculate decadal indicators and amplification factors
     if opts.decadal or opts.decadal_only or opts.recalc_decadal:
         if 'agr' in opts:
-            tea = TEAAgr(mask=mask, gr_grid_res=opts.grg_grid_spacing)
+            tea = TEAAgr(mask=mask, gr_grid_res=opts.grg_grid_spacing,
+                         significant_digits=opts.significant_digits)
         else:
-            tea = TEAIndicators()
+            tea = TEAIndicators(significant_digits=opts.significant_digits)
 
         # calculate decadal-mean ctp indicator variables
         calc_decadal_indicators(opts=opts, tea=tea)
@@ -181,19 +182,16 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 min_area=min_area, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                cell_size_y=opts.agr_cell_size, land_frac_min=opts.land_frac_min)
+                                cell_size_y=opts.agr_cell_size, land_frac_min=opts.land_frac_min,
+                                significant_digits=opts.significant_digits)
         else:
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 min_area=min_area, low_extreme=opts.low_extreme,
-                                unit=opts.unit, land_sea_mask=lsm)
+                                unit=opts.unit, land_sea_mask=lsm, significant_digits=opts.significant_digits)
 
         # computation of daily basis variables (Methods chapter 3)
         if gridded:
-            gr = opts.hourly
-            if opts.primary_threshold is not None:
-                gr = True
-            else:
-                gr = opts.hourly
+            gr = True
         else:
             gr = False
         tea.calc_daily_basis_vars(gr=gr)
@@ -212,11 +210,12 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
             data, mask, threshold = _reduce_region(opts, None, mask, threshold)
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                cell_size_y=opts.agr_cell_size, land_frac_min=opts.land_frac_min)
+                                cell_size_y=opts.agr_cell_size, land_frac_min=opts.land_frac_min,
+                                significant_digits=opts.significant_digits)
         else:
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
                                 unit=opts.unit,
-                                land_sea_mask=lsm)
+                                land_sea_mask=lsm, significant_digits=opts.significant_digits)
         logger.info(
             f'Loading daily basis variables from {dbv_filename}; if you want to recalculate them, '
             'set --recalc-daily.')
@@ -535,7 +534,7 @@ def _reduce_region(opts, data, mask, threshold=None, full_region=False):
     if data is not None:
         proc_data = data.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
     proc_mask = mask.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
-    if threshold is not None:
+    if threshold is not None and opts.threshold_type != 'abs':
         threshold = threshold.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
 
     return proc_data, proc_mask, threshold
@@ -664,6 +663,7 @@ def _load_gr_grid_static(opts):
     logger.info(f'Loading GR area grid from {gr_grid_areas_file}')
     try:
         gr_grid_areas = xr.open_dataset(gr_grid_areas_file)
+        gr_grid_areas = gr_grid_areas.area_grid
     except FileNotFoundError, AttributeError:
         if opts.decadal_only:
             logger.info(

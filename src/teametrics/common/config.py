@@ -103,6 +103,8 @@ def _get_default_opts(fname, opts):
         opts.parameter = 'Tx'
     if 'threshold_type' not in opts:
         opts.threshold_type = 'perc'
+    if 'aggregation_method' not in opts:
+        opts.aggregation_method = None
     if 'threshold' not in opts:
         if opts.precip:
             opts.threshold = 95
@@ -122,6 +124,8 @@ def _get_default_opts(fname, opts):
         opts.low_extreme = False
     if 'min_exceedance_area' not in opts:
         opts.min_exceedance_area = 1
+    if 'significant_digits' not in opts:
+        opts.significant_digits = 3
 
     # time_params options
     if 'start' not in opts:
@@ -242,6 +246,7 @@ def check_type(key, value):
         'parameter': str,
         'precip': bool,
         'threshold_type': str,
+        'aggregation_method': str,
         'threshold': float,
         'primary_threshold': float,
         'smoothing_radius': float,
@@ -249,6 +254,7 @@ def check_type(key, value):
         'low_extreme': bool,
         'min_exceedance_area': float,
         'min_duration': float,
+        'significant_digits': int,
 
         # time parameters
         'start': int,

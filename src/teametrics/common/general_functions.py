@@ -286,16 +286,47 @@ def get_gridded_data(start, end, opts, period='annual', hourly=False):
     # select variable
     if opts.dataset == 'SPARTACUS' and parameter == 'P24h_7to7':
         ds = ds.rename({'RR': parameter})
+    
+    # get temporal resolution of data
+    time_diff = (ds.time[1] - ds.time[0]).values
+    if time_diff < np.timedelta64(1, 'D'):
+        subdaily = True
+    else:
+        subdaily = False
 
     if opts.dataset == 'EOBS':
         if opts.parameter == 'Tx':
             ds = ds.rename({'tx': parameter})
         elif opts.parameter == 'Tn':
             ds = ds.rename({'tn': parameter})
-    data = ds[parameter]
+    try:
+        data = ds[parameter]
+    except KeyError as e:
+        if subdaily:
+            if opts.parameter == 'Tn' or opts.parameter == 'Tx':
+                data = ds['T']
+            else:
+                raise e
+        else:
+            raise e
 
     # get only values from selected period
     data = extract_period(ds=data, period=period, start_year=start, end_year=end)
+
+    # resample to daily data if hourly data is loaded but daily data is wanted
+    if subdaily and not hourly:
+        if opts.aggregation_method is not None:
+            agg_method = opts.aggregation_method
+            resampled = data.resample(time='1D')
+            data = getattr(resampled, agg_method)()
+        elif opts.parameter == 'Tx':
+            data = data.resample(time='1D').max()
+        elif opts.parameter == 'Tn':
+            data = data.resample(time='1D').min()
+        elif opts.precip:
+            data = data.resample(time='1D').sum()
+        else:
+            data = data.resample(time='1D').mean()
 
     if opts.dataset == 'SPARTACUS':
         data = data.drop('lambert_conformal_conic')

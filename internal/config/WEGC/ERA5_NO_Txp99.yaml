@@ -1,0 +1,75 @@
+# Template for gridded data TEA indicators; for details and available options see CFG-PARAMS-doc.md
+common_params:
+  input_data: &DATA
+    dataset: ERA5
+  GeoRegion: &GR
+    region: "NO"
+    agr: "NO"
+  parameter: &PARAM
+    parameter: Tx
+    precip: false
+    threshold_type: perc
+    threshold: 99
+    unit: degC
+    low_extreme: false
+  time_params: &TIME
+    start: 1961
+    end: 2025
+    period: annual
+    ref_period: 1961-1990
+    cc_period: 2011-2025
+  paths: &PATHS
+    input_data_path: &inputpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/daily/
+    hourly_data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/hourly/single_levels/prepped4TEA/
+    statpath: &statpath /data/users/mop/arsclisys/TEA/static/
+    maskpath: *statpath
+    mask_sub: masks/
+    outpath: /data/users/mop/arsclisys/TEA/results/EUR/AGR/
+  general: &GENERAL
+    use_dask: false
+
+create_region_masks:
+  <<: *GR
+  <<: *PARAM
+  <<: *DATA
+  <<: *PATHS
+  <<: *TIME
+  <<: *GENERAL
+  gr_type: polygon
+  sw_corner: null
+  ne_corner: null
+  center: null
+  we_len: null
+  ns_len: null
+  target_sys: 4326
+  shpfile: /data/arsclisys/backup/clim-hydro/TEA-Indicators/shapefiles/shapes_europe/CNTR_RG_01M_2020_4326.shp.zip
+  orofile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/ERA5_orography.nc
+  lsmfile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/ERA5_LSM.nc
+  outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/masks/
+
+calc_TEA:
+  <<: *GR
+  <<: *PARAM
+  <<: *TIME
+  <<: *DATA
+  <<: *PATHS
+  <<: *GENERAL
+  recalc_threshold: false
+  recalc_daily: true
+  hourly: false
+  decadal: true
+  recalc_decadal: true
+  spreads: true
+  decadal_only: false
+
+regrid_SPARTACUS_to_WEGNext:
+  <<: *GR
+  <<: *PARAM
+  <<: *DATA
+  <<: *PATHS
+  <<: *TIME
+  <<: *GENERAL
+  raw_data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS_raw/v2025_v2.1/
+  regridded_data_path: *inputpath
+  wegn_file: /var/wegnet/wegc203058/netcdf/WEA/WN_L2_HHD_v7_UTM_TF1_UTC_2020-08.nc
+  orography: false

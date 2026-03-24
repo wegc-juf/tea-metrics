@@ -129,13 +129,17 @@ class TEAAgr(TEAIndicators):
         # compensate rounding errors
         cell_data['DTEA'] = cell_data['DTEA'] / area_frac
         cell_area_grid = cell_area_grid / area_frac
-
+        
+        # select threshold grid for cell
+        cell_threshold_grid = self.threshold_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
+        
         if len(cell_area_grid[self.ydim]) == 0:
             raise ValueError('No valid cell found, check why this happens')
 
         # TODO: optimize for x y grids (xarray method)
         # two options: either return data itself and stack to xarray then calculate TEA or return individual TEA objects
-        tea_sub_gr = TEAIndicators(area_grid=cell_area_grid, min_area=self._min_area, unit=self.unit, ctp=self.CTP)
+        tea_sub_gr = TEAIndicators(area_grid=cell_area_grid, min_area=self._min_area, unit=self.unit, ctp=self.CTP,
+                                   threshold=cell_threshold_grid)
         tea_sub_gr.set_daily_results(cell_data)
         return tea_sub_gr
 
@@ -155,9 +159,14 @@ class TEAAgr(TEAIndicators):
             var_dict = {}
             xcoords, ycoords = self._get_xy()
             for var in data_vars:
-                var_dict[var] = (['time', self.ydim, self.xdim], np.nan * np.ones((len(ctp_results.time),
-                                                                                   len(ycoords),
-                                                                                   len(xcoords))))
+                if 'time' in ctp_results[var].dims:
+                    var_dict[var] = (['time', self.ydim, self.xdim], np.nan * np.ones((len(ctp_results.time),
+                                                                                       len(ycoords),
+                                                                                       len(xcoords))))
+                elif len(ctp_results[var].dims) == 0:
+                    var_dict[var] = ([self.ydim, self.xdim], np.nan * np.ones((len(ycoords), len(xcoords))))
+                else:
+                    raise ValueError(f'Unsupported variable dimensions for variable {var}: {ctp_results[var].dims}')
             self.ctp_results = xr.Dataset(coords={'time': ctp_results.time,
                                                   self.xdim: xcoords,
                                                   self.ydim: ycoords},
@@ -187,7 +196,7 @@ class TEAAgr(TEAIndicators):
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
-            self.ctp_results.to_netcdf(filepath)
+            self._to_netcdf(self.ctp_results, filepath)
 
     def _apply_gr_grid_mask(self):
         """
@@ -411,8 +420,8 @@ class TEAAgr(TEAIndicators):
         # calculate area weights (equation 34_0)
         if self.gr_grid_areas is None:
             raise ValueError('No GR area grid provided. Please provide a valid GR area grid.')
-        A_AGR = self.gr_grid_areas.area_grid.sum()
-        awgts = self.gr_grid_areas.area_grid / A_AGR
+        A_AGR = self.gr_grid_areas.sum()
+        awgts = self.gr_grid_areas / A_AGR
 
         # calc X_Ref^AGR and X_s^AGR (equation 34_1 and equation 34_2)
         x_ref_agr = (awgts * self._ref_mean).sum()
@@ -428,9 +437,13 @@ class TEAAgr(TEAIndicators):
         x_s_agr = self._calc_compound_vars(x_s_agr)
         x_ref_agr = self._calc_compound_vars(x_ref_agr)
 
-        # set values to nan for first and last 5/4 years
-        x_s_agr[dict(time=slice(0, 5))] = np.nan
-        x_s_agr[dict(time=slice(-4, None))] = np.nan
+        # set values to nan for first and last 5/4 years for all variables with dimension 'time' to avoid edge
+        # effects of decadal averaging
+        for var in x_s_agr.data_vars:
+            ds = x_s_agr[var]
+            if 'time' in ds.dims:
+                ds[dict(time=slice(0, 5))] = np.nan
+                ds[dict(time=slice(-4, None))] = np.nan
 
         # calculate spread estimates (equation 38)
         if spreads:
@@ -480,7 +493,7 @@ class TEAAgr(TEAIndicators):
             A_GR_full = (u_earth / 360 * self.cell_size_y) ** 2 / 100
         else:
             A_GR_full = (self.cell_size_y / 1000) ** 2 / 100
-        N_dof = int(A_AGR / A_GR_full)
+        N_dof = max(A_AGR / A_GR_full, 1)
 
         if spreads:
             # add p5 and p95 values (equation 41TODEFINE)

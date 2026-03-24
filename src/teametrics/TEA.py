@@ -9,6 +9,7 @@ import os
 import xarray as xr
 import pandas as pd
 import numpy as np
+from xarray import Dataset
 
 from .common.var_attrs import get_attrs, equal_vars
 from .common.TEA_logger import logger
@@ -27,7 +28,7 @@ class TEAIndicators:
 
     def __init__(self, input_data=None, threshold=None, min_area=1., area_grid=None,
                  low_extreme=False,
-                 unit='', mask=None, apply_mask=True, ctp=None, use_dask=False, **kwargs):
+                 unit='', mask=None, apply_mask=True, ctp=None, use_dask=False, significant_digits: int = 2, **kwargs):
         """
         Initialize TEAIndicators object
         Args:
@@ -41,6 +42,8 @@ class TEAIndicators:
             mask: mask grid for input data containing nan values for cells that should be masked. Default: None
             ctp: Climatic Time Period (CTP) to resample to. For allowed values see set_ctp method. Default: None
             use_dask: use dask for calculations. Default: False
+            significant_digits: least significant digits for netCDF output compression. If -1, no rounding is
+            applied. Default: 2
         """
         if threshold is not None and isinstance(threshold, (int, float)):
             if input_data is not None:
@@ -50,6 +53,8 @@ class TEAIndicators:
             else:
                 raise ValueError("Either input_data grid or mask must be provided for using a fixed threshold!")
         self.threshold_grid = threshold
+
+        self.significant_digits = significant_digits
 
         # set default x and y dim names
         self.xdim = 'lon'
@@ -436,6 +441,8 @@ class TEAIndicators:
         dtec_gr = dtec_gr.where(dtec_gr > 0, np.nan)
         if self.area_grid is None:
             self._create_area_grid(dtem)
+
+        # calculate area-weighted mean of DTEM for GR (equation 08)
         area_fac = self.area_grid / dtea_gr
         dtem_gr = (dtem * area_fac).sum(dim=(self.xdim, self.ydim), skipna=True)
         dtem_gr = dtem_gr.where(dtec_gr == 1, self.null_val)
@@ -445,6 +452,29 @@ class TEAIndicators:
         dtema_gr.attrs = get_attrs(vname='DTEMA_GR', data_unit=self.unit)
         self.daily_results['DTEM_GR'] = dtem_gr
         self.daily_results['DTEMA_GR'] = dtema_gr
+
+    def _calc_avg_threshold_GR(self):
+        """
+        calculate area-weighted mean of threshold for GR (equation 08 scheme)
+        """
+        if self.threshold_grid is None:
+            return
+
+        if 'DTEA_GR' not in self.daily_results:
+            self._calc_DTEA_GR()
+        if self.mask is not None and self.apply_mask:
+            threshold = self.threshold_grid.where(self.mask > 0, np.nan)
+        else:
+            threshold = self.threshold_grid
+        if self.area_grid is None:
+            self._create_area_grid(dtem)
+        # calculate area-weighted mean of threshold for GR (using equation 08 scheme)
+        area_fac = self.area_grid / self.gr_size
+        threshold_gr = (threshold * area_fac).sum(dim=(self.xdim, self.ydim), skipna=True)
+
+        threshold_gr = threshold_gr.rename(f'threshold_avg_GR')
+        threshold_gr.attrs = get_attrs(vname='threshold_avg_GR', data_unit=self.unit)
+        self.daily_results['threshold_avg_GR'] = threshold_gr
 
     def calc_daily_basis_vars(self, grid=True, gr=True):
         """
@@ -473,6 +503,7 @@ class TEAIndicators:
             self._calc_DTEC_GR()
             logger.debug("Calculating DTEM_GR")
             self._calc_DTEM_GR()
+            self._calc_avg_threshold_GR()
             self._calc_DTEM_Max_GR()
             logger.debug("Calculating DTEEC_GR")
             self._calc_DTEEC_GR()
@@ -490,13 +521,38 @@ class TEAIndicators:
         Args:
             filepath: path to save the results.
         """
-
         with warnings.catch_warnings():
-            # TODO: implement compression for all netCDF files and use float instead of double if possible
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
             logger.info(f"Saving daily results to {filepath}")
-            self.daily_results.to_netcdf(filepath)
+
+            self._to_netcdf(dataset=self.daily_results, filepath=filepath)
+
+    def _to_netcdf(self, dataset: Dataset, filepath):
+        """
+        save dataset to netCDF with compression and rounding to reduce file size
+
+        Args:
+            dataset: xarray Dataset to save
+            filepath: path to save the dataset
+
+        Returns:
+
+        """
+        digits = self.significant_digits
+
+        # save to netCDF with compression and rounding to reduce file size
+        if digits >= 0:
+            encoding = {
+                v: {
+                    "zlib": True,
+                    "complevel": 4,
+                }
+                for v in dataset.data_vars
+            }
+            dataset.round(decimals=digits).to_netcdf(filepath, encoding=encoding)
+        else:
+            dataset.to_netcdf(filepath)
 
     def load_daily_results(self, filepath):
         """
@@ -1218,6 +1274,12 @@ class TEAIndicators:
         self._calc_annual_event_severity()
         self._calc_annual_hourly_event_severity()
         self._calc_annual_exceedance_heat_content()
+
+        # copy average threshold value from daily results to ctp results
+        if 'threshold_avg_GR' in self.daily_results:
+            self.ctp_results['threshold_avg_GR'] = self.daily_results.threshold_avg_GR.copy()
+            self.ctp_results['threshold_avg_GR'].attrs = get_attrs(vname='threshold_avg', data_unit=self.unit)
+
         if drop_daily_results:
             self.daily_results.close()
             del self._daily_results_filtered
@@ -1234,14 +1296,16 @@ class TEAIndicators:
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
-            self.ctp_results.to_netcdf(filepath)
+            self._to_netcdf(self.ctp_results, filepath)
 
     def load_ctp_results(self, filepath, use_dask=True):
         """
         load all CTP results from filepath
         """
         logger.info(f"Loading CTP results from {filepath}")
-        self.ctp_results = xr.open_mfdataset(filepath)
+        self.ctp_results = xr.open_mfdataset(filepath, data_vars='minimal', combine='by_coords',
+                                             coords='minimal', compat='override', join='exact',
+                                             chunks='auto' if use_dask else None)
         # TODO: optimize code in TEA._calc_spread_estimators
         if not use_dask:
             # avoid using dask when calculating spreads
@@ -1330,7 +1394,7 @@ class TEAIndicators:
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
-            self.decadal_results.to_netcdf(filepath)
+            self._to_netcdf(self.decadal_results, filepath)
 
     def load_decadal_results(self, filepath):
         """
@@ -1352,13 +1416,16 @@ class TEAIndicators:
                 "decade of data")
         for var in self.ctp_results.data_vars:
             if self.ctp_results[var].attrs['metric_type'] == 'basic':
-                self.decadal_results[var] = self.ctp_results[var].rolling(time=decadal_window[0],
-                                                                          center=True,
-                                                                          min_periods=1).mean(
-                    skipna=True)
-                # set first and last 5 years to nan
-                self.decadal_results[var][:decadal_window[1]] = np.nan
-                self.decadal_results[var][-decadal_window[2]:] = np.nan
+                if 'time' in self.ctp_results[var].dims:
+                    self.decadal_results[var] = self.ctp_results[var].rolling(time=decadal_window[0],
+                                                                              center=True,
+                                                                              min_periods=1).mean(
+                        skipna=True)
+                    # set first and last 5 years to nan
+                    self.decadal_results[var][:decadal_window[1]] = np.nan
+                    self.decadal_results[var][-decadal_window[2]:] = np.nan
+                else:
+                    self.decadal_results[var] = self.ctp_results[var]
                 self.decadal_results[var].attrs = get_attrs(vname=var, dec=True,
                                                             data_unit=self.unit)
 
@@ -1489,6 +1556,12 @@ class TEAIndicators:
         """
         annual_data = self.ctp_results
         dec_data = self.decadal_results
+
+        # drop data without time dimension
+        annual_data = annual_data.drop_vars([var for var in annual_data.data_vars if 'time' not in annual_data[
+            var].dims])
+        dec_data = dec_data.drop_vars([var for var in dec_data.data_vars if 'time' not in dec_data[var].dims])
+
         supp, slow = xr.full_like(dec_data, np.nan), xr.full_like(dec_data, np.nan)
         for icy, cy in enumerate(annual_data.time):
             # skip first and last 5 years
@@ -1633,7 +1706,7 @@ class TEAIndicators:
             duration_data: optional Xarray dataset with cumulative event duration data (e.g. decadal ED)
         """
         for vvar in ds.data_vars:
-            if len(ds[vvar].dims) > 1:
+            if len(ds[vvar].dims) > 1 and 'time' in ds[vvar].dims and 'ED' in ds and ds.ED is not None:
                 duration = duration_data.ED if duration_data is not None else ds.ED
                 ds[vvar] = ds[vvar].where(duration >= min_duration)
             elif ds[vvar].dims == ('time',) and 'ED_GR' in ds and ds.ED_GR is not None:
@@ -1723,7 +1796,7 @@ class TEAIndicators:
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
-            self.amplification_factors.to_netcdf(filepath)
+            self._to_netcdf(self.amplification_factors, filepath)
 
     def load_amplification_factors(self, filepath):
         """
