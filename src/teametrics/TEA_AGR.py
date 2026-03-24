@@ -316,8 +316,7 @@ class TEAAgr(TEAIndicators):
         agr_vars = [var for var in self._cc_mean.data_vars if 'AGR' in var or 'supp' in var or 'slow' in var]
         self._cc_mean = self._cc_mean.drop_vars(agr_vars)
 
-    @staticmethod
-    def _calc_weighted_perc(data, areas):
+    def _calc_weighted_perc(self, data, areas):
         """
         calculate weighted percentiles
         :param data: data
