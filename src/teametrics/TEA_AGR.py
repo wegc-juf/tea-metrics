@@ -609,11 +609,14 @@ class TEAAgr(TEAIndicators):
         """
         get x and y coords for GeoRegion grid
         """
-        # TODO also test for latlon grids
-        if self.xdim != 'lon' and self.gr_grid_mask is not None:
-            xcoord = self.gr_grid_mask[self.xdim]
-            ycoord = self.gr_grid_mask[self.ydim]
-            return xcoord, ycoord
+        if self.gr_grid_mask is not None:
+            xcoords = self.gr_grid_mask[self.xdim]
+            ycoords = self.gr_grid_mask[self.ydim]
+            return xcoords, ycoords
+        
+        if self.ydim == 'y':
+            raise ValueError('GR grid file not available for x/y grid - cannot get x and y coordinates for GR grid. '
+                             'Please generate GR grid first.')
         
         if margin is None:
             margin = self.cell_size_y / 2
@@ -638,15 +641,12 @@ class TEAAgr(TEAIndicators):
                                 ycoord.max().values + self.gr_grid_res - margin,
                                 self.gr_grid_res)
 
-        if self.ydim == 'y':
-            margin_lon = margin
-        else:
-            # compute x margin taking y coord of first grid row
-            y_0 = ycoords[0] if len(ycoords) > 0 else ycoord.max().values
-            margin_lon = 1 / np.cos(np.deg2rad(y_0)) * margin
-            # round margin_lon to resolution of gr grid
-            margin_lon = np.round(np.round(margin_lon / self.gr_grid_res, 0) * self.gr_grid_res, 2)
-            
+        # compute x margin taking y coord of first grid row
+        y_0 = ycoords[0] if len(ycoords) > 0 else ycoord.max().values
+        margin_lon = 1 / np.cos(np.deg2rad(y_0)) * margin
+        # round margin_lon to resolution of gr grid
+        margin_lon = np.round(np.round(margin_lon / self.gr_grid_res, 0) * self.gr_grid_res, 2)
+        
         xcoords = np.arange(xcoord.min().values + margin_lon,
                             xcoord.max().values + self.gr_grid_res - margin_lon,
                             self.gr_grid_res)
