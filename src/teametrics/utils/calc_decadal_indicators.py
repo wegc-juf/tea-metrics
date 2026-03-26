@@ -49,6 +49,7 @@ def load_ctp_data(opts, tea):
         name = opts.region
     filenames = (f'{ctppath}/CTP_{opts.param_str}_{grg_str}{name}_{opts.period}'
                  f'_{opts.dataset}_*.nc')
+    logger.info(f"Looking for CTP results in {filenames}")
     files = sorted(glob.glob(filenames))
     files = [file for file in files if is_in_period(filename=file, start=opts.start, end=opts.end)
              if 'ref' not in file]

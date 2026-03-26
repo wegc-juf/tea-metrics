@@ -5,6 +5,7 @@ Equation numbers refer to Supplementary Notes therin
 """
 import warnings
 import os
+import gc
 
 import xarray as xr
 import pandas as pd
@@ -1376,8 +1377,12 @@ class TEAIndicators:
         if drop_annual_results:
             self.ctp_results.close()
             del self.ctp_results
+            self.ctp_results = xr.Dataset()
             del self._CTP_resample_mean
+            self._CTP_resample_mean = None
             del self._CTP_resample_sum
+            self._CTP_resample_sum = None
+            gc.collect()
 
     def _backup_decadal_ED(self):
         self._decadal_ED = xr.Dataset(

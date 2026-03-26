@@ -70,7 +70,6 @@ class TEAAgr(TEAIndicators):
 
         self.gr_grid_mask = gr_grid_mask
         self.gr_grid_areas = gr_grid_areas
-        self.ctp_results = None
 
         # filter input data to valid cells
         if self.land_sea_mask is not None and self.input_data is not None:
@@ -263,6 +262,7 @@ class TEAAgr(TEAIndicators):
         self.gr_grid_areas = self.gr_grid_areas.where(self.gr_grid_mask > 0)
         self._crop_to_gr_mask_extents()
         self._ref_mean = self._ref_mean.where(self.gr_grid_mask > 0)
+        self._cc_mean = self._cc_mean.where(self.gr_grid_mask > 0)
         self.decadal_results = self.decadal_results.where(self.gr_grid_mask > 0)
         self.amplification_factors = self.amplification_factors.where(self.gr_grid_mask > 0)
 
@@ -295,13 +295,14 @@ class TEAAgr(TEAIndicators):
 
         # use correct slice order for lat/lon and xy grids
         if self.gr_grid_areas[self.ydim][0] > self.gr_grid_areas[self.ydim][-1]:
-            y_slice = slice(y_range[1], y_range[0])
+            y_slice = slice(max(y_range), min(y_range))
         else:
-            y_slice = slice(y_range[0], y_range[1])
+            y_slice = slice(min(y_range), max(y_range))
         x_slice = slice(x_range[0], x_range[1])
 
         self.gr_grid_areas = self.gr_grid_areas.sel({self.ydim: y_slice, self.xdim: x_slice})
         self._ref_mean = self._ref_mean.sel({self.ydim: y_slice, self.xdim: x_slice})
+        self._cc_mean = self._cc_mean.sel({self.ydim: y_slice, self.xdim: x_slice})
         self.decadal_results = self.decadal_results.sel({self.ydim: y_slice, self.xdim: x_slice})
         self.amplification_factors = self.amplification_factors.sel({self.ydim: y_slice, self.xdim: x_slice})
 
