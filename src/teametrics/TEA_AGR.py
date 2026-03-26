@@ -5,10 +5,12 @@ Equation numbers refer to Supplementary Notes therin
 """
 import warnings
 import time
+from typing import Any
 
 import xarray as xr
 import numpy as np
 from tqdm import trange
+from xarray import Dataset
 
 from .common.var_attrs import get_attrs
 from .common.TEA_logger import logger
@@ -315,6 +317,16 @@ class TEAAgr(TEAIndicators):
         self._ref_mean = self._ref_mean.drop_vars(agr_vars)
         agr_vars = [var for var in self._cc_mean.data_vars if 'AGR' in var or 'supp' in var or 'slow' in var]
         self._cc_mean = self._cc_mean.drop_vars(agr_vars)
+        
+        # also drop ref and CC
+        unwanted_vars = [var for var in self.decadal_results if '_ref' in var or '_CC' in var]
+        self.decadal_results = self.decadal_results.drop_vars(unwanted_vars)
+        # also drop ref and CC
+        unwanted_vars = [var for var in self._ref_mean if '_ref' in var or '_CC' in var]
+        self._ref_mean = self._ref_mean.drop_vars(unwanted_vars)
+        # also drop ref and CC
+        unwanted_vars = [var for var in self._cc_mean if '_ref' in var or '_CC' in var]
+        self._cc_mean = self._cc_mean.drop_vars(unwanted_vars)
 
     def _calc_weighted_perc(self, data, areas):
         """
@@ -485,6 +497,71 @@ class TEAAgr(TEAIndicators):
             x_ref_spreads = xr.Dataset()
 
         # calculate error estimates for AGR mean (equation 42TODEFINE)
+        N_dof = self._get_N_dof(A_AGR)
+        
+        if spreads:
+            # add p5 and p95 values (equation 41TODEFINE)
+            # TODO: optimize this
+            self._calc_agr_percentiles(data=self.decadal_results)
+            self._calc_agr_percentiles(data=self._ref_mean)
+            self._calc_agr_percentiles(data=self._cc_mean)
+            self._calc_agr_percentiles(data=self.amplification_factors)
+        
+        x_cc_agr, x_cc_spreads, x_ref_agr, x_ref_spreads, x_s_agr = self._rename_AGR_vars(x_cc_agr, x_cc_spreads,
+                                                                                          x_ref_agr, x_ref_spreads,
+                                                                                          x_s_agr)
+        
+        self._add_attributes(x_cc_agr, x_ref_agr, x_s_agr, af_agr, af_cc_agr)
+        
+        # merge
+        x_s_agr = xr.merge([x_s_agr, x_s_spreads])
+        af_agr = xr.merge([af_agr, af_cc_agr, af_spreads, af_cc_spreads])
+        af_agr = self._duplicate_vars(af_agr)
+
+        # add number of degrees of freedom for AGR mean
+        x_s_agr['N_dof_AGR'] = N_dof
+        x_s_agr['N_dof_AGR'].attrs = {'long_name': 'Number of degrees of freedom for AGR mean'}
+        af_agr['N_dof_AGR'] = N_dof
+        af_agr['N_dof_AGR'].attrs = {'long_name': 'Number of degrees of freedom for AGR mean'}
+
+        # put together to final output
+        self.decadal_results = xr.merge([x_s_agr, x_ref_spreads, x_cc_spreads, x_ref_agr,
+                                         x_cc_agr, self.decadal_results],
+                                        compat='override')
+        self.amplification_factors = xr.merge([af_agr, self.amplification_factors], compat='override')
+        # self.amplification_factors = xr.merge([self.amplification_factors, af_agr], compat='override')
+    
+    def _rename_AGR_vars(self, x_cc_agr: Dataset, x_cc_spreads: Dataset, x_ref_agr: Dataset, x_ref_spreads: Dataset,
+                         x_s_agr: Dataset) -> tuple[Dataset, Dataset, Dataset, Dataset, Dataset]:
+        # rename variables
+        rename_dict = {var: f'{var}_AGR' for var in x_s_agr.data_vars}
+        x_s_agr = x_s_agr.rename(rename_dict)
+        rename_dict = {var: f'{var}_AGR_ref' for var in x_ref_agr.data_vars}
+        x_ref_agr = x_ref_agr.rename(rename_dict)
+        rename_dict = {var: f'{var}_AGR_CC' for var in x_cc_agr.data_vars}
+        x_cc_agr = x_cc_agr.rename(rename_dict)
+        rename_dict = {var: var.replace('AGR', 'AGR_CC') for var in x_cc_spreads.data_vars}
+        x_cc_spreads = x_cc_spreads.rename(rename_dict)
+        rename_dict = {}
+        for var in self._cc_mean.data_vars:
+            if 'AGR' in var:
+                rename_dict[var] = var.replace('AGR', 'AGR_CC')
+            else:
+                rename_dict[var] = f"{var}_CC"
+        self._cc_mean = self._cc_mean.rename(rename_dict)
+        rename_dict = {var: var.replace('AGR', 'AGR_ref') for var in x_ref_spreads.data_vars}
+        x_ref_spreads = x_ref_spreads.rename(rename_dict)
+        rename_dict = {}
+        for var in self._ref_mean.data_vars:
+            if 'AGR' in var:
+                rename_dict[var] = var.replace('AGR', 'AGR_ref')
+            else:
+                rename_dict[var] = f"{var}_ref"
+        self._ref_mean = self._ref_mean.rename(rename_dict)
+        return x_cc_agr, x_cc_spreads, x_ref_agr, x_ref_spreads, x_s_agr
+    
+    def _get_N_dof(self, A_AGR) -> float | Any:
+        # calculate error estimates for AGR mean (equation 42TODEFINE)
         r_earth = 6371
         u_earth = 2 * np.pi * r_earth
         # # size of grid cell in 100 km^2
@@ -493,46 +570,25 @@ class TEAAgr(TEAIndicators):
         else:
             A_GR_full = (self.cell_size_y / 1000) ** 2 / 100
         N_dof = max(A_AGR / A_GR_full, 1)
-
-        if spreads:
-            # add p5 and p95 values (equation 41TODEFINE)
-            # TODO: optimize this
-            self._calc_agr_percentiles(data=self.decadal_results)
-            self._calc_agr_percentiles(data=self.amplification_factors)
-
+        return N_dof
+    
+    def _add_attributes(self, x_cc_agr, x_ref_agr, x_s_agr, af_agr, af_cc_agr):
         # add attributes
         for vvar in af_agr.data_vars:
             af_agr[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
         for vvar in af_cc_agr.data_vars:
             af_cc_agr[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
-
-        # join af_agr and af_cc_agr
-        af_agr = xr.merge([af_agr, af_cc_agr, af_spreads, af_cc_spreads])
-        af_agr = self._duplicate_vars(af_agr)
-
-        # rename variables
-        rename_dict = {var: f'{var}_AGR' for var in x_s_agr.data_vars}
-        x_s_agr = x_s_agr.rename(rename_dict)
-        rename_dict = {var: var.replace('AGR', 'AGR_CC') for var in x_cc_spreads.data_vars}
-        x_cc_spreads = x_cc_spreads.rename(rename_dict)
-        rename_dict = {var: var.replace('AGR', 'AGR_ref') for var in x_ref_spreads.data_vars}
-        x_ref_spreads = x_ref_spreads.rename(rename_dict)
-
-        # add attributes
         for vvar in x_s_agr.data_vars:
             x_s_agr[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
-        x_s_agr = xr.merge([x_s_agr, x_s_spreads])
-
-        # add number of degrees of freedom for AGR mean
-        x_s_agr['N_dof_AGR'] = N_dof
-        x_s_agr['N_dof_AGR'].attrs = {'long_name': 'Number of degrees of freedom for AGR mean'}
-        af_agr['N_dof_AGR'] = N_dof
-        af_agr['N_dof_AGR'].attrs = {'long_name': 'Number of degrees of freedom for AGR mean'}
-
-        self.decadal_results = xr.merge([x_s_agr, x_ref_spreads, x_cc_spreads, self.decadal_results], compat='override')
-        self.amplification_factors = xr.merge([af_agr, self.amplification_factors], compat='override')
-        # self.amplification_factors = xr.merge([self.amplification_factors, af_agr], compat='override')
-
+        for vvar in x_ref_agr.data_vars:
+            x_ref_agr[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
+        for vvar in x_cc_agr.data_vars:
+            x_cc_agr[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
+        for vvar in self._ref_mean.data_vars:
+            self._ref_mean[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
+        for vvar in self._cc_mean.data_vars:
+            self._cc_mean[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
+    
     def _calc_agr_spread(self, data, ref):
         """
         calculate spread estimates of grid cell values around AGR mean (equation 38)
@@ -598,6 +654,11 @@ class TEAAgr(TEAIndicators):
 
             if 'AF' in var:
                 var = var.replace('AF', 'AGR_AF')
+                
+            elif 'ref' in var:
+                var = var.replace('ref', 'AGR_ref')
+            elif 'CC' in var:
+                var = var.replace('CC', 'AGR_CC')
             else:
                 var = f'{var}_AGR'
             data[f'{var}_p05'] = p5

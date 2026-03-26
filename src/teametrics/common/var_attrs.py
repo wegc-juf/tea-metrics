@@ -2,6 +2,8 @@
 script for adding attributes to TEA variables
 """
 
+import re
+
 equal_vars = {'EM': 'tEX'}
 
 
@@ -109,7 +111,7 @@ def get_attrs(vname=None, dec=False, spread=None, period='', data_unit=''):
     }
 
     # add (A)GR indicators if necessary
-    vname_dict = vname.replace('_GR', '').replace('_AGR', '').replace('_AF', '').replace('_CC', '')
+    vname_dict = re.sub(r'(_GR|_AGR|_AF_CC|_AF|_CC|_ref|_p05|_p95)', '', vname)
     vattrs = attrs[vname_dict]
     if '_GR' in vname:
         vattrs['long_name'] = f'{vattrs["long_name"]} (GR)'
@@ -123,7 +125,12 @@ def get_attrs(vname=None, dec=False, spread=None, period='', data_unit=''):
     elif 'AF_CC' in vname:
         vattrs['long_name'] = f'{vattrs["long_name"]} CC amplification'
         vattrs['units'] = '1'
-
+    # ref and CC values
+    elif '_ref' in vname:
+        vattrs['long_name'] = f'{vattrs["long_name"]} (for ref period)'
+    elif '_CC' in vname:
+        vattrs['long_name'] = f'{vattrs["long_name"]} (for CC period)'
+    
     # add decadal-mean for decadal variables
     if dec:
         vattrs['long_name'] = f'decadal-mean {vattrs["long_name"]}'

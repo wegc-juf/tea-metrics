@@ -66,7 +66,6 @@ class TEAIndicators:
         elif area_grid is not None:
             self._find_dim_names(data=area_grid)
             
-
         self.apply_mask = apply_mask
 
         self.use_dask = use_dask
@@ -160,7 +159,7 @@ class TEAIndicators:
         """
         # y order of slice coordinates already correct from y_range
         slice_x = slice(x_range[0], x_range[1])
-        slice_y = slice(y_range[1], y_range[0])
+        slice_y = slice(y_range[0], y_range[1])
         
         # select using the current dimension names
         self.input_data = self.input_data.sel({self.ydim: slice_y, self.xdim: slice_x})
@@ -178,7 +177,8 @@ class TEAIndicators:
         x_max = mask[self.xdim][idx_with_data[1]].max().values
         y_min = mask[self.ydim][idx_with_data[0]].min().values
         y_max = mask[self.ydim][idx_with_data[0]].max().values
-        if 'lon' in self.mask.dims:
+        # use correct slice order for lat/lon and xy grids
+        if mask[self.ydim][0] > mask[self.ydim][-1]:
             # lon must be max to min
             y_range = [y_max, y_min]
         else:
@@ -1388,6 +1388,15 @@ class TEAIndicators:
         """
         save all decadal results to filepath
         """
+        
+        if self._cc_mean is not None and self._ref_mean is not None:
+            # name correctly
+            rename_dict = {var: f'{var}_CC' for var in self._cc_mean.data_vars if '_CC' not in var}
+            cc_mean = self._cc_mean.rename(rename_dict)
+            rename_dict = {var: f'{var}_ref' for var in self._ref_mean.data_vars if '_ref' not in var}
+            ref_mean = self._ref_mean.rename(rename_dict)
+            # save
+            self.decadal_results = xr.merge([self.decadal_results, cc_mean, ref_mean])
 
         if os.path.exists(filepath):
             os.remove(filepath)
@@ -1603,6 +1612,10 @@ class TEAIndicators:
         Args:
             period: current climate period: tuple(start year, end year). Default: self.cc_period
         """
+        # drop old cc vars first
+        drop_vars = [var for var in self.decadal_results.data_vars if '_CC' in var or '_ref' in var]
+        self.decadal_results = self.decadal_results.drop_vars(drop_vars)
+        
         if period is None:
             period = self.cc_period
 
@@ -1621,6 +1634,10 @@ class TEAIndicators:
         Args:
             period: reference period: tuple(start year, end year). Default: self.ref_period
         """
+        # drop old ref vars first
+        drop_vars = [var for var in self.decadal_results.data_vars if '_CC' in var or '_ref' in var]
+        self.decadal_results = self.decadal_results.drop_vars(drop_vars)
+        
         if period is None:
             period = self.ref_period
 
