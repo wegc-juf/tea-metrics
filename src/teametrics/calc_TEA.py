@@ -70,7 +70,7 @@ def calc_tea_indicators(opts):
 
             # for aggregate GeoRegion calculation, load GR grid files
             if 'agr' in opts:
-                _load_or_generate_gr_grid(opts, tea)
+                _load_or_generate_gr_grid_static(opts, tea)
 
             # calculate CTP indicators
             calc_annual_ctp_indicators(tea=tea, opts=opts, start=p_start, end=p_end)
@@ -94,7 +94,8 @@ def calc_tea_indicators(opts):
 
         # calculate AGR variables
         if 'agr' in opts:
-            _load_or_generate_gr_grid(opts, tea)
+            _load_or_generate_gr_grid_static(opts, tea)
+            # TODO calc also for annual data
             _calc_agr_mean_and_spread(opts=opts, tea=tea)
 
 
@@ -368,23 +369,9 @@ def _save_ctp_output(opts, tea, start, end):
         end: end year
     """
     create_tea_history(cfg_params=opts, tea=tea, dataset='ctp_results')
-
-    path = Path(f'{opts.outpath}/ctp_indicator_variables/')
-    path.mkdir(parents=True, exist_ok=True)
-
-    if 'agr' in opts:
-        grg_str = 'GRG-'
-    else:
-        grg_str = ''
-
-    if 'station' in opts:
-        name = opts.station
-    else:
-        name = opts.region
-    outpath = (f'{opts.outpath}/ctp_indicator_variables/'
-               f'CTP_{opts.param_str}_{grg_str}{name}_{opts.period}_{opts.dataset}'
-               f'_{start}to{end}.nc')
-
+    
+    outpath = _get_ctp_filepath(start, end, opts)
+    
     path_ref = outpath.replace('.nc', '_ref.nc')
 
     logger.info(f'Saving CTP indicators to {outpath}')
@@ -392,6 +379,39 @@ def _save_ctp_output(opts, tea, start, end):
 
     if opts.compare_to_ref:
         _compare_to_ctp_ref(tea, path_ref)
+
+
+def _get_ctp_filepath(start, end, opts, annual_agr=False) -> str:
+    """
+    get filepath for CTP results
+    Args:
+        start: start year
+        end: end year
+        opts: options as defined in CFG-PARAMS-doc
+        annual_agr: set if annual agr results should be saved
+
+    Returns:
+        outpath: filepath for CTP results
+
+    """
+    path = Path(f'{opts.outpath}/ctp_indicator_variables/')
+    path.mkdir(parents=True, exist_ok=True)
+    
+    if annual_agr:
+        grg_str = 'AGR-'
+    elif 'agr' in opts:
+        grg_str = 'GRG-'
+    else:
+        grg_str = ''
+    
+    if 'station' in opts:
+        name = opts.station
+    else:
+        name = opts.region
+    outpath = (f'{opts.outpath}/ctp_indicator_variables/'
+               f'CTP_{opts.param_str}_{grg_str}{name}_{opts.period}_{opts.dataset}'
+               f'_{start}to{end}.nc')
+    return outpath
 
 
 def _save_grg_mask(opts, grg_mask, grg_areas):
@@ -425,7 +445,7 @@ def _save_grg_mask(opts, grg_mask, grg_areas):
         grg_mask.to_netcdf(mask_file)
 
 
-def _load_or_generate_gr_grid(opts, tea):
+def _load_or_generate_gr_grid_static(opts, tea):
     """
     load or generate grid of GRs mask and area grid for AGR calculation
     Args:
@@ -616,20 +636,34 @@ def _calc_agr_mean_and_spread(opts, tea):
         agr_opts.region = opts.agr
         mask_file = _load_mask_file(agr_opts)
         tea.mask = mask_file
-        _load_or_generate_gr_grid(agr_opts, tea)
+        _load_or_generate_gr_grid_static(agr_opts, tea)
         crop_to_shp = True
 
-    tea.calc_agr_vars(y_range=agr_y_range, x_range=agr_x_range, spreads=opts.spreads, crop_to_shp=crop_to_shp)
+    tea.calc_agr_vars(y_range=agr_y_range, x_range=agr_x_range, spreads=opts.spreads, crop_to_shp=crop_to_shp,
+                      calc_annual=opts.annual_spreads)
 
     # save results
+    # # decadal
     outpath_decadal = get_decadal_outpath(opts, opts.agr)
-    outpath_ampl = get_amplification_outpath(opts, opts.agr)
-    logger.info(f'Saving AGR decadal results to {outpath_decadal}')
+    logger.info(f'Saving decadal AGR results to {outpath_decadal}')
     # remove outpath_decadal if it exists
     if os.path.exists(outpath_decadal):
         os.remove(outpath_decadal)
     create_tea_history(cfg_params=opts, tea=tea, dataset='decadal_results')
     tea.save_decadal_results(filepath=outpath_decadal)
+
+    # # annual
+    if opts.annual_spreads:
+        filepath_annual = _get_ctp_filepath(opts.start, opts.end, opts, annual_agr=True)
+        logger.info(f'Saving annual AGR results to {filepath_annual}')
+        create_tea_history(cfg_params=opts, tea=tea, dataset='ctp_results')
+        # drop 3D vars already saved in GRG files
+        tea.ctp_results = tea.ctp_results.drop_vars(
+            [var for var in tea.ctp_results.data_vars if 'AGR' not in var])
+        tea.save_ctp_results(filepath=filepath_annual)
+
+    # # amplification factors
+    outpath_ampl = get_amplification_outpath(opts, opts.agr)
     logger.info(f'Saving AGR amplification factors to {outpath_ampl}')
     create_tea_history(cfg_params=opts, tea=tea, dataset='amplification_factors')
     tea.save_amplification_factors(filepath=outpath_ampl)

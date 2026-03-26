@@ -70,6 +70,7 @@ class TEAAgr(TEAIndicators):
 
         self.gr_grid_mask = gr_grid_mask
         self.gr_grid_areas = gr_grid_areas
+        self.ctp_results = None
 
         # filter input data to valid cells
         if self.land_sea_mask is not None and self.input_data is not None:
@@ -310,11 +311,17 @@ class TEAAgr(TEAIndicators):
         """
         agr_vars = [var for var in self.decadal_results.data_vars if 'AGR' in var or 'supp' in var or 'slow' in var]
         self.decadal_results = self.decadal_results.drop_vars(agr_vars)
+        
+        agr_vars = [var for var in self.ctp_results.data_vars if 'AGR' in var or 'supp' in var or 'slow' in var]
+        self.ctp_results = self.ctp_results.drop_vars(agr_vars)
+        
         agr_vars = [var for var in self.amplification_factors.data_vars if 'AGR' in var or 'supp' in var or 'slow' in
                     var]
         self.amplification_factors = self.amplification_factors.drop_vars(agr_vars)
+        
         agr_vars = [var for var in self._ref_mean.data_vars if 'AGR' in var or 'supp' in var or 'slow' in var]
         self._ref_mean = self._ref_mean.drop_vars(agr_vars)
+        
         agr_vars = [var for var in self._cc_mean.data_vars if 'AGR' in var or 'supp' in var or 'slow' in var]
         self._cc_mean = self._cc_mean.drop_vars(agr_vars)
         
@@ -409,7 +416,7 @@ class TEAAgr(TEAIndicators):
             pval095 = np.nan
         return pval005, pval095
 
-    def calc_agr_vars(self, y_range=None, x_range=None, spreads=True, crop_to_shp=False):
+    def calc_agr_vars(self, y_range=None, x_range=None, spreads=True, crop_to_shp=False, calc_annual=False):
         """
         calculate AGR variables
 
@@ -418,7 +425,13 @@ class TEAAgr(TEAIndicators):
             y_range: y coordinate range (min, max). Default: Full region
             spreads: if True, calculate spreads and percentiles for AGR variables
             crop_to_shp: if True, crop data to shape of aggregated GeoRegion (default: False)
+            calc_annual: if True, calculate vars also for annual data
         """
+        xt_p_agr = None
+        x_p_agr = None
+        x_p_spreads = None
+        xt_p_ref_agr = None
+        
         # filter data to spatial extent of aggregated GeoRegion
         if y_range is not None or x_range is not None:
             self._crop_to_rect(x_range=x_range, y_range=y_range)
@@ -435,17 +448,29 @@ class TEAAgr(TEAIndicators):
         awgts = self.gr_grid_areas / A_AGR
 
         # calc X_Ref^AGR and X_s^AGR (equation 34_1 and equation 34_2)
-        x_ref_agr = (awgts * self._ref_mean).sum()
-        xt_s_agr = (awgts * self.decadal_results).sum(dim=(self.ydim, self.xdim))
+        x_ref_agr = self.calc_area_weighted_mean(awgts, self._ref_mean)
+        xt_s_agr = self.calc_area_weighted_mean(awgts, self.decadal_results)
+        if calc_annual:
+            xt_p_agr = self.calc_area_weighted_mean(awgts, self.ctp_results)
 
-        # calc Xt_ref_db and Xt_ref_agr (equation 34_3)
+        # calc Xt_ref_agr (equation 34_3)
         xt_ref_agr = self._calc_gmean_decadal(start_year=self.ref_period[0], end_year=self.ref_period[1], data=xt_s_agr)
+        if calc_annual:
+            # TODO: check if geometric mean should be used here, in case of arithmetic mean the fraction below seems
+            #  to be always 1 probably because of linear behavior
+            xt_p_ref_agr = xt_p_agr.sel(
+                time=slice(f'{self.ref_period[0]}-01-01', f'{self.ref_period[1]}-12-31')).mean(dim='time')
 
         # calculate X_s_AGR (equation 34_4)
         x_s_agr = (x_ref_agr / xt_ref_agr) * xt_s_agr
+        if calc_annual:
+            # TODO: check if we should use xp_ref_agr and xt_p_ref_agr here when description in SI is ready
+            x_p_agr = (x_ref_agr / xt_ref_agr) * xt_p_agr
 
         # calculate compound variables (equation 35)
         x_s_agr = self._calc_compound_vars(x_s_agr)
+        if calc_annual:
+            x_p_agr = self._calc_compound_vars(x_p_agr)
         x_ref_agr = self._calc_compound_vars(x_ref_agr)
 
         # set values to nan for first and last 5/4 years for all variables with dimension 'time' to avoid edge
@@ -459,8 +484,11 @@ class TEAAgr(TEAIndicators):
         # calculate spread estimates (equation 38)
         if spreads:
             x_s_spreads = self._calc_agr_spread(data=self.decadal_results, ref=x_s_agr)
+            if calc_annual:
+                x_p_spreads = self._calc_agr_spread(data=self.ctp_results, ref=x_p_agr)
         else:
             x_s_spreads = xr.Dataset()
+            x_p_spreads = xr.Dataset()
 
         # calculate CC period averages (equation 36)
         x_cc_agr = self._calc_gmean_decadal(start_year=self.cc_period[0], end_year=self.cc_period[1], data=x_s_agr)
@@ -476,7 +504,7 @@ class TEAAgr(TEAIndicators):
         af_cc_agr = af_cc_agr.rename(rename_dict)
 
         if spreads:
-            # calculate spread estimates (equation 38)
+            # calculate AF spread estimates (equation 38)
             af_spreads = self._calc_agr_spread(data=self.amplification_factors, ref=af_agr)
             af_spreads = af_spreads.rename({var: var.replace('AF_AGR', 'AGR_AF') for var in af_spreads.data_vars})
 
@@ -502,6 +530,8 @@ class TEAAgr(TEAIndicators):
         if spreads:
             # add p5 and p95 values (equation 41TODEFINE)
             # TODO: optimize this
+            if calc_annual:
+                self._calc_agr_percentiles(data=self.ctp_results)
             self._calc_agr_percentiles(data=self.decadal_results)
             self._calc_agr_percentiles(data=self._ref_mean)
             self._calc_agr_percentiles(data=self._cc_mean)
@@ -509,30 +539,42 @@ class TEAAgr(TEAIndicators):
         
         x_cc_agr, x_cc_spreads, x_ref_agr, x_ref_spreads, x_s_agr = self._rename_AGR_vars(x_cc_agr, x_cc_spreads,
                                                                                           x_ref_agr, x_ref_spreads,
-                                                                                          x_s_agr)
+                                                                                          x_s_agr, calc_annual)
         
-        self._add_attributes(x_cc_agr, x_ref_agr, x_s_agr, af_agr, af_cc_agr)
-        
+        # add attributes
+        self._add_attributes(af_agr)
+        self._add_attributes(af_cc_agr)
+        self._add_attributes(x_cc_agr)
+        self._add_attributes(x_ref_agr)
+        self._add_attributes(x_s_agr)
+        if calc_annual:
+            self._add_attributes(x_p_agr)
+
         # merge
         x_s_agr = xr.merge([x_s_agr, x_s_spreads])
         af_agr = xr.merge([af_agr, af_cc_agr, af_spreads, af_cc_spreads])
         af_agr = self._duplicate_vars(af_agr)
+        if calc_annual:
+            x_p_agr = xr.merge([x_p_agr, x_p_spreads])
 
         # add number of degrees of freedom for AGR mean
         x_s_agr['N_dof_AGR'] = N_dof
         x_s_agr['N_dof_AGR'].attrs = {'long_name': 'Number of degrees of freedom for AGR mean'}
         af_agr['N_dof_AGR'] = N_dof
         af_agr['N_dof_AGR'].attrs = {'long_name': 'Number of degrees of freedom for AGR mean'}
+        if calc_annual:
+            x_p_agr['N_dof_AGR'] = N_dof
 
         # put together to final output
         self.decadal_results = xr.merge([x_s_agr, x_ref_spreads, x_cc_spreads, x_ref_agr,
                                          x_cc_agr, self.decadal_results],
                                         compat='override')
+        if calc_annual:
+            self.ctp_results = xr.merge([x_p_agr, self.ctp_results], compat='override')
         self.amplification_factors = xr.merge([af_agr, self.amplification_factors], compat='override')
-        # self.amplification_factors = xr.merge([self.amplification_factors, af_agr], compat='override')
     
     def _rename_AGR_vars(self, x_cc_agr: Dataset, x_cc_spreads: Dataset, x_ref_agr: Dataset, x_ref_spreads: Dataset,
-                         x_s_agr: Dataset) -> tuple[Dataset, Dataset, Dataset, Dataset, Dataset]:
+                         x_s_agr: Dataset, calc_annual=False) -> tuple[Dataset, Dataset, Dataset, Dataset, Dataset]:
         # rename variables
         rename_dict = {var: f'{var}_AGR' for var in x_s_agr.data_vars}
         x_s_agr = x_s_agr.rename(rename_dict)
@@ -540,6 +582,9 @@ class TEAAgr(TEAIndicators):
         x_ref_agr = x_ref_agr.rename(rename_dict)
         rename_dict = {var: f'{var}_AGR_CC' for var in x_cc_agr.data_vars}
         x_cc_agr = x_cc_agr.rename(rename_dict)
+        if calc_annual:
+            rename_dict = {var: f'{var}_AGR' for var in x_p_agr.data_vars}
+            x_p_agr = x_p_agr.rename(rename_dict)
         rename_dict = {var: var.replace('AGR', 'AGR_CC') for var in x_cc_spreads.data_vars}
         x_cc_spreads = x_cc_spreads.rename(rename_dict)
         rename_dict = {}
@@ -572,22 +617,31 @@ class TEAAgr(TEAIndicators):
         N_dof = max(A_AGR / A_GR_full, 1)
         return N_dof
     
-    def _add_attributes(self, x_cc_agr, x_ref_agr, x_s_agr, af_agr, af_cc_agr):
-        # add attributes
-        for vvar in af_agr.data_vars:
-            af_agr[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
-        for vvar in af_cc_agr.data_vars:
-            af_cc_agr[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
-        for vvar in x_s_agr.data_vars:
-            x_s_agr[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
-        for vvar in x_ref_agr.data_vars:
-            x_ref_agr[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
-        for vvar in x_cc_agr.data_vars:
-            x_cc_agr[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
-        for vvar in self._ref_mean.data_vars:
-            self._ref_mean[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
-        for vvar in self._cc_mean.data_vars:
-            self._cc_mean[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
+    def _add_attributes(self, dataset):
+        """
+        set correct attributes for all vars of dataset
+        Args:
+            dataset: xarray dataset
+
+        Returns:
+
+        """
+        for vvar in dataset.data_vars:
+            dataset[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
+    
+    def calc_area_weighted_mean(self, awgts, data) -> Any:
+        """
+        calculate area weighted mean according to equation 34_1
+        Args:
+            awgts: area weights
+            data: data
+
+        Returns:
+            result: area weighted mean
+
+        """
+        result = (awgts * data).sum(dim=(self.ydim, self.xdim))
+        return result
     
     def _calc_agr_spread(self, data, ref):
         """

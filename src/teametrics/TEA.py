@@ -1627,12 +1627,13 @@ class TEAIndicators:
                 cc_mean[vvar].attrs['long_name'] = 'CC mean of ' + cc_mean[vvar].attrs['long_name']
         self._cc_mean = cc_mean
 
-    def _calc_ref(self, period=None):
+    def _calc_ref(self, period=None, calc_annual=False):
         """
         calculate geometric mean of ref period (equation 26)
 
         Args:
             period: reference period: tuple(start year, end year). Default: self.ref_period
+            calc_annual: calculate ref_mean also from annual data
         """
         # drop old ref vars first
         drop_vars = [var for var in self.decadal_results.data_vars if '_CC' in var or '_ref' in var]
@@ -1643,6 +1644,22 @@ class TEAIndicators:
 
         start_year, end_year = period
         ref_mean = self._calc_gmean_decadal(start_year=start_year, end_year=end_year, skipna=False)
+        
+        # calc ref_mean with annual data
+        # TODO check again when SI infos are ready
+        calc_annual = False
+        if calc_annual:
+            use_gmean = False
+            annual_ref = self.ctp_results.sel(time=slice(f'{start_year}-01-01', f'{end_year}-12-31'))
+            if not use_gmean:
+                # use arithmetic average as for calculating decadal data out of annual data (seems the right way to do)
+                ref_mean_annual = annual_ref.mean(dim='time')
+            else:
+                # TODO check again when SI infos are ready
+                # use geometric average, only works if all values are > 0, if not, special method has to be implemented
+                # as explained in SI, or simply use the minimum value > 0 instead
+                ref_mean_annual = self._gmean_custom(annual_ref, dim='time', skipna=False)
+            self._ref_mean_annual = ref_mean_annual
 
         for vvar in ref_mean.data_vars:
             ref_mean[vvar].attrs = self.decadal_results[vvar].attrs
@@ -1730,8 +1747,8 @@ class TEAIndicators:
                 duration = duration_data.ED_GR if duration_data is not None else ds.ED_GR
                 ds[vvar] = ds[vvar].where(duration >= min_duration)
 
-    def calc_amplification_factors(self, ref_period=(1961, 1990), cc_period=(2008, 2024),
-                                   min_duration=7):
+    def calc_amplification_factors(self, ref_period=(1961, 1990), cc_period=(2008, 2024), min_duration=7,
+                                   calc_annual_ref=False):
         """
         calculate amplification factors (equation 27)
 
@@ -1739,6 +1756,7 @@ class TEAIndicators:
             ref_period: reference period: tuple(start year, end year). Default: (1961, 1990)
             cc_period: current climate period: tuple(start year, end year). Default: (2008, 2022)
             min_duration: minimum cumulative decadal event duration (10-yr sum) in days. Default: 10
+            calc_annual_ref: also calculate reference values for annual data
         """
         # TODO: write ref and cc period to output file
         min_duration_avg = min_duration / 10
@@ -1747,7 +1765,7 @@ class TEAIndicators:
         if self._cc_mean is None:
             self._calc_cc()
         if self._ref_mean is None:
-            self._calc_ref()
+            self._calc_ref(calc_annual=calc_annual_ref)
         cc_mean = self._cc_mean
         ref_mean = self._ref_mean
         if min_duration > 0:
@@ -1919,8 +1937,7 @@ class TEAIndicators:
         # drop all non GR variables
         if not self._calc_grid:
             self.daily_results = self.daily_results.drop_vars(
-                [var for var in self.daily_results.data_vars if 'GR' not
-                 in var])
+                [var for var in self.daily_results.data_vars if 'GR' not in var])
 
         # filter according to CTP definition (e.g. summer months)
         self._filter_CTP()

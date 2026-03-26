@@ -100,8 +100,9 @@ def calc_decadal_indicators(opts, tea, outpath=None):
     if opts.recalc_decadal or not os.path.exists(outpath):
         load_ctp_data(opts=opts, tea=tea)
         logger.info("Calculating decadal indicators")
+        drop_annual_results = not opts.annual_spreads
         tea.calc_decadal_indicators(decadal_window=opts.decadal_window, calc_spread=opts.spreads,
-                                    drop_annual_results=True, min_duration=opts.min_duration)
+                                    drop_annual_results=drop_annual_results, min_duration=opts.min_duration)
         create_tea_history(cfg_params=opts, tea=tea, dataset='decadal_results')
         path = Path(f'{opts.outpath}/dec_indicator_variables/')
         path.mkdir(parents=True, exist_ok=True)
@@ -175,7 +176,7 @@ def calc_amplification_factors(opts, tea, outpath=None):
         warnings.simplefilter("ignore")
         logger.info('Calculating amplification factors.')
         tea.calc_amplification_factors(ref_period=opts.ref_period, cc_period=opts.cc_period,
-                                       min_duration=opts.min_duration)
+                                       min_duration=opts.min_duration, calc_annual_ref=opts.annual_spreads)
 
     path = Path(f'{opts.outpath}/dec_indicator_variables/amplification/')
     path.mkdir(parents=True, exist_ok=True)
