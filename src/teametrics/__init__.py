@@ -1,2 +1,2 @@
 # This will be dynamically set by poetry-dynamic-versioning
-__version__ = "0.10.1b1"
+__version__ = "0.10.2b1"

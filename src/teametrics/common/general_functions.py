@@ -453,6 +453,7 @@ def calc_percentiles(opts, threshold_min=None, data=None):
         percent = percent_smooth
 
     percent = percent.drop_vars('quantile')
+    percent.load()
 
     return percent
 
