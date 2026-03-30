@@ -698,7 +698,7 @@ def _load_gr_grid_static(opts):
     try:
         gr_grid_areas = xr.open_dataset(gr_grid_areas_file)
         gr_grid_areas = gr_grid_areas.area_grid
-    except FileNotFoundError, AttributeError:
+    except (FileNotFoundError, AttributeError):
         if opts.decadal_only:
             logger.info(
                 f'No GR area grid found at {gr_grid_areas_file}. Trying to generate one')

@@ -1652,7 +1652,6 @@ class TEAIndicators:
         
         # calc ref_mean with annual data
         # TODO check again when SI infos are ready
-        calc_annual = False
         if calc_annual:
             use_gmean = False
             annual_ref = self.ctp_results.sel(time=slice(f'{start_year}-01-01', f'{end_year}-12-31'))

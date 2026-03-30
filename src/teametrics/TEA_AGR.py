@@ -538,9 +538,8 @@ class TEAAgr(TEAIndicators):
             self._calc_agr_percentiles(data=self._cc_mean)
             self._calc_agr_percentiles(data=self.amplification_factors)
         
-        x_cc_agr, x_cc_spreads, x_ref_agr, x_ref_spreads, x_s_agr = self._rename_AGR_vars(x_cc_agr, x_cc_spreads,
-                                                                                          x_ref_agr, x_ref_spreads,
-                                                                                          x_s_agr, calc_annual)
+        x_cc_agr, x_cc_spreads, x_ref_agr, x_ref_spreads, x_s_agr, x_p_agr = self._rename_AGR_vars(
+            x_cc_agr, x_cc_spreads, x_ref_agr, x_ref_spreads, x_s_agr, x_p_agr, calc_annual)
         
         # add attributes
         self._add_attributes(af_agr)
@@ -575,7 +574,8 @@ class TEAAgr(TEAIndicators):
         self.amplification_factors = xr.merge([af_agr, self.amplification_factors], compat='override')
     
     def _rename_AGR_vars(self, x_cc_agr: Dataset, x_cc_spreads: Dataset, x_ref_agr: Dataset, x_ref_spreads: Dataset,
-                         x_s_agr: Dataset, calc_annual=False) -> tuple[Dataset, Dataset, Dataset, Dataset, Dataset]:
+                         x_s_agr: Dataset, x_p_agr: Dataset, calc_annual=False) -> tuple[
+                            Dataset, Dataset, Dataset, Dataset, Dataset, Dataset]:
         # rename variables
         rename_dict = {var: f'{var}_AGR' for var in x_s_agr.data_vars}
         x_s_agr = x_s_agr.rename(rename_dict)
@@ -604,8 +604,9 @@ class TEAAgr(TEAIndicators):
             else:
                 rename_dict[var] = f"{var}_ref"
         self._ref_mean = self._ref_mean.rename(rename_dict)
-        return x_cc_agr, x_cc_spreads, x_ref_agr, x_ref_spreads, x_s_agr
+        return x_cc_agr, x_cc_spreads, x_ref_agr, x_ref_spreads, x_s_agr, x_p_agr
     
+    # noinspection PyPep8Naming
     def _get_N_dof(self, A_AGR) -> float | Any:
         # calculate error estimates for AGR mean (equation 42TODEFINE)
         r_earth = 6371
