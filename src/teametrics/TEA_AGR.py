@@ -305,6 +305,8 @@ class TEAAgr(TEAIndicators):
         self._cc_mean = self._cc_mean.sel({self.ydim: y_slice, self.xdim: x_slice})
         self.decadal_results = self.decadal_results.sel({self.ydim: y_slice, self.xdim: x_slice})
         self.amplification_factors = self.amplification_factors.sel({self.ydim: y_slice, self.xdim: x_slice})
+        if self.ctp_results:
+            self.ctp_results = self.ctp_results.sel({self.ydim: y_slice, self.xdim: x_slice})
 
     def _drop_agr_values_and_spreads(self):
         """
@@ -394,7 +396,7 @@ class TEAAgr(TEAIndicators):
         avals_ordered = combined_sorted[:, 0]
         wgts_ordered = combined_sorted[:, 1]
         # calculate cumsum of weights to find percentiles
-        wgts_cumsum = np.cumsum(wgts_ordered)
+        wgts_cumsum = np.nancumsum(wgts_ordered)
         wgts_diff_005 = np.abs(wgts_cumsum - 0.05)
         wgts_diff_095 = np.abs(wgts_cumsum - 0.95)
         # find index of wgts_cumsum that is closest to 0.05 (but smaller or equal than 0.05)
@@ -410,7 +412,7 @@ class TEAAgr(TEAIndicators):
         try:
             p095_index = np.nanargmin(wgts_diff_095)
             if wgts_cumsum[p095_index] < 0.95:
-                while wgts_cumsum[p095_index] < 0.95:
+                while wgts_cumsum[p095_index] < 0.95 and p095_index < len(wgts_cumsum) - 1:
                     p095_index += 1
             pval095 = avals_ordered[p095_index]
         except ValueError:
