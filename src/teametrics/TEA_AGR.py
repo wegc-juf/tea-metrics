@@ -729,8 +729,8 @@ class TEAAgr(TEAIndicators):
         get x and y coords for GeoRegion grid
         """
         if self.gr_grid_mask is not None:
-            xcoords = self.gr_grid_mask[self.xdim]
-            ycoords = self.gr_grid_mask[self.ydim]
+            xcoords = self.gr_grid_mask[self.xdim].values
+            ycoords = self.gr_grid_mask[self.ydim].values
             return xcoords, ycoords
         
         if self.ydim == 'y':
