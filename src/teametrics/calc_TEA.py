@@ -397,19 +397,21 @@ def _get_ctp_filepath(start, end, opts, annual_agr=False) -> str:
     path = Path(f'{opts.outpath}/ctp_indicator_variables/')
     path.mkdir(parents=True, exist_ok=True)
     
+    region = opts.region
+    
     if annual_agr:
         grg_str = 'AGR-'
+        region = opts.agr
     elif 'agr' in opts:
         grg_str = 'GRG-'
     else:
         grg_str = ''
     
     if 'station' in opts:
-        name = opts.station
-    else:
-        name = opts.region
+        region = opts.station
+        
     outpath = (f'{opts.outpath}/ctp_indicator_variables/'
-               f'CTP_{opts.param_str}_{grg_str}{name}_{opts.period}_{opts.dataset}'
+               f'CTP_{opts.param_str}_{grg_str}{region}_{opts.period}_{opts.dataset}'
                f'_{start}to{end}.nc')
     return outpath
 
