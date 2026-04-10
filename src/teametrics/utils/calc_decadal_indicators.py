@@ -169,12 +169,12 @@ def calc_amplification_factors(opts, tea, outpath=None):
     """
     if outpath is None:
         if 'station' in opts:
-            region = opts.station
+            name = opts.station
         elif 'agr' in opts:
-            region = opts.agr
+            name = opts.agr
         else:
-            region = opts.region
-        outpath = get_amplification_outpath(opts, region)
+            name = opts.region
+        outpath = get_amplification_outpath(opts, name)
 
     # calculate amplification factors
     with warnings.catch_warnings():

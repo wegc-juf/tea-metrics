@@ -338,11 +338,12 @@ class TEAAgr(TEAIndicators):
         unwanted_vars = [var for var in self._cc_mean if '_ref' in var or '_CC' in var]
         self._cc_mean = self._cc_mean.drop_vars(unwanted_vars)
 
-    def _calc_weighted_perc(self, data, areas):
+    def _calc_weighted_perc(self, data, areas, annual=False):
         """
         calculate weighted percentiles
         :param data: data
         :param areas: area sizes
+        :param annual: annual data
         :return:
         """
         # remove values where data is nan
@@ -361,7 +362,7 @@ class TEAAgr(TEAIndicators):
                                coords={'time': (['time'], data.time.data)})
 
         for iyr, yr in enumerate(data.time):
-            if iyr < 5:
+            if iyr < 5 and not annual:
                 continue
             avals = data[iyr, :, :].values
             wgts_iyr = wgts[iyr, :, :].values
@@ -534,7 +535,7 @@ class TEAAgr(TEAIndicators):
             # add p5 and p95 values (equation 41TODEFINE)
             # TODO: optimize this
             if calc_annual:
-                self._calc_agr_percentiles(data=self.ctp_results)
+                self._calc_agr_percentiles(data=self.ctp_results, annual=True)
             self._calc_agr_percentiles(data=self.decadal_results)
             self._calc_agr_percentiles(data=self._ref_mean)
             self._calc_agr_percentiles(data=self._cc_mean)
@@ -688,12 +689,13 @@ class TEAAgr(TEAIndicators):
 
         return xr.merge([s_upp, s_low])
 
-    def _calc_agr_percentiles(self, data):
+    def _calc_agr_percentiles(self, data, annual=False):
         """
         calculate spread estimates of grid cell values around AGR mean (equation 38)
         Args:
             data: data for spread estimation
-            ref: reference data for spread estimation
+            annual: set True for annual data (default: False)
+            
         Returns:
             xarray dataset with upper and lower spread estimates
 
@@ -708,7 +710,7 @@ class TEAAgr(TEAIndicators):
             # p5_std = data[var].quantile(0.05, dim=(self.ydim, self.xdim))
             # p95_std = data[var].quantile(0.95, dim=(self.ydim, self.xdim))
 
-            p5, p95 = self._calc_weighted_perc(data[var], areas)
+            p5, p95 = self._calc_weighted_perc(data[var], areas, annual)
 
             if 'AF' in var:
                 var = var.replace('AF', 'AGR_AF')
