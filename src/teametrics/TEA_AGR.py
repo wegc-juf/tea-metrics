@@ -265,6 +265,8 @@ class TEAAgr(TEAIndicators):
         self._cc_mean = self._cc_mean.where(self.gr_grid_mask > 0)
         self.decadal_results = self.decadal_results.where(self.gr_grid_mask > 0)
         self.amplification_factors = self.amplification_factors.where(self.gr_grid_mask > 0)
+        if self.ctp_results is not None:
+            self.ctp_results = self.ctp_results.where(self.gr_grid_mask > 0)
 
     def _crop_to_gr_mask_extents(self):
         """
