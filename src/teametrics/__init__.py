@@ -1,2 +1,2 @@
 # This will be dynamically set by poetry-dynamic-versioning
-__version__ = "0.10.10rc1"
+__version__ = "0.10.10rc2"
