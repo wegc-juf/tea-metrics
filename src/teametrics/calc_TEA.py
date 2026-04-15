@@ -124,7 +124,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
 
     # use either TEAIndicators or TEAAgr class depending on the options
     if 'agr' in opts:
-        agr_str = f'AGR_{opts.grg_grid_spacing}-'
+        agr_str = f'AGR-'
         TEA_class_obj = TEAAgr
     else:
         agr_str = ''
