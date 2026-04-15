@@ -49,7 +49,7 @@ def load_data(opts):
     """
     agr_str, gr_str = '', 'GR'
     if 'agr' in opts:
-        agr_str, gr_str = 'AGR-', 'AGR'
+        agr_str, gr_str = f'AGR_{opts.grg_grid_spacing}-', 'AGR'
 
     ds = xr.open_dataset(f'{opts.outpath}/dec_indicator_variables/'
                          f'DEC_{opts.param_str}_{agr_str}{opts.region}_{opts.period}_{opts.dataset}'

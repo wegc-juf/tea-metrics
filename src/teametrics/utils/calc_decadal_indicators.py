@@ -40,7 +40,7 @@ def load_ctp_data(opts, tea):
             return False
 
     if 'Agr' in str(type(tea)):
-        grg_str = 'GRG-'
+        grg_str = f'GRG_{opts.grg_grid_spacing}-'
     else:
         grg_str = ''
     if 'station' in opts:
@@ -123,7 +123,7 @@ def calc_decadal_indicators(opts, tea, outpath=None):
 
 def get_decadal_outpath(opts, region):
     if 'agr' in opts:
-        agr_str = 'AGR-'
+        agr_str = f'AGR_{opts.grg_grid_spacing}-'
     else:
         agr_str = ''
     outpath = (f'{opts.outpath}/dec_indicator_variables/'
@@ -213,7 +213,7 @@ def get_amplification_outpath(opts, region):
 
     """
     if 'agr' in opts:
-        agr_str = 'AGR-'
+        agr_str = f'AGR_{opts.grg_grid_spacing}-'
     else:
         agr_str = ''
     outpath = (f'{opts.outpath}/dec_indicator_variables/amplification/'

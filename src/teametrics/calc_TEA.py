@@ -124,7 +124,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
 
     # use either TEAIndicators or TEAAgr class depending on the options
     if 'agr' in opts:
-        agr_str = 'AGR-'
+        agr_str = f'AGR_{opts.grg_grid_spacing}-'
         TEA_class_obj = TEAAgr
     else:
         agr_str = ''
@@ -400,10 +400,10 @@ def _get_ctp_filepath(start, end, opts, annual_agr=False) -> str:
     region = opts.region
     
     if annual_agr:
-        grg_str = 'AGR-'
+        grg_str = f'AGR_{opts.grg_grid_spacing}-'
         region = opts.agr
     elif 'agr' in opts:
-        grg_str = 'GRG-'
+        grg_str = f'GRG_{opts.grg_grid_spacing}-'
     else:
         grg_str = ''
     

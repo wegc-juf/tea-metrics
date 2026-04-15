@@ -7,7 +7,7 @@ import xarray as xr
 def load_data(gr_type):
     gr_str = ''
     if gr_type == 'AGR':
-        gr_str = 'AGR-'
+        gr_str = 'AGR_0.5-'
     ds = xr.open_dataset(f'/data/users/hst/TEA/TEA/testy_data/dec_indicator_variables/amplification/'
                          f'AF_Tx99.0p_{gr_str}AUT_annual_ERA5_1961to2025.nc')
 

@@ -94,7 +94,7 @@ def plot_eur_tex(opts):
 
     """
     if opts.agr:
-        gr_str = f'AGR-{opts.agr}'
+        gr_str = f'AGR_{opts.grg_grid_spacing}-{opts.agr}'
     else:
         gr_str = opts.region
     data = xr.open_dataset(f'{opts.outpath}dec_indicator_variables/amplification/'
