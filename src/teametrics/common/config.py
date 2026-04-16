@@ -186,6 +186,9 @@ def _get_default_opts(fname, opts):
             opts.min_duration = 7
         if 'altitude_threshold' not in opts:
             opts.altitude_threshold = 1500
+        if opts.decadal_only:
+            # if decadal_only, annual_spreads can't be calculated, so set to False
+            opts.annual_spreads = False
 
     # create_region_masks.py options
     if fname == 'create_region_masks':
