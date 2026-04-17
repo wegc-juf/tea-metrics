@@ -1012,6 +1012,24 @@ class TEAIndicators:
             em_gr_avg_max = em_gr_max / self.ctp_results.ED_GR
             em_gr_avg_max.attrs = get_attrs(vname='EM_avg_Max_GR', data_unit=self.unit)
             self.ctp_results['EM_avg_Max_GR'] = em_gr_avg_max
+            
+    def _calc_annual_avg_duration_magnitude(self):
+        """
+        calculate average duration-magnitude (DM_avg)
+        """
+        if 'ED_avg' not in self.ctp_results and 'ED_avg_GR' not in self.ctp_results:
+            self._calc_annual_event_duration()
+        if 'EM_avg' not in self.ctp_results and 'EM_avg_GR' not in self.ctp_results:
+            self._calc_annual_exceedance_magnitude()
+
+        if 'ED_avg_GR' in self.ctp_results:
+            dm_avg = self.ctp_results.ED_avg_GR * self.ctp_results.EM_avg_GR
+            dm_avg.attrs = get_attrs(vname='DM_avg_GR', data_unit=self.unit)
+            self.ctp_results['DM_avg_GR'] = dm_avg
+        if 'ED_avg' in self.ctp_results:
+            dm_avg = self.ctp_results.ED_avg * self.ctp_results.EM_avg
+            dm_avg.attrs = get_attrs(vname='DM_avg', data_unit=self.unit)
+            self.ctp_results['DM_avg'] = dm_avg
 
     def _calc_annual_htEX(self):
         """
@@ -1268,6 +1286,7 @@ class TEAIndicators:
         self._calc_annual_event_duration()
         self._calc_hourly_ctp_vars()
         self._calc_annual_exceedance_magnitude()
+        self._calc_annual_avg_duration_magnitude()
         self._calc_annual_htEX()
         self._calc_annual_total_events_extremity()
         self._calc_annual_hourly_total_events_extremity()
@@ -1477,6 +1496,11 @@ class TEAIndicators:
         EM_Md = self._calc_temporal_events_extremity(ed=data['ED'], m=data['EM_avg_Md'])
         EM_Md.attrs = get_attrs(vname='EM_Md', dec=True, data_unit=self.unit)
         data['EM_Md'] = EM_Md
+        
+        # calculate duration-magnitude (DM_avg)
+        DM_avg = data['ED_avg'] * data['EM_avg']
+        DM_avg.attrs = get_attrs(vname='DM_avg', dec=True, data_unit=self.unit)
+        data['DM_avg'] = DM_avg
 
         # calculate hourly tEX (cf. equation TBD)
         if f'h_avg' in data:
@@ -1502,7 +1526,12 @@ class TEAIndicators:
                 'EM_avg_GR_Md'])
             EM_GR_Md.attrs = get_attrs(vname='EM_GR_Md', dec=True, data_unit=self.unit)
             data['EM_GR_Md'] = EM_GR_Md
-
+            
+            # calculate duration-magnitude (DM_avg_GR)
+            DM_avg_GR = data['ED_avg_GR'] * data['EM_avg_GR']
+            DM_avg_GR.attrs = get_attrs(vname='DM_avg_GR', dec=True, data_unit=self.unit)
+            data['DM_avg_GR'] = DM_avg_GR
+            
             # calculate hourly tEX (cf. equation TBD)
             if f'h_avg_GR' in data:
                 h_avg = data[f'h_avg_GR']

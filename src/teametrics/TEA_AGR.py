@@ -689,7 +689,7 @@ class TEAAgr(TEAIndicators):
         s_upp = s_upp.rename(rename_dict_up)
         s_low = s_low.rename(rename_dict_low)
 
-        return xr.merge([s_upp, s_low])
+        return xr.merge([s_upp, s_low], compat='no_conflicts')
 
     def _calc_agr_percentiles(self, data, annual=False):
         """

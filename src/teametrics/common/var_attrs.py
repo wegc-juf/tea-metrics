@@ -70,9 +70,8 @@ def get_attrs(vname=None, dec=False, spread=None, period='', data_unit=''):
                        'units': data_unit, 'metric_type': 'basic'},
         'EA_avg': {'long_name': 'average exceedance area', 'units': '100 km^2',
                    'metric_type': 'basic'},
-        'DM': {'long_name': 'duration-magnitude indicator', 'units': f'{data_unit} d',
-               'metric_type':
-                   'compound'},
+        'DM_avg': {'long_name': 'average duration-magnitude indicator', 'units': f'{data_unit} d',
+                   'metric_type': 'compound'},
         'TEX': {'long_name': 'total events extremity',
                 'units': f'100 km^2 {data_unit} d yr^-1', 'metric_type':
                     'compound'},
