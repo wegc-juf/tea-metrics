@@ -719,6 +719,8 @@ def run():
     warnings.filterwarnings(action='ignore', message='All-NaN slice encountered')
     warnings.filterwarnings(action='ignore', message='divide by zero encountered in divide')
     warnings.filterwarnings(action='ignore', message='invalid value encountered in divide')
+    
+    logger.info(f'Running teametrics version {TEA_VERSION}')
 
     # get command line parameters
     cmd_opts = _getopts()

@@ -135,8 +135,8 @@ class TEAAgr(TEAIndicators):
         # select threshold grid for cell
         cell_threshold_grid = self.threshold_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
         
-        if len(cell_area_grid[self.ydim]) == 0:
-            raise ValueError('No valid cell found, check why this happens')
+        if len(cell_area_grid[self.ydim]) == 0 or len(cell_area_grid[self.xdim]) == 0:
+            return None
 
         # TODO: optimize for x y grids (xarray method)
         # two options: either return data itself and stack to xarray then calculate TEA or return individual TEA objects
