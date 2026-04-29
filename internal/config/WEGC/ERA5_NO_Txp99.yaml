@@ -5,6 +5,8 @@ common_params:
   GeoRegion: &GR
     region: "NO"
     agr: "NO"
+    grg_grid_spacing: 0.25
+    land_frac_min: 0.25
   parameter: &PARAM
     parameter: Tx
     precip: false
@@ -20,11 +22,11 @@ common_params:
     cc_period: 2011-2025
   paths: &PATHS
     input_data_path: &inputpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/daily/
-    hourly_data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/hourly/single_levels/prepped4TEA/
-    statpath: &statpath /data/users/mop/arsclisys/TEA/static/
+    hourly_data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/daily/
+    statpath: &statpath /home/wegnet/results/static/
     maskpath: *statpath
     mask_sub: masks/
-    outpath: /data/users/mop/arsclisys/TEA/results/EUR/AGR/
+    outpath: /home/wegnet/results/TEA_indicators_test/
   general: &GENERAL
     use_dask: false
 
@@ -55,21 +57,10 @@ calc_TEA:
   <<: *PATHS
   <<: *GENERAL
   recalc_threshold: false
-  recalc_daily: true
+  recalc_daily: false
   hourly: false
   decadal: true
   recalc_decadal: true
   spreads: true
+  annual_spreads: true
   decadal_only: false
-
-regrid_SPARTACUS_to_WEGNext:
-  <<: *GR
-  <<: *PARAM
-  <<: *DATA
-  <<: *PATHS
-  <<: *TIME
-  <<: *GENERAL
-  raw_data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS_raw/v2025_v2.1/
-  regridded_data_path: *inputpath
-  wegn_file: /var/wegnet/wegc203058/netcdf/WEA/WN_L2_HHD_v7_UTM_TF1_UTC_2020-08.nc
-  orography: false

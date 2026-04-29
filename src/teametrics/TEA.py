@@ -1366,7 +1366,7 @@ class TEAIndicators:
                 window used: [window_size,-delta_years,+delta_years]. Defaults to (10, 5, 4).
             calc_spread: calculate spread estimators (equation 25)
             drop_annual_results: delete annual results after calculation
-            min_duration: minimum cumulative duration of events in days/decade to keep in decadal results (default: 10)
+            min_duration: minimum cumulative duration of events in days/decade to keep in decadal results (default: 7)
                 if 0, no minimum duration is applied
                 if > 0, only events with a duration of at least min_duration years are kept
         """
@@ -1677,7 +1677,7 @@ class TEAIndicators:
             period = self.ref_period
 
         start_year, end_year = period
-        ref_mean = self._calc_gmean_decadal(start_year=start_year, end_year=end_year, skipna=False)
+        ref_mean = self._calc_gmean_decadal(start_year=start_year, end_year=end_year, skipna=True)
         
         # calc ref_mean with annual data
         # TODO check again when SI infos are ready
@@ -1878,6 +1878,7 @@ class TEAIndicators:
         calculate geometric mean
         """
         # noinspection PyArgumentList
+        x = x.where(x > 0)
         return np.exp((np.log(x).mean(dim=dim, skipna=skipna)))
 
     @staticmethod

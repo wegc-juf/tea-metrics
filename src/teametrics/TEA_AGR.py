@@ -30,7 +30,7 @@ class TEAAgr(TEAIndicators):
     """
     def __init__(self, input_data=None, threshold=None, mask=None, min_area=0.0001,
                  gr_grid_res=0.5, land_sea_mask=None, gr_grid_mask=None, gr_grid_areas=None,
-                 land_frac_min=0.5, cell_size_y=2, **kwargs):
+                 land_frac_min=0.25, cell_size_y=2, **kwargs):
         """
         initialize TEA object
 
@@ -349,8 +349,8 @@ class TEAAgr(TEAIndicators):
         :return:
         """
         # remove values where data is nan
-        areas_3d = xr.full_like(data, 1) * areas
-        areas_3d = areas_3d.where(np.isfinite(data))
+        areas_3d = areas.expand_dims({'time': data.time}) if 'time' in data.dims else areas
+        areas_3d = areas_3d.where(~np.isnan(data))
 
         wgts = areas_3d / areas_3d.sum(dim=(self.ydim, self.xdim))
 
@@ -450,14 +450,12 @@ class TEAAgr(TEAIndicators):
         # calculate area weights (equation 34_0)
         if self.gr_grid_areas is None:
             raise ValueError('No GR area grid provided. Please provide a valid GR area grid.')
-        A_AGR = self.gr_grid_areas.sum()
-        awgts = self.gr_grid_areas / A_AGR
 
         # calc X_Ref^AGR and X_s^AGR (equation 34_1 and equation 34_2)
-        x_ref_agr = self.calc_area_weighted_mean(awgts, self._ref_mean)
-        xt_s_agr = self.calc_area_weighted_mean(awgts, self.decadal_results)
+        x_ref_agr = self.calc_area_weighted_mean(self.gr_grid_areas, self._ref_mean)
+        xt_s_agr = self.calc_area_weighted_mean(self.gr_grid_areas, self.decadal_results)
         if calc_annual:
-            xt_p_agr = self.calc_area_weighted_mean(awgts, self.ctp_results)
+            xt_p_agr = self.calc_area_weighted_mean(self.gr_grid_areas, self.ctp_results)
 
         # calc Xt_ref_agr (equation 34_3)
         xt_ref_agr = self._calc_gmean_decadal(start_year=self.ref_period[0], end_year=self.ref_period[1], data=xt_s_agr)
@@ -531,6 +529,7 @@ class TEAAgr(TEAIndicators):
             x_ref_spreads = xr.Dataset()
 
         # calculate error estimates for AGR mean (equation 42TODEFINE)
+        A_AGR = self.gr_grid_areas.sum()
         N_dof = self._get_N_dof(A_AGR)
         
         if spreads:
@@ -636,17 +635,19 @@ class TEAAgr(TEAIndicators):
         for vvar in dataset.data_vars:
             dataset[vvar].attrs = get_attrs(vname=vvar, data_unit=self.unit)
     
-    def calc_area_weighted_mean(self, awgts, data) -> Any:
+    def calc_area_weighted_mean(self, area, data) -> Any:
         """
         calculate area weighted mean according to equation 34_1
         Args:
-            awgts: area weights
+            area: area data
             data: data
 
         Returns:
             result: area weighted mean
 
         """
+        area = area.where(~np.isnan(data.threshold_avg))
+        awgts = area / area.sum(dim=(self.ydim, self.xdim))
         result = (awgts * data).sum(dim=(self.ydim, self.xdim))
         return result
     

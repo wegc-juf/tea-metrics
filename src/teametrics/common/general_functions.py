@@ -278,7 +278,7 @@ def get_gridded_data(start, end, opts, period='annual', hourly=False):
 
     logger.info(f'Loading data from {filenames}...')
     try:
-        ds = xr.open_mfdataset(filenames, combine='by_coords', data_vars='all')
+        ds = xr.open_mfdataset(filenames, combine='by_coords', data_vars='all', join='outer', compat='no_conflicts')
     except ValueError as e:
         logger.warning(f'Error loading data: {e} Trying again with combine="nested"')
         ds = xr.open_mfdataset(filenames, combine='nested', data_vars='all')

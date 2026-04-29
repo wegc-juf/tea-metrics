@@ -47,12 +47,12 @@ def load_ctp_data(opts, tea):
         name = opts.station
     else:
         name = opts.region
-    filenames = (f'{ctppath}/CTP_{opts.param_str}_{grg_str}{name}_{opts.period}'
-                 f'_{opts.dataset}_*.nc')
-    logger.info(f"Looking for CTP results in {filenames}")
-    files = sorted(glob.glob(filenames))
-    files = [file for file in files if is_in_period(filename=file, start=opts.start, end=opts.end)
-             if 'ref' not in file]
+    file_path = Path(f'{ctppath}')
+    file_mask = f'CTP_{opts.param_str}_{grg_str}{name}_{opts.period}_{opts.dataset}_*.nc'
+    logger.info(f"Looking for CTP results in {file_path}/{file_mask}")
+    files = sorted(file_path.glob(file_mask))
+    files = [filename for filename in files if is_in_period(filename=str(filename), start=opts.start, end=opts.end)
+             if 'ref' not in str(filename)]
 
     # TODO: optimize tea._calc_spread_estimators
 
@@ -126,9 +126,9 @@ def get_decadal_outpath(opts, region):
         agr_str = f'AGR_{opts.grg_grid_spacing}-'
     else:
         agr_str = ''
-    outpath = (f'{opts.outpath}/dec_indicator_variables/'
-               f'DEC_{opts.param_str}_{agr_str}{region}_{opts.period}_{opts.dataset}'
-               f'_{opts.start}to{opts.end}.nc')
+    outpath = Path(f'{opts.outpath}/dec_indicator_variables/'
+                   f'DEC_{opts.param_str}_{agr_str}{region}_{opts.period}_{opts.dataset}'
+                   f'_{opts.start}to{opts.end}.nc')
     return outpath
 
 
@@ -216,7 +216,7 @@ def get_amplification_outpath(opts, region):
         agr_str = f'AGR_{opts.grg_grid_spacing}-'
     else:
         agr_str = ''
-    outpath = (f'{opts.outpath}/dec_indicator_variables/amplification/'
-               f'AF_{opts.param_str}_{agr_str}{region}_{opts.period}_{opts.dataset}'
-               f'_{opts.start}to{opts.end}.nc')
+    outpath = Path(f'{opts.outpath}/dec_indicator_variables/amplification/'
+                   f'AF_{opts.param_str}_{agr_str}{region}_{opts.period}_{opts.dataset}'
+                   f'_{opts.start}to{opts.end}.nc')
     return outpath

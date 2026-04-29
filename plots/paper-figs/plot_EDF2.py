@@ -159,8 +159,7 @@ def plot_subplot(axs, data, ii, nv, rdata, param, region, sfac, no_facs):
         refs = []
         for ireg, reg in enumerate(data.keys()):
             rdata = data[reg]
-            ref = gmean(rdata[props[ii]['var']].sel(time=slice('1966-01-01',
-                                                              '1986-12-31')).values)
+            ref = gmean(rdata[props[ii]['var']].sel(time=slice('1966-01-01', '1986-12-31')).values)
             refs.append(ref)
             rdata = rdata / ref
             syr = pd.Timestamp(rdata.time[0].values).year

@@ -80,7 +80,7 @@ def _get_default_opts(fname, opts):
         if 'grg_grid_spacing' not in opts:
             opts.grg_grid_spacing = 0.5
         if 'land_frac_min' not in opts:
-            opts.land_frac_min = 0.5
+            opts.land_frac_min = 0.25
         if 'agr_range' not in opts:
             if opts.agr == 'EUR':
                 opts.agr_range = '35,70,-11,40'
