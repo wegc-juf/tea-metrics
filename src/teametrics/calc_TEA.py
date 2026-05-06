@@ -23,6 +23,7 @@ from .common.TEA_logger import logger
 from .utils.calc_decadal_indicators import (calc_decadal_indicators, calc_amplification_factors,
                                             get_decadal_outpath, get_amplification_outpath)
 from .TEA import TEAIndicators
+from .TEA import DEBUG
 from .TEA_AGR import TEAAgr
 from . import __version__ as TEA_VERSION
 
@@ -650,7 +651,16 @@ def _calc_agr_mean_and_spread(opts, tea):
     logger.info(f'Saving decadal AGR results to {outpath_decadal}')
     # remove outpath_decadal if it exists
     if os.path.exists(outpath_decadal):
-        os.remove(outpath_decadal)
+        try:
+            os.remove(outpath_decadal)
+        except PermissionError as err:
+            if not DEBUG:
+                raise err
+            logger.info(f"Permission denied for {outpath_decadal}. Trying to save file to /tmp/ instead.")
+            filename = os.path.basename(outpath_decadal)
+            outpath_decadal = os.path.join('/tmp/', filename)
+            if os.path.exists(outpath_decadal):
+                os.remove(outpath_decadal)
     create_tea_history(cfg_params=opts, tea=tea, dataset='decadal_results')
     tea.save_decadal_results(filepath=outpath_decadal)
 

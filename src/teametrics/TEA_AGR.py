@@ -5,6 +5,7 @@ Equation numbers refer to Supplementary Notes therin
 """
 import warnings
 import time
+import os
 from typing import Any
 
 import xarray as xr
@@ -15,6 +16,7 @@ from xarray import Dataset
 from .common.var_attrs import get_attrs
 from .common.TEA_logger import logger
 from .TEA import TEAIndicators
+from .TEA import DEBUG
 
 
 class TEAAgr(TEAIndicators):
@@ -198,7 +200,17 @@ class TEAAgr(TEAIndicators):
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
-            self._to_netcdf(self.ctp_results, filepath)
+            try:
+                self._to_netcdf(self.ctp_results, filepath)
+            except PermissionError as err:
+                if not DEBUG:
+                    raise err
+                logger.info(f"Permission denied for {filepath}. Trying to save file to /tmp/ instead.")
+                filename = os.path.basename(filepath)
+                filepath = os.path.join('/tmp/', filename)
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                self._to_netcdf(self.ctp_results, filepath)
 
     def _apply_gr_grid_mask(self):
         """

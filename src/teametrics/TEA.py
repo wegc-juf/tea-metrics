@@ -15,6 +15,8 @@ from xarray import Dataset
 from .common.var_attrs import get_attrs, equal_vars
 from .common.TEA_logger import logger
 
+DEBUG = False
+
 
 class TEAIndicators:
     """
@@ -527,7 +529,17 @@ class TEAIndicators:
             warnings.simplefilter("ignore")
             logger.info(f"Saving daily results to {filepath}")
 
-            self._to_netcdf(dataset=self.daily_results, filepath=filepath)
+            try:
+                self._to_netcdf(dataset=self.daily_results, filepath=filepath)
+            except PermissionError as err:
+                if not DEBUG:
+                    raise err
+                logger.info(f"Permission denied for {filepath}. Trying to save file to /tmp/ instead.")
+                filename = os.path.basename(filepath)
+                filepath = os.path.join('/tmp/', filename)
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                self._to_netcdf(dataset=self.daily_results, filepath=filepath)
 
     def _to_netcdf(self, dataset: Dataset, filepath):
         """
@@ -1316,8 +1328,16 @@ class TEAIndicators:
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
-            self._to_netcdf(self.ctp_results, filepath)
-
+            try:
+                self._to_netcdf(self.ctp_results, filepath)
+            except PermissionError as err:
+                if not DEBUG:
+                    raise err
+                logger.info(f"Permission denied for {filepath}. Trying to save file to /tmp/ instead.")
+                filename = os.path.basename(filepath)
+                filepath = os.path.join('/tmp/', filename)
+                self._to_netcdf(self.ctp_results, filepath)
+                
     def load_ctp_results(self, filepath, use_dask=True):
         """
         load all CTP results from filepath
@@ -1423,7 +1443,16 @@ class TEAIndicators:
             self.decadal_results = xr.merge([self.decadal_results, cc_mean, ref_mean])
 
         if os.path.exists(filepath):
-            os.remove(filepath)
+            try:
+                os.remove(filepath)
+            except PermissionError as err:
+                if not DEBUG:
+                    raise err
+                logger.warning(f"Permission denied for {filepath}. Trying to save file to /tmp/ instead.")
+                filename = os.path.basename(filepath)
+                filepath = os.path.join('/tmp/', filename)
+                if os.path.exists(filepath):
+                    os.remove(filepath)
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
@@ -1864,8 +1893,18 @@ class TEAIndicators:
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
-            self._to_netcdf(self.amplification_factors, filepath)
-
+            try:
+                self._to_netcdf(self.amplification_factors, filepath)
+            except PermissionError as err:
+                if not DEBUG:
+                    raise err
+                logger.info(f"Permission denied for {filepath}. Trying to save file to /tmp/ instead.")
+                filename = os.path.basename(filepath)
+                filepath = os.path.join('/tmp/', filename)
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                self._to_netcdf(self.amplification_factors, filepath)
+                
     def load_amplification_factors(self, filepath):
         """
         load amplification factors from filepath
