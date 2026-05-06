@@ -1799,13 +1799,15 @@ class TEAIndicators:
         Args:
             ds: Xarray dataset (must contain 'ED' variable)
             min_duration: minimum duration in days
-            duration_data: optional Xarray dataset with cumulative event duration data (e.g. decadal ED)
+            duration_data: optional Xarray dataset with cumulative event duration data (e.g. decadal ED), else uses ED from ds
         """
         for vvar in ds.data_vars:
-            if len(ds[vvar].dims) > 1 and 'time' in ds[vvar].dims and 'ED' in ds and ds.ED is not None:
+            if 'threshold' in vvar:
+                continue
+            if 'ED' in ds and ds.ED is not None:
                 duration = duration_data.ED if duration_data is not None else ds.ED
                 ds[vvar] = ds[vvar].where(duration >= min_duration)
-            elif ds[vvar].dims == ('time',) and 'ED_GR' in ds and ds.ED_GR is not None:
+            elif 'ED_GR' in ds and ds.ED_GR is not None:
                 duration = duration_data.ED_GR if duration_data is not None else ds.ED_GR
                 ds[vvar] = ds[vvar].where(duration >= min_duration)
 
@@ -1817,7 +1819,7 @@ class TEAIndicators:
         Args:
             ref_period: reference period: tuple(start year, end year). Default: (1961, 1990)
             cc_period: current climate period: tuple(start year, end year). Default: (2008, 2022)
-            min_duration: minimum cumulative decadal event duration (10-yr sum) in days. Default: 10
+            min_duration: minimum cumulative decadal event duration (10-yr sum) in days. Default: 7
             calc_annual_ref: also calculate reference values for annual data
         """
         # TODO: write ref and cc period to output file
@@ -1828,8 +1830,8 @@ class TEAIndicators:
             self._calc_cc()
         if self._ref_mean is None:
             self._calc_ref(calc_annual=calc_annual_ref)
+        ref_mean = self._ref_mean.copy()
         cc_mean = self._cc_mean
-        ref_mean = self._ref_mean
         if min_duration > 0:
             # get ED in d/year for ref period (1 d/y = 10 d/decade)
             ed = self._decadal_ED.sel(time=slice(f'{ref_period[0] + 5}-01-01', f'{ref_period[1] - 4}-12-31'))

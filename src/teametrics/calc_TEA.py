@@ -643,7 +643,7 @@ def _calc_agr_mean_and_spread(opts, tea):
         crop_to_shp = True
 
     tea.calc_agr_vars(y_range=agr_y_range, x_range=agr_x_range, spreads=opts.spreads, crop_to_shp=crop_to_shp,
-                      calc_annual=opts.annual_spreads)
+                      calc_annual=opts.annual_spreads, min_duration=opts.min_duration)
 
     # save results
     # # decadal

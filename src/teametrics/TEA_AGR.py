@@ -434,7 +434,8 @@ class TEAAgr(TEAIndicators):
             pval095 = np.nan
         return pval005, pval095
 
-    def calc_agr_vars(self, y_range=None, x_range=None, spreads=True, crop_to_shp=False, calc_annual=False):
+    def calc_agr_vars(self, y_range=None, x_range=None, spreads=True, crop_to_shp=False, calc_annual=False,
+                      min_duration=7):
         """
         calculate AGR variables
 
@@ -444,7 +445,9 @@ class TEAAgr(TEAIndicators):
             spreads: if True, calculate spreads and percentiles for AGR variables
             crop_to_shp: if True, crop data to shape of aggregated GeoRegion (default: False)
             calc_annual: if True, calculate vars also for annual data
+            min_duration: minimum cumulative decadal event duration (10-yr sum) in days. Default: 7
         """
+        min_duration_avg = min_duration / 10
         xt_p_agr = None
         x_p_agr = None
         x_p_spreads = None
@@ -507,6 +510,7 @@ class TEAAgr(TEAIndicators):
         x_cc_agr = self._calc_gmean_decadal(start_year=self.cc_period[0], end_year=self.cc_period[1], data=x_s_agr)
 
         # calculate amplification factors (equation 37)
+        self._apply_min_duration(ds=x_ref_agr, min_duration=min_duration_avg, duration_data=x_ref_agr)
         af_agr = x_s_agr / x_ref_agr
         af_cc_agr = x_cc_agr / x_ref_agr
 
