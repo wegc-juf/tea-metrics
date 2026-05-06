@@ -1403,8 +1403,8 @@ class TEAIndicators:
         self._backup_decadal_ED()
 
         # apply minimum duration to decadal results
-        if min_duration_avg > 0:
-            self._apply_min_duration(self.decadal_results, min_duration_avg)
+        # if min_duration_avg > 0:
+        #     self._apply_min_duration(self.decadal_results, min_duration_avg)
 
         if calc_spread:
             self._calc_spread_estimators()

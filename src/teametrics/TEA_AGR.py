@@ -472,15 +472,12 @@ class TEAAgr(TEAIndicators):
         # calc Xt_ref_agr (equation 34_3)
         xt_ref_agr = self._calc_gmean_decadal(start_year=self.ref_period[0], end_year=self.ref_period[1], data=xt_s_agr)
         if calc_annual:
-            # TODO: check if geometric mean should be used here, in case of arithmetic mean the fraction below seems
-            #  to be always 1 probably because of linear behavior
             xt_p_ref_agr = xt_p_agr.sel(
                 time=slice(f'{self.ref_period[0]}-01-01', f'{self.ref_period[1]}-12-31')).mean(dim='time')
 
         # calculate X_s_AGR (equation 34_4)
         x_s_agr = (x_ref_agr / xt_ref_agr) * xt_s_agr
         if calc_annual:
-            # TODO: check if we should use xp_ref_agr and xt_p_ref_agr here when description in SI is ready
             x_p_agr = (x_ref_agr / xt_ref_agr) * xt_p_agr
 
         # calculate compound variables (equation 35)
@@ -661,6 +658,8 @@ class TEAAgr(TEAIndicators):
         area = area.where(~np.isnan(data.threshold_avg))
         awgts = area / area.sum(dim=(self.ydim, self.xdim))
         result = (awgts * data).sum(dim=(self.ydim, self.xdim))
+        # set result to nan where all data is nan
+        result = result.where(~np.isnan(data).all(dim=(self.ydim, self.xdim)))
         return result
     
     def _calc_agr_spread(self, data, ref):
