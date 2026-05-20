@@ -1804,7 +1804,7 @@ class TEAIndicators:
         for vvar in ds.data_vars:
             if 'threshold' in vvar:
                 continue
-            if 'ED' in ds and ds.ED is not None:
+            if 'ED' in ds and ds.ED is not None and 'GR' not in vvar:
                 duration = duration_data.ED if duration_data is not None else ds.ED
                 ds[vvar] = ds[vvar].where(duration >= min_duration)
             elif 'ED_GR' in ds and ds.ED_GR is not None:
