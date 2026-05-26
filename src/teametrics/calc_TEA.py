@@ -83,9 +83,9 @@ def calc_tea_indicators(opts):
     if opts.decadal or opts.decadal_only or opts.recalc_decadal:
         if 'agr' in opts:
             tea = TEAAgr(mask=mask, gr_grid_res=opts.grg_grid_spacing,
-                         significant_digits=opts.significant_digits)
+                         significant_digits=opts.significant_digits, ref_period=opts.ref_period)
         else:
-            tea = TEAIndicators(significant_digits=opts.significant_digits)
+            tea = TEAIndicators(significant_digits=opts.significant_digits, ref_period=opts.ref_period)
 
         # calculate decadal-mean ctp indicator variables
         calc_decadal_indicators(opts=opts, tea=tea)
@@ -448,6 +448,7 @@ def _save_grg_mask(opts, grg_mask, grg_areas):
         grg_mask.to_netcdf(mask_file)
 
 
+# noinspection PyProtectedMember
 def _load_or_generate_gr_grid_static(opts, tea):
     """
     load or generate grid of GRs mask and area grid for AGR calculation
@@ -461,7 +462,9 @@ def _load_or_generate_gr_grid_static(opts, tea):
     # load static GR grid files
     gr_grid_mask, gr_grid_areas = _load_gr_grid_static(opts)
     # generate GR grid mask and area if necessary
-    if gr_grid_mask is None or gr_grid_areas is None:
+    if tea._ref_mean is not None:
+        mismatch = gr_grid_mask[tea.xdim][0].values not in tea._ref_mean[tea.xdim].values
+    if gr_grid_mask is None or gr_grid_areas is None or mismatch:
         tea.generate_gr_grid_mask()
         _save_grg_mask(opts, tea.gr_grid_mask, tea.gr_grid_areas)
     else:

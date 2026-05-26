@@ -16,6 +16,7 @@ from .common.var_attrs import get_attrs, equal_vars
 from .common.TEA_logger import logger
 
 DEBUG = False
+DEFAULT_MIN_DURATION = 2.5
 
 
 class TEAIndicators:
@@ -31,7 +32,8 @@ class TEAIndicators:
 
     def __init__(self, input_data=None, threshold=None, min_area=1., area_grid=None,
                  low_extreme=False,
-                 unit='', mask=None, apply_mask=True, ctp=None, use_dask=False, significant_digits: int = 2, **kwargs):
+                 unit='', mask=None, apply_mask=True, ctp=None, use_dask=False, significant_digits: int = 2,
+                 ref_period=(1961, 1990), **kwargs):
         """
         Initialize TEAIndicators object
         Args:
@@ -145,7 +147,7 @@ class TEAIndicators:
         self._cc_mean = None
         self.cc_period = None
         self._ref_mean = None
-        self.ref_period = None
+        self.ref_period = ref_period
         self.amplification_factors = xr.Dataset()
 
         self.null_val = 0
@@ -1376,7 +1378,8 @@ class TEAIndicators:
     # ### Decadal mean functions ###
 
     def calc_decadal_indicators(self, decadal_window=(10, 5, 4), calc_spread=False,
-                                drop_annual_results=True, min_duration=7):
+                                drop_annual_results=True, min_duration=DEFAULT_MIN_DURATION,
+                                calc_annual_ref=False):
         """
         calculate decadal mean for all CTP indicators
         equation 23_1 and equation 23_2
@@ -1398,6 +1401,9 @@ class TEAIndicators:
 
         self._calc_decadal_mean(decadal_window=decadal_window)
         self._calc_decadal_compound_vars()
+        if self._ref_mean is None:
+            self._calc_ref(calc_annual=calc_annual_ref)
+        self._apply_min_duration(self.decadal_results, min_duration_avg, duration_data=self._ref_mean)
 
         # backup self.decadal_results.ED
         self._backup_decadal_ED()
@@ -1811,7 +1817,8 @@ class TEAIndicators:
                 duration = duration_data.ED_GR if duration_data is not None else ds.ED_GR
                 ds[vvar] = ds[vvar].where(duration >= min_duration)
 
-    def calc_amplification_factors(self, ref_period=(1961, 1990), cc_period=(2008, 2024), min_duration=7,
+    def calc_amplification_factors(self, ref_period=(1961, 1990), cc_period=(2008, 2024),
+                                   min_duration=DEFAULT_MIN_DURATION,
                                    calc_annual_ref=False):
         """
         calculate amplification factors (equation 27)
@@ -1822,7 +1829,6 @@ class TEAIndicators:
             min_duration: minimum cumulative decadal event duration (10-yr sum) in days. Default: 7
             calc_annual_ref: also calculate reference values for annual data
         """
-        # TODO: write ref and cc period to output file
         min_duration_avg = min_duration / 10
         self.ref_period = ref_period
         self.cc_period = cc_period
@@ -1830,13 +1836,13 @@ class TEAIndicators:
             self._calc_cc()
         if self._ref_mean is None:
             self._calc_ref(calc_annual=calc_annual_ref)
-        ref_mean = self._ref_mean.copy()
+        ref_mean = self._ref_mean
         cc_mean = self._cc_mean
         if min_duration > 0:
             # get ED in d/year for ref period (1 d/y = 10 d/decade)
-            ed = self._decadal_ED.sel(time=slice(f'{ref_period[0] + 5}-01-01', f'{ref_period[1] - 4}-12-31'))
-            ed_min = ed.min(dim='time', skipna=True)
-            self._apply_min_duration(ref_mean, min_duration_avg, duration_data=ed_min)
+            # ed = self._decadal_ED.sel(time=slice(f'{ref_period[0] + 5}-01-01', f'{ref_period[1] - 4}-12-31'))
+            # ed_min = ed.min(dim='time', skipna=True)
+            self._apply_min_duration(ref_mean, min_duration_avg, duration_data=ref_mean)
         amplification_factors = self.decadal_results / ref_mean
         amplification_factors = amplification_factors.where(ref_mean > 0)
         cc_amplification = cc_mean / ref_mean

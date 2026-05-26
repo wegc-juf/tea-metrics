@@ -183,7 +183,7 @@ def _get_default_opts(fname, opts):
         if 'annual_spreads' not in opts:
             opts.annual_spreads = False
         if 'min_duration' not in opts:
-            opts.min_duration = 7
+            opts.min_duration = teametrics.TEA.DEFAULT_MIN_DURATION
         if 'altitude_threshold' not in opts:
             opts.altitude_threshold = 1500
         if opts.decadal_only and not opts.recalc_decadal and opts.annual_spreads:

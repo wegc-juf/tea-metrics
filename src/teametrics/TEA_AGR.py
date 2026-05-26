@@ -15,7 +15,7 @@ from xarray import Dataset
 
 from .common.var_attrs import get_attrs
 from .common.TEA_logger import logger
-from .TEA import TEAIndicators
+from .TEA import TEAIndicators, DEFAULT_MIN_DURATION
 from .TEA import DEBUG
 
 
@@ -65,13 +65,19 @@ class TEAAgr(TEAIndicators):
             self._y_resolution_in = None
         self.gr_grid_res = gr_grid_res
         self.gr_grid_mask = None
-        self.gr_grid_areas = None
         self.land_sea_mask = land_sea_mask
         self.land_frac_min = land_frac_min
         self.cell_size_y = cell_size_y
 
         self.gr_grid_mask = gr_grid_mask
         self.gr_grid_areas = gr_grid_areas
+        
+        self.a_agr_full = None
+        self.areas_full = None
+        self.a_agr_domain = None
+        self.areas_domain = None
+        self.a_agr_elig = None
+        self.areas_elig = None
 
         # filter input data to valid cells
         if self.land_sea_mask is not None and self.input_data is not None:
@@ -271,6 +277,9 @@ class TEAAgr(TEAIndicators):
         Returns:
 
         """
+        if ((self.gr_grid_mask[self.xdim] != self._ref_mean[self.xdim]).all() or (self.gr_grid_mask[self.ydim] !=
+                self._ref_mean[self.ydim]).all()):
+            raise ValueError('GR grid mask and reference mean have different coordinates. Cannot crop to shape.')
         self.gr_grid_areas = self.gr_grid_areas.where(self.gr_grid_mask > 0)
         self._crop_to_gr_mask_extents()
         self._ref_mean = self._ref_mean.where(self.gr_grid_mask > 0)
@@ -433,9 +442,47 @@ class TEAAgr(TEAIndicators):
         except ValueError:
             pval095 = np.nan
         return pval005, pval095
+    
+    def calc_a_agr(self):
+        """
+        Calculate AGR areas
+        """
+        self._calc_a_agr_elig()
+        self._calc_a_agr_domain()
+        self._calc_a_agr_full()
+    
+    def _calc_a_agr_elig(self):
+        """
+        calculate eligible area for AGR calculation (A_AGR_elig, equation TBD)
+        
+        Returns:
+
+        """
+        self.areas_elig = self.gr_grid_areas.where(self._ref_mean.ED > 0)
+        self.a_agr_elig = self.areas_elig.sum()
+        
+    def _calc_a_agr_domain(self):
+        """
+        calculate domain area for AGR calculation (A_AGR_domain, equation TBD)
+        
+        Returns:
+
+        """
+        self.areas_domain = self.gr_grid_areas.where(~np.isnan(self._ref_mean.threshold_avg))
+        self.a_agr_domain = self.areas_domain.sum()
+
+    def _calc_a_agr_full(self):
+        """
+        calculate full area for AGR calculation (A_AGR_full, equation TBD)
+        
+        Returns:
+
+        """
+        self.areas_full = self.gr_grid_areas.copy()
+        self.a_agr_full = self.areas_full.sum()
 
     def calc_agr_vars(self, y_range=None, x_range=None, spreads=True, crop_to_shp=False, calc_annual=False,
-                      min_duration=7):
+                      min_duration=DEFAULT_MIN_DURATION):
         """
         calculate AGR variables
 
@@ -467,10 +514,11 @@ class TEAAgr(TEAIndicators):
             raise ValueError('No GR area grid provided. Please provide a valid GR area grid.')
 
         # calc X_Ref^AGR and X_s^AGR (equation 34_1 and equation 34_2)
-        x_ref_agr = self.calc_area_weighted_mean(self.gr_grid_areas, self._ref_mean)
-        xt_s_agr = self.calc_area_weighted_mean(self.gr_grid_areas, self.decadal_results)
+        self.calc_a_agr()
+        x_ref_agr = self.calc_area_weighted_mean(self.areas_elig, self._ref_mean)
+        xt_s_agr = self.calc_area_weighted_mean(self.areas_elig, self.decadal_results)
         if calc_annual:
-            xt_p_agr = self.calc_area_weighted_mean(self.gr_grid_areas, self.ctp_results)
+            xt_p_agr = self.calc_area_weighted_mean(self.areas_elig, self.ctp_results)
 
         # calc Xt_ref_agr (equation 34_3)
         xt_ref_agr = self._calc_gmean_decadal(start_year=self.ref_period[0], end_year=self.ref_period[1], data=xt_s_agr)
@@ -542,8 +590,7 @@ class TEAAgr(TEAIndicators):
             x_ref_spreads = xr.Dataset()
 
         # calculate error estimates for AGR mean (equation 42TODEFINE)
-        A_AGR = self.gr_grid_areas.sum()
-        N_dof = self._get_N_dof(A_AGR)
+        N_dof = self._get_N_dof()
         
         if spreads:
             # add p5 and p95 values (equation 41TODEFINE)
@@ -624,7 +671,8 @@ class TEAAgr(TEAIndicators):
         return x_cc_agr, x_cc_spreads, x_ref_agr, x_ref_spreads, x_s_agr, x_p_agr
     
     # noinspection PyPep8Naming
-    def _get_N_dof(self, A_AGR) -> float | Any:
+    def _get_N_dof(self) -> float | Any:
+        A_AGR = self.a_agr_full
         # calculate error estimates for AGR mean (equation 42TODEFINE)
         r_earth = 6371
         u_earth = 2 * np.pi * r_earth
@@ -659,7 +707,6 @@ class TEAAgr(TEAIndicators):
             result: area weighted mean
 
         """
-        area = area.where(~np.isnan(data.threshold_avg))
         awgts = area / area.sum(dim=(self.ydim, self.xdim))
         result = (awgts * data).sum(dim=(self.ydim, self.xdim))
         # set result to nan where all data is nan
