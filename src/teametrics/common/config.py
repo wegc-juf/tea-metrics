@@ -184,6 +184,8 @@ def _get_default_opts(fname, opts):
             opts.annual_spreads = False
         if 'min_duration' not in opts:
             opts.min_duration = teametrics.TEA.DEFAULT_MIN_DURATION
+        if 'agr_frac_min' not in opts:
+            opts.agr_frac_min = 0.25
         if 'altitude_threshold' not in opts:
             opts.altitude_threshold = 1500
         if opts.decadal_only and not opts.recalc_decadal and opts.annual_spreads:
@@ -246,6 +248,7 @@ def check_type(key, value):
         'agr_range': str,  # comma-separated string of floats
         'grg_grid_spacing': float,
         'land_frac_min': float,
+        'agr_frac_min': float,
 
         # Parameters
         'parameter': str,

@@ -83,7 +83,9 @@ def calc_tea_indicators(opts):
     if opts.decadal or opts.decadal_only or opts.recalc_decadal:
         if 'agr' in opts:
             tea = TEAAgr(mask=mask, gr_grid_res=opts.grg_grid_spacing,
-                         significant_digits=opts.significant_digits, ref_period=opts.ref_period)
+                         significant_digits=opts.significant_digits, ref_period=opts.ref_period,
+                         agr_frac_min=opts.agr_frac_min, min_duration=opts.min_duration,
+                         land_frac_min=opts.land_frac_min)
         else:
             tea = TEAIndicators(significant_digits=opts.significant_digits, ref_period=opts.ref_period)
 
@@ -184,8 +186,9 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 min_area=min_area, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                cell_size_y=opts.agr_cell_size, land_frac_min=opts.land_frac_min,
-                                significant_digits=opts.significant_digits)
+                                cell_size_y=opts.agr_cell_size,
+                                significant_digits=opts.significant_digits, agr_frac_min=opts.agr_frac_min,
+                                land_frac_min=opts.land_frac_min, min_duration=opts.min_duration)
         else:
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 min_area=min_area, low_extreme=opts.low_extreme,
@@ -212,8 +215,8 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
             data, mask, threshold = _reduce_region(opts, None, mask, threshold)
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                cell_size_y=opts.agr_cell_size, land_frac_min=opts.land_frac_min,
-                                significant_digits=opts.significant_digits)
+                                cell_size_y=opts.agr_cell_size,
+                                significant_digits=opts.significant_digits, agr_frac_min=opts.agr_frac_min)
         else:
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
                                 unit=opts.unit,
@@ -243,6 +246,7 @@ def calc_annual_ctp_indicators(tea, opts, start, end):
 
     if 'agr' in opts:
         tea.land_frac_min = opts.land_frac_min
+        tea.min_duration = opts.min_duration
 
     # calculate annual climatic time period indicators
     logger.info('Calculating annual CTP indicators')
@@ -646,7 +650,7 @@ def _calc_agr_mean_and_spread(opts, tea):
         crop_to_shp = True
 
     tea.calc_agr_vars(y_range=agr_y_range, x_range=agr_x_range, spreads=opts.spreads, crop_to_shp=crop_to_shp,
-                      calc_annual=opts.annual_spreads, min_duration=opts.min_duration)
+                      calc_annual=opts.annual_spreads)
 
     # save results
     # # decadal
