@@ -748,7 +748,7 @@ class TEAAgr(TEAIndicators):
         # equation 38_3 and 38_6
         c_low_sum = ((1 - c_upp) * areas).sum(dim=(self.ydim, self.xdim))
         # replace 0 values with nan to avoid division by zero
-        c_low_sum = c_low_sum.where(c_low_sum > 0, c_low_sum)
+        c_low_sum = c_low_sum.where(c_upp_sum > 0)
         s_low = np.sqrt(1 / c_low_sum * ((1 - c_upp) * areas * (data - ref) ** 2).sum(dim=(self.ydim, self.xdim)))
 
         # get attributes for variables and rename them

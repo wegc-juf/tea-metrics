@@ -1867,6 +1867,7 @@ class TEAIndicators:
                 cc_amplification[vvar].attrs['units'] = '1'
 
         # rename vars
+        # noinspection PyStringConversionWithoutDunderMethod
         rename_dict_af = {vvar: f'{vvar}_AF' for vvar in amplification_factors.data_vars}
         rename_dict_af_cc = {vvar: f'{vvar}_AF_CC' for vvar in cc_amplification.data_vars}
         amplification_factors = amplification_factors.rename(rename_dict_af)
