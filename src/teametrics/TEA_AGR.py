@@ -32,7 +32,8 @@ class TEAAgr(TEAIndicators):
     """
     def __init__(self, input_data=None, threshold=None, mask=None, min_area=0.0001,
                  gr_grid_res=0.5, land_sea_mask=None, gr_grid_mask=None, gr_grid_areas=None,
-                 land_frac_min=0.25, cell_size_y=2, **kwargs):
+                 land_frac_min=0.25, cell_size_y=2, agr_frac_min=0.25, min_duration=DEFAULT_MIN_DURATION,
+                 **kwargs):
         """
         initialize TEA object
 
@@ -78,6 +79,9 @@ class TEAAgr(TEAIndicators):
         self.areas_domain = None
         self.a_agr_elig = None
         self.areas_elig = None
+        self.agr_frac_min = agr_frac_min
+        
+        self.min_duration = min_duration
 
         # filter input data to valid cells
         if self.land_sea_mask is not None and self.input_data is not None:
@@ -481,8 +485,7 @@ class TEAAgr(TEAIndicators):
         self.areas_full = self.gr_grid_areas.copy()
         self.a_agr_full = self.areas_full.sum()
 
-    def calc_agr_vars(self, y_range=None, x_range=None, spreads=True, crop_to_shp=False, calc_annual=False,
-                      min_duration=DEFAULT_MIN_DURATION):
+    def calc_agr_vars(self, y_range=None, x_range=None, spreads=True, crop_to_shp=False, calc_annual=False):
         """
         calculate AGR variables
 
@@ -492,9 +495,8 @@ class TEAAgr(TEAIndicators):
             spreads: if True, calculate spreads and percentiles for AGR variables
             crop_to_shp: if True, crop data to shape of aggregated GeoRegion (default: False)
             calc_annual: if True, calculate vars also for annual data
-            min_duration: minimum cumulative decadal event duration (10-yr sum) in days. Default: 7
         """
-        min_duration_avg = min_duration / 10
+        min_duration_avg = self.min_duration / 10
         xt_p_agr = None
         x_p_agr = None
         x_p_spreads = None
@@ -512,14 +514,21 @@ class TEAAgr(TEAIndicators):
         # calculate area weights (equation 34_0)
         if self.gr_grid_areas is None:
             raise ValueError('No GR area grid provided. Please provide a valid GR area grid.')
-
-        # calc X_Ref^AGR and X_s^AGR (equation 34_1 and equation 34_2)
+        
+        # calculate areas for AGR calculation, full area, domain area, and eligible area
         self.calc_a_agr()
+        
+        # check if there are enough valid grid cells for AGR calculation
+        ratio = self.a_agr_elig / self.a_agr_domain
+        if ratio <= self.agr_frac_min:
+            self.areas_elig = self.areas_elig * np.nan
+        
+        # calc X_Ref^AGR and X_s^AGR (equation 34_1 and equation 34_2)
         x_ref_agr = self.calc_area_weighted_mean(self.areas_elig, self._ref_mean)
         xt_s_agr = self.calc_area_weighted_mean(self.areas_elig, self.decadal_results)
         if calc_annual:
             xt_p_agr = self.calc_area_weighted_mean(self.areas_elig, self.ctp_results)
-
+        
         # calc Xt_ref_agr (equation 34_3)
         xt_ref_agr = self._calc_gmean_decadal(start_year=self.ref_period[0], end_year=self.ref_period[1], data=xt_s_agr)
         if calc_annual:
@@ -766,7 +775,7 @@ class TEAAgr(TEAIndicators):
 
         """
         logger.info(f'Calculating 5th and 95th percentiles')
-        areas = self.gr_grid_areas
+        areas = self.areas_elig
 
         for var in data.data_vars:
             # calculate 5th and 95th percentiles for each variable
