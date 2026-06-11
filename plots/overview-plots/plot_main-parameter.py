@@ -41,16 +41,23 @@ def _getopts():
 
 
 def get_data(opts):
+
+    reg_str = opts.region
+    if 'agr' in opts and opts.agr:
+        reg_str = f'AGR-{opts.agr}'
+
     af = xr.open_dataset(f'{opts.outpath}dec_indicator_variables/amplification/'
-                         f'AF_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}_{opts.start}to{opts.end}.nc')
+                         f'AF_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}_{opts.start}to{opts.end}.nc')
 
     dec = xr.open_dataset(f'{opts.outpath}dec_indicator_variables/'
-                          f'DEC_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}_{opts.start}to{opts.end}.nc')
+                          f'DEC_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}_{opts.start}to{opts.end}.nc')
 
     return af, dec
 
 
 def gr_plot_params(opts, vname):
+    if 'agr' in opts:
+        vname = vname.replace('AGR', 'GR')
     params = {'EF_GR_AF': {'col': 'tab:blue',
                            'ylbl': r'EF amplification $(\mathcal{A}^\mathrm{F})$',
                            'title': 'Event Frequency (Annual)',
@@ -144,13 +151,14 @@ def plot_gr_data(opts, ax, data, ddata, vname):
     ax.set_xlim(syr, eyr)
     ax.xaxis.set_minor_locator(FixedLocator(np.arange(syr, eyr)))
 
-    ymin, ymax = 0.5, 2
+    ymin = round_to_next(rval=data[vname].min().values, limit=0.5, lower=True)
+    ymax = round_to_next(rval=data[vname].max().values, limit=0.5)
     ax.set_yticks(np.arange(ymin, ymax + 0.5, 0.5))
     ax.set_ylim(ymin, ymax)
 
     ax.set_title(props['title'], fontsize=14)
 
-    ypos_ref = 0.4
+    ypos_ref = ((1 - ymin) / (ymax - ymin)) + 0.05
     ypos_cc = ((data[f'{vname}_CC'].values - ymin) / (ymax - ymin)) + 0.05
     ax.text(0.02, ypos_ref, r'$\mathcal{A}_\mathrm{Ref}$',
             horizontalalignment='left',
@@ -169,7 +177,7 @@ def plot_gr_data(opts, ax, data, ddata, vname):
     ref_abs = gmean(ddata.sel(time=slice(ref_cy_syr_ts, ref_cy_eyr_ts)))
     cc_abs = gmean(ddata.sel(time=slice(cc_cy_syr_ts, cc_cy_eyr_ts)))
 
-    if vname == 'EA_avg_GR_AF':
+    if vname in ['EA_avg_GR_AF', 'EA_avg_AGR_AF']:
         ax.text(0.02, 0.9, f'{opts.param_str}-{opts.period}-{vname[:2]}' + r'$_\mathrm{Ref | CC}$ = '
                 + f'{ref_abs:.1f}' + r'$\,$|$\,$'
                 + f'{cc_abs:.1f} {props["unit"]} \n'
@@ -204,8 +212,13 @@ def plot_tex_es(opts, ax, data, ddata):
     xvals = data.time
     xticks = np.arange(opts.start, opts.end + 1)
 
-    ax.plot(xticks, data['ES_avg_GR_AF'], 'o-', color='tab:grey', markersize=3, linewidth=2)
-    ax.plot(xticks, data['TEX_GR_AF'], 'o-', color='tab:red', markersize=3, linewidth=2)
+    es_var, tex_var = 'ES_avg_GR_AF', 'TEX_GR_AF'
+    if 'agr' in opts:
+        es_var = es_var.replace('GR', 'AGR')
+        tex_var = tex_var.replace('GR', 'AGR')
+
+    ax.plot(xticks, data[es_var], 'o-', color='tab:grey', markersize=3, linewidth=2)
+    ax.plot(xticks, data[tex_var], 'o-', color='tab:red', markersize=3, linewidth=2)
 
     # find indices of ref/cc period
     ref_sidx, ref_eidx = np.where(xticks == opts.ref_period[0])[0][0], np.where(xticks == opts.ref_period[1])[0][0]
@@ -213,9 +226,9 @@ def plot_tex_es(opts, ax, data, ddata):
 
     ax.plot(xticks[ref_sidx:ref_eidx + 1], np.ones(len(xvals[ref_sidx:ref_eidx + 1])), alpha=0.5, color='tab:grey',
             linewidth=2)
-    ax.plot(xticks[cc_sidx:cc_eidx + 1], np.ones(len(xvals[cc_sidx:cc_eidx + 1])) * data['ES_avg_GR_AF_CC'].values,
+    ax.plot(xticks[cc_sidx:cc_eidx + 1], np.ones(len(xvals[cc_sidx:cc_eidx + 1])) * data[f'{es_var}_CC'].values,
             alpha=0.5, color='tab:grey', linewidth=2)
-    ax.plot(xticks[cc_sidx:cc_eidx + 1], np.ones(len(xvals[cc_sidx:cc_eidx + 1])) * data['TEX_GR_AF_CC'].values,
+    ax.plot(xticks[cc_sidx:cc_eidx + 1], np.ones(len(xvals[cc_sidx:cc_eidx + 1])) * data[f'{tex_var}_CC'].values,
             alpha=0.5, color='tab:red', linewidth=2)
 
     ax.set_ylabel(r'ES|TEX amplification $(\mathcal{A}^\mathrm{S}, \mathcal{A}^\mathrm{T})$',
@@ -230,16 +243,20 @@ def plot_tex_es(opts, ax, data, ddata):
     ax.set_xlim(syr, eyr)
     ax.xaxis.set_minor_locator(FixedLocator(np.arange(syr, eyr)))
 
-    ymin, ymax = 0, 10
+    ymin = 0
+    if data[tex_var].max().values > data[es_var].max().values:
+        ymax = round_to_next(rval=data[tex_var].max().values, limit=1) + 1
+    else:
+        ymax = round_to_next(rval=data[es_var].max().values, limit=1) + 1
     ax.set_yticks(np.arange(ymin, ymax + 1, 1))
     ax.set_ylim(ymin, ymax)
 
     ax.set_title('Avg. Event Severity and Total Events Extremity', fontsize=14)
     ax.set_xlabel('Time (core year of decadal-mean value)', fontsize=10)
 
-    ypos_ref = 0.12
-    ypos_cc_tex = ((data['TEX_GR_AF_CC'].values - ymin) / (ymax - ymin)) + 0.05
-    ypos_cc_es = ((data['ES_avg_GR_AF_CC'].values - ymin) / (ymax - ymin)) + 0.05
+    ypos_ref = ((1 - ymin) / (ymax - ymin)) + 0.05
+    ypos_cc_tex = ((data[f'{tex_var}_CC'].values - ymin) / (ymax - ymin)) + 0.05
+    ypos_cc_es = ((data[f'{es_var}_CC'].values - ymin) / (ymax - ymin)) + 0.05
     ax.text(0.02, ypos_ref, r'$\mathcal{A}_\mathrm{Ref}$',
             horizontalalignment='left', verticalalignment='center', transform=ax.transAxes, fontsize=11)
     ax.text(0.93, ypos_cc_es, r'$\mathcal{A}_\mathrm{CC}^\mathrm{S}$',
@@ -252,10 +269,10 @@ def plot_tex_es(opts, ax, data, ddata):
         f'{opts.ref_period[1] - 5}-01-01')
     cc_cy_syr_ts, cc_cy_eyr_ts = pd.Timestamp(f'{opts.cc_period[0] + 5}-01-01'), pd.Timestamp(
         f'{opts.cc_period[1] - 5}-01-01')
-    ref_abs_tex = gmean(ddata['TEX_GR'].sel(time=slice(ref_cy_syr_ts, ref_cy_eyr_ts)))
-    cc_abs_tex = gmean(ddata['TEX_GR'].sel(time=slice(cc_cy_syr_ts, cc_cy_eyr_ts)))
-    ref_abs_es = gmean(ddata['ES_avg_GR'].sel(time=slice(ref_cy_syr_ts, ref_cy_eyr_ts)))
-    cc_abs_es = gmean(ddata['ES_avg_GR'].sel(time=slice(cc_cy_syr_ts, cc_cy_eyr_ts)))
+    ref_abs_tex = gmean(ddata[tex_var[:-3]].sel(time=slice(ref_cy_syr_ts, ref_cy_eyr_ts)))
+    cc_abs_tex = gmean(ddata[tex_var[:-3]].sel(time=slice(cc_cy_syr_ts, cc_cy_eyr_ts)))
+    ref_abs_es = gmean(ddata[es_var[:-3]].sel(time=slice(ref_cy_syr_ts, ref_cy_eyr_ts)))
+    cc_abs_es = gmean(ddata[es_var[:-3]].sel(time=slice(cc_cy_syr_ts, cc_cy_eyr_ts)))
 
     ax.text(0.02, 0.85,
             f'{opts.param_str}-{opts.period}-TEX' + r'$_\mathrm{Ref | CC}$'
@@ -266,11 +283,11 @@ def plot_tex_es(opts, ax, data, ddata):
             + f'{cc_abs_es:.0f} ' + r'areal$\,$' + opts.unit + r'$\,$days$\,$'
             + '\n'
             + r'$\mathcal{A}_\mathrm{CC}^\mathrm{S} | \mathcal{A}_\mathrm{CC}^\mathrm{T}$ = '
-            + f'{data["ES_avg_GR_AF_CC"]:.2f}' + r'$\,$|$\,$'
-            + f'{data["TEX_GR_AF_CC"]:.2f}',
+            + f'{data[f"{es_var}_CC"]:.2f}' + r'$\,$|$\,$'
+            + f'{data[f"{tex_var}_CC"]:.2f}',
             horizontalalignment='left',
             verticalalignment='center', transform=ax.transAxes, backgroundcolor='whitesmoke',
-            fontsize=9)
+            fontsize=9, zorder=2)
 
 
 def plot_map(opts, fig, ax, data):
@@ -287,14 +304,9 @@ def plot_map(opts, fig, ax, data):
     """
     props = map_plot_params(opts=opts, vname=data.name)
 
-    cntry = xr.open_dataset(f'{opts.maskpath}{opts.region}_masks_{opts.dataset}.nc')
-    if 'x' in data.dims:
-        cntry = cntry.sel(x=data.x, y=data.y)
-    else:
-        cntry = cntry.sel(x=data.lon, y=data.lat)
-    ax.contourf(cntry.nw_mask, colors='mistyrose')
-
-    lvls = np.arange(1, 4.25, 0.25)
+    cn = round_to_next(rval=data.min().values, limit=0.5, lower=True)
+    cx = round_to_next(rval=data.max().values, limit=0.5)
+    lvls = np.arange(cn, cx + 0.25, 0.25)
     if data.max() > lvls[-1] and data.min() > lvls[0]:
         ext = 'max'
     elif data.max() < lvls[-1] and data.min() > lvls[0]:
@@ -306,7 +318,10 @@ def plot_map(opts, fig, ax, data):
     val_min, val_max = gt0_data.min().values, gt0_data.max().values
     range_vals = [val_min, val_max]
 
-    map_vals = ax.contourf(data, cmap=props['cmap'], extend=ext, levels=lvls, vmin=1, vmax=4)
+    if 'lat' in data.dims and data.lat[0] > data.lat[1]:
+        data = data.sortby('lat')
+
+    map_vals = ax.contourf(data, cmap=props['cmap'], extend=ext, levels=lvls, vmin=cn, vmax=cx)
 
     ax.axis('off')
     divider = make_axes_locatable(ax)
@@ -314,13 +329,32 @@ def plot_map(opts, fig, ax, data):
     cb = fig.colorbar(map_vals, cax=cax, orientation='vertical')
     cb.set_label(label=f'{opts.param_str}-{opts.period}-{props["lbl"]}', fontsize=12)
     cb.ax.tick_params(labelsize=10)
-    cb.ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
+    cb.ax.yaxis.set_major_formatter(FormatStrFormatter('%.2f'))
     ax.set_title(props["title"], fontsize=14)
 
     ax.text(0.02, 0.92, props['lbl'] + f'(i,j) [{range_vals[0]:.2f}, {range_vals[1]:.2f}]',
             horizontalalignment='left',
             verticalalignment='center', transform=ax.transAxes, backgroundcolor='whitesmoke',
             fontsize=9)
+
+
+def round_to_next(rval, limit, lower=False):
+    """
+    round number to next number
+    Args:
+        rval: value to round
+        limit: limit to which one should round
+        lower: set if floor should be used instead of ceil
+
+    Returns:
+
+    """
+
+    rounded = np.ceil(rval / limit) * limit
+    if lower:
+        rounded = np.floor(rval / limit) * limit
+
+    return rounded
 
 
 def plot_main_parameter(opts):
@@ -338,6 +372,8 @@ def plot_main_parameter(opts):
 
     gr_vars = ['EF_GR_AF', 'ED_avg_GR_AF', 'EM_avg_GR_AF', 'EA_avg_GR_AF']
     for irow, gr_var in enumerate(gr_vars):
+        if 'agr' in opts:
+            gr_var = gr_var.replace('GR', 'AGR')
         plot_gr_data(opts=opts, ax=axs[irow, 0], data=data[[gr_var, f'{gr_var}_CC']], vname=gr_var,
                      ddata=dec_data[gr_var.split('_AF')[0]])
 
@@ -345,8 +381,15 @@ def plot_main_parameter(opts):
     for irow, map_var in enumerate(map_vars):
         plot_map(opts=opts, fig=fig, ax=axs[irow, 1], data=data[map_var])
 
-    plot_tex_es(opts=opts, ax=axs[3, 1], data=data[['TEX_GR_AF', 'ES_avg_GR_AF', f'TEX_GR_AF_CC', f'ES_avg_GR_AF_CC']],
-                ddata=dec_data[['TEX_GR', 'ES_avg_GR']])
+
+    if 'agr' in opts:
+        plot_tex_es(opts=opts, ax=axs[3, 1],
+                   data=data[['TEX_AGR_AF', 'ES_avg_AGR_AF', f'TEX_AGR_AF_CC', f'ES_avg_AGR_AF_CC']],
+                   ddata=dec_data[['TEX_AGR', 'ES_avg_AGR']])
+    else:
+        plot_tex_es(opts=opts, ax=axs[3, 1],
+                    data=data[['TEX_GR_AF', 'ES_avg_GR_AF', f'TEX_GR_AF_CC', f'ES_avg_GR_AF_CC']],
+                    ddata=dec_data[['TEX_GR', 'ES_avg_GR']])
 
 
     # iterate over each subplot and add a text label
@@ -357,7 +400,10 @@ def plot_main_parameter(opts):
 
     fig.subplots_adjust(wspace=0.2, hspace=0.33)
 
-    plt.savefig(f'{opts.outpath}/plots/main-parameter_{opts.param_str}_{opts.region}_{opts.period}_{opts.dataset}'
+    reg_str = opts.region
+    if 'agr' in opts:
+        reg_str = f'AGR-{opts.agr}'
+    plt.savefig(f'{opts.outpath}/plots/main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
                 f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
 
 
