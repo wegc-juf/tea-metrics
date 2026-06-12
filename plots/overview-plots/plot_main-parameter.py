@@ -11,7 +11,7 @@ import os
 from scipy.stats import gmean
 import xarray as xr
 
-from config import load_opts
+from teametrics.common.config import load_opts
 
 
 def _getopts():
@@ -46,10 +46,10 @@ def get_data(opts):
     if 'agr' in opts and opts.agr:
         reg_str = f'AGR-{opts.agr}'
 
-    af = xr.open_dataset(f'{opts.outpath}dec_indicator_variables/amplification/'
+    af = xr.open_dataset(f'{opts.outpath}/dec_indicator_variables/amplification/'
                          f'AF_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}_{opts.start}to{opts.end}.nc')
 
-    dec = xr.open_dataset(f'{opts.outpath}dec_indicator_variables/'
+    dec = xr.open_dataset(f'{opts.outpath}/dec_indicator_variables/'
                           f'DEC_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}_{opts.start}to{opts.end}.nc')
 
     return af, dec
@@ -403,6 +403,9 @@ def plot_main_parameter(opts):
     reg_str = opts.region
     if 'agr' in opts:
         reg_str = f'AGR-{opts.agr}'
+
+    print(f'Saving plots to {opts.outpath}/plots/main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
+                f'_{opts.start}to{opts.end}.png')
     plt.savefig(f'{opts.outpath}/plots/main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
                 f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
 
