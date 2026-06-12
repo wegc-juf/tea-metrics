@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Plot main parameter (GR and CC map)
 """

@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Plot TEX map
 """
@@ -13,7 +14,8 @@ import numpy as np
 import os
 import xarray as xr
 
-from config import load_opts
+from teametrics.common.config import load_opts
+
 
 def _getopts():
     """
@@ -143,9 +145,13 @@ def plot_eur_tex(opts):
     axs.tick_params(axis='both', which='major', labelsize=12)
     plt.title('Total Events Extremity (TEX) amplification', fontsize=16)
 
-
-    plt.savefig(f'{opts.outpath}/plots/TEX-map_{opts.param_str}_{gr_str}_{opts.period}_{opts.dataset}'
-                           f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
+    out_file = f'{opts.outpath}/plots/TEX-map_{opts.param_str}_{gr_str}_{opts.period}_{opts.dataset}' \
+               f'_{opts.start}to{opts.end}.png'
+    print(f'Saving plot to {out_file}')
+    try:
+        plt.savefig(out_file, dpi=dpi, bbox_inches='tight')
+    except Exception as e:
+        print(f'Error saving plot: {e}')
 
 
 if __name__ == '__main__':
