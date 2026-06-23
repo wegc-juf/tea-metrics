@@ -126,15 +126,21 @@ class TEAIndicators:
         if int(pd_major) > 2 or (int(pd_major) == 2 and int(pd_minor) >= 2):
             self.CTP_freqs = {'annual': 'YS', 'seasonal': 'QS-DEC', 'WAS': 'YS-APR',
                               'ESS': 'YS-MAY', 'JJA': 'YS-JUN',
-                              'DJF': 'YS-DEC', 'EWS': 'YS-NOV', 'monthly': 'MS'}
+                              'DJF': 'YS-DEC', 'EWS': 'YS-NOV', 'monthly': 'MS', 'june': 'MS', 'jan': 'MS',
+                              'feb': 'MS', 'mar': 'MS', 'apr': 'MS', 'may': 'MS', 'jun': 'MS', 'jul': 'MS', 'aug': 'MS',
+                              'sep': 'MS', 'oct': 'MS', 'nov': 'MS', 'dec': 'MS'}
         else:
             self.CTP_freqs = {'annual': 'AS', 'seasonal': 'QS-DEC', 'WAS': 'AS-APR',
                               'ESS': 'AS-MAY', 'JJA': 'AS-JUN',
-                              'DJF': 'AS-DEC', 'EWS': 'AS-NOV', 'monthly': 'MS'}
+                              'DJF': 'AS-DEC', 'EWS': 'AS-NOV', 'monthly': 'MS', 'june': 'MS', 'jan': 'MS', 'feb': 'MS',
+                              'mar': 'MS', 'apr': 'MS', 'may': 'MS', 'jun': 'MS', 'jul': 'MS', 'aug': 'MS',
+                              'sep': 'MS', 'oct': 'MS', 'nov': 'MS', 'dec': 'MS'}
         self._overlap_ctps = ['EWS', 'DJF']
         self.CTP_months = {'WAS': [4, 5, 6, 7, 8, 9, 10], 'ESS': [5, 6, 7, 8, 9],
                            'EWS': [11, 12, 1, 2, 3],
-                           'JJA': [6, 7, 8], 'DJF': [12, 1, 2]}
+                           'JJA': [6, 7, 8], 'DJF': [12, 1, 2], 'june': [6], 'jan': [1], 'feb': [2], 'mar': [3],
+                           'apr': [4], 'may': [5], 'jul': [7], 'aug': [8], 'sep': [9], 'oct': [10], 'nov': [11],
+                           'dec': [12]}
         self._CTP_resample_sum = None
         self._CTP_resample_mean = None
         self.ctp_results = xr.Dataset()
@@ -783,7 +789,8 @@ class TEAIndicators:
                 'DJF': winter season (December to February)
                 'EWS': extended winter season (November to March)
         """
-        valid_dec_periods = ['annual', 'seasonal', 'monthly', 'WAS', 'ESS', 'EWS', 'JJA', 'DJF']
+        valid_dec_periods = ['annual', 'seasonal', 'monthly', 'WAS', 'ESS', 'EWS', 'JJA', 'DJF', 'june', 'jan',
+                             'feb', 'mar', 'apr', 'may', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
         if ctp not in valid_dec_periods:
             raise ValueError(f"Invalid CTP: {ctp}. Allowed values: {valid_dec_periods}")
         self.CTP = ctp
@@ -1651,12 +1658,12 @@ class TEAIndicators:
             cupp = xr.where(one_decade > center_val, 1, 0)
 
             cupp_sum = cupp.sum(dim='time')
-            cupp_sum = cupp_sum.where(cupp_sum > 0, 1)
+            cupp_sum = cupp_sum.where(cupp_sum > 2, 2)
             supp_per = np.sqrt(
                 1 / cupp_sum * ((cupp * (one_decade - center_val) ** 2).sum(dim='time')))
 
             clow_sum = (1 - cupp).sum(dim='time')
-            clow_sum = clow_sum.where(clow_sum > 0, 1)
+            clow_sum = clow_sum.where(clow_sum > 2, 2)
             slow_per = np.sqrt(
                 1 / clow_sum * (((1 - cupp) * (one_decade - center_val) ** 2).sum(dim='time')))
 

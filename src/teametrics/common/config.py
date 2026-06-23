@@ -381,8 +381,10 @@ def check_config(opts_dict):
         'station': ['Graz', 'Innsbruck', 'Wien', 'Salzburg', 'Kremsmuenster',
                     'BadGleichenberg', 'Deutschlandsberg'],
         'threshold_type': ['abs', 'perc'],
-        'period': ['monthly', 'seasonal', 'annual', 'WAS', 'ESS', 'MAM', 'JJA', 'SON', 'DJF'],
-        'perc_period': ['monthly', 'seasonal', 'annual', 'WAS', 'ESS', 'MAM', 'JJA', 'SON', 'DJF'],
+        'period': ['monthly', 'seasonal', 'annual', 'WAS', 'ESS', 'MAM', 'JJA', 'SON', 'DJF', 'june', 'jan', 'feb',
+                   'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'],
+        'perc_period': ['monthly', 'seasonal', 'annual', 'WAS', 'ESS', 'MAM', 'JJA', 'SON', 'DJF', 'june', 'jan',
+                        'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'],
         'gr_type': ['polygon', 'corners', 'center'],
     }
 
