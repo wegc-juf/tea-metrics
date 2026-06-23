@@ -150,8 +150,14 @@ def plot_eur_tex(opts):
     print(f'Saving plot to {out_file}')
     try:
         plt.savefig(out_file, dpi=dpi, bbox_inches='tight')
-    except Exception as e:
-        print(f'Error saving plot: {e}')
+    except (PermissionError, FileNotFoundError) as e:
+        out_file = f'/tmp/TEX-map_{opts.param_str}_{gr_str}_{opts.period}_{opts.dataset}' \
+                   f'_{opts.start}to{opts.end}.png'
+        print(f'Error saving plot: {e}, trying to save to {out_file} instead.')
+        try:
+            plt.savefig(out_file, dpi=dpi, bbox_inches='tight')
+        except (PermissionError, FileNotFoundError) as e:
+            print(f'Error saving plot to fallback location: {e}')
 
 
 if __name__ == '__main__':
@@ -160,5 +166,8 @@ if __name__ == '__main__':
     # check and create output path
     plt_outpath = f'{opts.outpath}/plots'
     if not os.path.exists(plt_outpath):
-        os.makedirs(plt_outpath)
+        try:
+            os.makedirs(plt_outpath)
+        except (PermissionError, FileNotFoundError) as e:
+            print(f'Error creating output directory: {e}')
     plot_eur_tex(opts)
