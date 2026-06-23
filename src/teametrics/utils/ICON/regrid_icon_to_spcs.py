@@ -28,7 +28,7 @@ def crop_icon_to_spcs():
 
     ds = xr.concat(datasets, dim="step")
     austria = ds.sel(
-        latitude=slice(49.2, 46.1),
+        latitude=slice(46.1, 49.1),
         longitude=slice(9.3, 17.4)
     )
     
@@ -64,8 +64,8 @@ def interpolate_icon_to_spcs(ds):
     """
     spcs_grid = xr.open_dataset(SPCS_GRID_FILE)
     ds_interp = ds.interp(
-        latitude=spcs_grid.latitude,
-        longitude=spcs_grid.longitude,
+        latitude=spcs_grid.lat,
+        longitude=spcs_grid.lon,
         method="linear"
     )
     
@@ -77,6 +77,7 @@ def run_main():
     ds = convert_forecast_lead_time_to_datetime(ds)
     ds = interpolate_icon_to_spcs(ds)
     print(ds)
+    ds.to_netcdf("./icon_eu_t2m_regridded/icon_eu_t2m_spcs.nc")
     
     
 if __name__ == "__main__":
