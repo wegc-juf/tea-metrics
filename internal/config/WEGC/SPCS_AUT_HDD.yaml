@@ -54,6 +54,7 @@ regrid_SPARTACUS_to_WEGNext:
   <<: *PARAM
   <<: *DATA
   parameter: Tx
+  input_data_path: *data_path
   raw_data_path: /data/reloclim/backup/ZAMG_SPARTACUS/data/v2024_v2.1/
   orography: false
   orog_file: /data/reloclim/backup/ZAMG_INCA/data/original/INCA_orog_corrected_y_dim.nc
