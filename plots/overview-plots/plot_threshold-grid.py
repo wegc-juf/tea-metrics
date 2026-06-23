@@ -15,7 +15,7 @@ import seaborn as sns
 import sys
 import xarray as xr
 
-from config import load_opts
+from teametrics.common.config import load_opts
 
 
 def _getopts():
