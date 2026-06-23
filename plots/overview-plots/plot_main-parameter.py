@@ -13,6 +13,7 @@ from scipy.stats import gmean
 import xarray as xr
 
 from teametrics.common.config import load_opts
+from teametrics.utils.calc_decadal_indicators import get_amplification_outpath, get_decadal_outpath
 
 
 def _getopts():
@@ -47,11 +48,10 @@ def get_data(opts):
     if 'agr' in opts and opts.agr:
         reg_str = f'AGR-{opts.agr}'
 
-    af = xr.open_dataset(f'{opts.outpath}/dec_indicator_variables/amplification/'
-                         f'AF_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}_{opts.start}to{opts.end}.nc')
-
-    dec = xr.open_dataset(f'{opts.outpath}/dec_indicator_variables/'
-                          f'DEC_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}_{opts.start}to{opts.end}.nc')
+    af_file = get_amplification_outpath(opts=opts, region=opts.agr if 'agr' in opts else opts.region)
+    af = xr.open_dataset(af_file)
+    dec_file = get_decadal_outpath(opts=opts, region=opts.agr if 'agr' in opts else opts.region)
+    dec = xr.open_dataset(dec_file)
 
     return af, dec
 
@@ -382,7 +382,6 @@ def plot_main_parameter(opts):
     for irow, map_var in enumerate(map_vars):
         plot_map(opts=opts, fig=fig, ax=axs[irow, 1], data=data[map_var])
 
-
     if 'agr' in opts:
         plot_tex_es(opts=opts, ax=axs[3, 1],
                    data=data[['TEX_AGR_AF', 'ES_avg_AGR_AF', f'TEX_AGR_AF_CC', f'ES_avg_AGR_AF_CC']],
@@ -405,10 +404,19 @@ def plot_main_parameter(opts):
     if 'agr' in opts:
         reg_str = f'AGR-{opts.agr}'
 
-    print(f'Saving plots to {opts.outpath}/plots/main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
-                f'_{opts.start}to{opts.end}.png')
-    plt.savefig(f'{opts.outpath}/plots/main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}'
-                f'_{opts.start}to{opts.end}.png', dpi=150, bbox_inches='tight')
+    out_file = f'{opts.outpath}/plots/main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}' \
+               f'_{opts.start}to{opts.end}.png'
+    print(f'Saving plots to {out_file}')
+    try:
+        plt.savefig(out_file, dpi=150, bbox_inches='tight')
+    except (PermissionError, FileNotFoundError) as e:
+        out_file = f'/tmp/main-parameter_{opts.param_str}_{reg_str}_{opts.period}_{opts.dataset}' \
+                   f'_{opts.start}to{opts.end}.png'
+        print(f'Error saving plot: {e}, trying to save to {out_file} instead.')
+        try:
+            plt.savefig(out_file, dpi=150, bbox_inches='tight')
+        except (PermissionError, FileNotFoundError) as e:
+            print(f'Error saving plot to fallback location: {e}')
 
 
 if __name__ == '__main__':
@@ -417,5 +425,8 @@ if __name__ == '__main__':
     # check and create output path
     plt_outpath = f'{opts.outpath}/plots'
     if not os.path.exists(plt_outpath):
-        os.makedirs(plt_outpath)
+        try:
+            os.makedirs(plt_outpath)
+        except PermissionError as e:
+            print(f'Error creating output directory: {e}')
     plot_main_parameter(opts)
