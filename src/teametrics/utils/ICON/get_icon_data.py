@@ -1,7 +1,9 @@
 from pathlib import Path
 import requests
+import bz2
+import shutil
 
-run = "00"      # 00,06,12,18 UTC
+run = "00"  # 00, 06, 12, 18 UTC
 date = "20260623"
 
 base = (
@@ -16,17 +18,34 @@ for fh in range(0, 121):
 
     fhr = f"{fh:03d}"
 
-    fname = (
+    bz2_name = (
         f"icon-eu_europe_regular-lat-lon_single-level_"
         f"{date}{run}_{fhr}_T_2M.grib2.bz2"
     )
 
-    url = base + fname
+    grib_name = bz2_name[:-4]  # remove .bz2
+
+    url = base + bz2_name
 
     r = requests.get(url, timeout=60)
 
-    if r.status_code == 200:
-        with open(outdir / fname, "wb") as f:
-            f.write(r.content)
+    if r.status_code != 200:
+        print(f"missing: {fhr}")
+        continue
 
-        print("downloaded", fhr)
+    bz2_path = outdir / bz2_name
+    grib_path = outdir / grib_name
+
+    # Save compressed file
+    with open(bz2_path, "wb") as f:
+        f.write(r.content)
+
+    # Decompress
+    with bz2.open(bz2_path, "rb") as fin:
+        with open(grib_path, "wb") as fout:
+            shutil.copyfileobj(fin, fout)
+
+    # Remove compressed archive
+    bz2_path.unlink()
+
+    print(f"downloaded + unpacked {fhr}")
