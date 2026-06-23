@@ -234,6 +234,7 @@ def run():
             filename_parts = filename.split(opts.parameter.upper())
             filename_out = f'{filename_parts[0]}{opts.parameter}{filename_parts[1]}'
             ds_new.to_netcdf(path / filename_out, encoding=encoding, engine='netcdf4')
+            print(f"Saved regridded file to {path / filename_out}")
 
 
 if __name__ == '__main__':
