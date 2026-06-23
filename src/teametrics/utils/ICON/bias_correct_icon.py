@@ -106,11 +106,17 @@ def compute_bias_field_rolling(
     fc = icon_hist_tmax.sel(time=common_days)
 
     daily_error = obs - fc
-
+    
+    weights = xr.DataArray(
+        [1, 2, 3, 4, 5, 6, 7],
+        dims=["time"]
+    )
+    
     bias = (
         daily_error
-        .rolling(time=window, min_periods=window)
-        .mean()
+        .isel(time=slice(-7, None))
+        .weighted(weights)
+        .mean("time")
     )
 
     return bias.isel(time=-1)
