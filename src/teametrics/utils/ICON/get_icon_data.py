@@ -2,50 +2,61 @@ from pathlib import Path
 import requests
 import bz2
 import shutil
+import datetime
 
 run = "00"  # 00, 06, 12, 18 UTC
-date = "20260623"
 
 base = (
     "https://opendata.dwd.de/weather/nwp/icon-eu/grib/"
     f"{run}/t_2m/"
 )
 
-outdir = Path("icon_eu_t2m")
-outdir.mkdir(exist_ok=True)
 
-for fh in range(0, 121):
+def download_icon_eu_t2m():
+    date = datetime.date.today().strftime("%Y%m%d")
+    
+    outdir = Path("icon_eu_t2m")
+    outdir.mkdir(exist_ok=True)
 
-    fhr = f"{fh:03d}"
+    for fh in range(0, 121):
 
-    bz2_name = (
-        f"icon-eu_europe_regular-lat-lon_single-level_"
-        f"{date}{run}_{fhr}_T_2M.grib2.bz2"
-    )
+        fhr = f"{fh:03d}"
 
-    grib_name = bz2_name[:-4]  # remove .bz2
+        bz2_name = (
+            f"icon-eu_europe_regular-lat-lon_single-level_"
+            f"{date}{run}_{fhr}_T_2M.grib2.bz2"
+        )
 
-    url = base + bz2_name
+        grib_name = bz2_name[:-4]  # remove .bz2
 
-    r = requests.get(url, timeout=60)
+        url = base + bz2_name
 
-    if r.status_code != 200:
-        print(f"missing: {fhr}")
-        continue
+        r = requests.get(url, timeout=60)
 
-    bz2_path = outdir / bz2_name
-    grib_path = outdir / grib_name
+        if r.status_code != 200:
+            print(f"missing: {fhr}")
+            continue
 
-    # Save compressed file
-    with open(bz2_path, "wb") as f:
-        f.write(r.content)
+        bz2_path = outdir / bz2_name
+        grib_path = outdir / grib_name
 
-    # Decompress
-    with bz2.open(bz2_path, "rb") as fin:
-        with open(grib_path, "wb") as fout:
-            shutil.copyfileobj(fin, fout)
+        # Save compressed file
+        with open(bz2_path, "wb") as f:
+            f.write(r.content)
 
-    # Remove compressed archive
-    bz2_path.unlink()
+        # Decompress
+        with bz2.open(bz2_path, "rb") as fin:
+            with open(grib_path, "wb") as fout:
+                shutil.copyfileobj(fin, fout)
 
-    print(f"downloaded + unpacked {fhr}")
+        # Remove compressed archive
+        bz2_path.unlink()
+
+        print(f"downloaded + unpacked {fhr}")
+
+
+def run_main():
+    download_icon_eu_t2m()
+    
+if __name__ == "__main__":
+    run_main()
