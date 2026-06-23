@@ -22,3 +22,5 @@ __pycache__
 /plots/paper-figs/misc/*.png
 /internal/config/WEGC/ERA5_AT_Tx25.yaml
 /internal/config/WEGC/ERA5H_COMMON_UTCI26.yaml
+*.grib2
+/src/teametrics/utils/ICON/icon_eu_t2m_regridded/*.nc
