@@ -180,7 +180,11 @@ def _getopts():
                         type=str,
                         default='../TEA_CFG.yaml',
                         help='TEA configuration file (default: TEA_CFG.yaml)')
-    
+    parser.add_argument('--year', '-y',
+                        dest='year',
+                        type=int,
+                        help='Year for processing')
+
     myopts = parser.parse_args()
     
     return myopts
@@ -197,7 +201,10 @@ def run():
         regrid_orog(opts=opts)
     else:
         input_path = Path(opts.input_data_path)
-        input_files = sorted(input_path.glob(f'*{opts.parameter.upper()}*.nc'))
+        if cmd_opts.year is not None:
+            input_files = sorted(input_path.glob(f'*{opts.parameter.upper()}*{cmd_opts.year}.nc'))
+        else:
+            input_files = sorted(input_path.glob(f'*{opts.parameter.upper()}*.nc'))
         if len(input_files) == 0:
             raise FileNotFoundError(f'No input files found in {input_path}/*{opts.parameter}*.nc')
         for ifile in trange(len(input_files), desc='Regridding files'):

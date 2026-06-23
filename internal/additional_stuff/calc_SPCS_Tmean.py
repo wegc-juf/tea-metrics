@@ -25,6 +25,12 @@ if __name__ == "__main__":
         required=False,
         help="Path to the output directory for Tmean files, default is raw_data_path",
     )
+    parser.add_argument(
+        "--year",
+        type=int,
+        required=False,
+        help="Year to process, default is all years",
+    )
     args = parser.parse_args()
     if not args.output_path:
         args.output_path = args.raw_data_path
@@ -33,7 +39,10 @@ if __name__ == "__main__":
     output_path = Path(args.output_path)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    file_mask = 'SPARTACUS2-DAILY_Tn*.nc'
+    if args.year:
+        file_mask = f'SPARTACUS2-DAILY_Tn*{args.year}.nc'
+    else:
+        file_mask = 'SPARTACUS2-DAILY_Tn*.nc'
     
     all_files = sorted(raw_data_path.glob(file_mask))
     for tmin_file in all_files:
