@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 detrend_CTP = "June"
 plot_data = True
 show_plots = False
+save_data = True
 
 
 def get_data(data_var="Tx30", data_path=None, time_interval=None):
@@ -110,26 +111,30 @@ def plot_cumulative_heatwave(heatwave_cumulative, heatwave_period, data_var="DTE
     if show_plots:
         plt.show()
 
+def calc_heatwave_metrics(data, heatwave_period, data_var="DTEMA_GR", add_values=None):
+    # Select the heatwave period
+    heatwave_data = data.sel(time=slice(heatwave_period[0], heatwave_period[1]))[data_var]
+    if add_values is not None:
+        new_times = [np.datetime64("2026-06-29"), np.datetime64("2026-06-30")]
+        new_data = xr.DataArray(add_values, coords=[new_times], dims=["time"])
+        heatwave_data = xr.concat([heatwave_data, new_data], dim="time")
+    heatwave_total = heatwave_data.sum(dim='time')
+    heatwave_cumulative = heatwave_data.cumsum(dim='time')
+    mean_heatwave = heatwave_data.mean(dim='time')
+    return heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave
+
 
 def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended_data=None):
-    
-    def calc_heatwave_metrics(data, heatwave_period, data_var="DTEMA_GR", add_values=None):
-        # Select the heatwave period
-        heatwave_data = data.sel(time=slice(heatwave_period[0], heatwave_period[1]))[data_var]
-        if add_values is not None:
-            new_times = [np.datetime64("2026-06-29"), np.datetime64("2026-06-30")]
-            new_data = xr.DataArray(add_values, coords=[new_times], dims=["time"])
-            heatwave_data = xr.concat([heatwave_data, new_data], dim="time")
-        heatwave_total = heatwave_data.sum(dim='time')
-        heatwave_cumulative = heatwave_data.cumsum(dim='time')
-        mean_heatwave = heatwave_data.mean(dim='time')
-        return heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave
     
     heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave = calc_heatwave_metrics(
         data, heatwave_period, data_var=data_var, add_values=[900, 300] if heatwave_period[0] == "2026-06-17" else None)
     print(f"Heatwave TEX_GR = S_GR for period {heatwave_period[0]} to {heatwave_period[1]}:"
           f" {heatwave_total.values:.0f} areal degC days / event, event_mean MA_GR = {mean_heatwave.values:.0f} "
           f"areal degC, event_max MA_GR = {heatwave_data.max().values:.0f} areal degC")
+    if save_data:
+        # save csv files for heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave
+        heatwave_data.to_dataframe().to_csv(f'heatwave_daily_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.csv')
+        heatwave_cumulative.to_dataframe().to_csv(f'heatwave_cumulative_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.csv')
 
     if detrended_data is not None:
         detrended_heatwave_data, detrended_heatwave_total, detrended_heatwave_cumulative, detrended_mean_heatwave = (
@@ -140,6 +145,12 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
               f" {detrended_heatwave_total.values:.0f} areal degC days / event, event_mean MA_GR ="
               f" {detrended_mean_heatwave.values:.0f} "
               f"areal degC, event_max MA_GR = {detrended_heatwave_data.max().values:.0f} areal degC")
+        if save_data:
+            # save csv files for detrended_heatwave_data, detrended_heatwave_total, detrended_heatwave_cumulative, detrended_mean_heatwave
+            detrended_heatwave_data.to_dataframe().to_csv(
+                f'heatwave_daily_DETREND_{detrend_CTP}_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.csv')
+            detrended_heatwave_cumulative.to_dataframe().to_csv(
+                f'heatwave_cumulative_DETREND_{detrend_CTP}_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.csv')
     else:
         detrended_heatwave_data = None
         detrended_heatwave_cumulative = None
