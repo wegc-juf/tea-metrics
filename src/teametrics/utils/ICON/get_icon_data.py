@@ -57,6 +57,75 @@ def download_icon_eu_t2m():
         print(f"downloaded + unpacked {fhr}")
 
 
+def download_icon_t2m(
+    date,
+    run="00",
+    outdir="icon_global_t2m",
+    max_hour=None,
+):
+    """
+    Download DWD ICON Global T_2M forecasts.
+
+    Parameters
+    ----------
+    date : str
+        YYYYMMDD
+
+    run : str
+        "00", "06", "12", "18"
+
+    outdir : str
+
+    max_hour : int or None
+        Forecast horizon.
+        Defaults:
+            180 for 00/12
+            120 for 06/18
+    """
+
+    if max_hour is None:
+        max_hour = 180 if run in ["00", "12"] else 120
+
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    base = (
+        "https://opendata.dwd.de/weather/nwp/icon/grib/"
+        f"{run}/t_2m/"
+    )
+
+    for fh in range(max_hour + 1):
+
+        fhr = f"{fh:03d}"
+
+        fname_bz2 = (
+            f"icon_global_icosahedral_single-level_"
+            f"{date}{run}_{fhr}_T_2M.grib2.bz2"
+        )
+
+        url = base + fname_bz2
+
+        try:
+
+            print(f"Downloading {url} ...")
+            r = requests.get(url, timeout=60)
+
+            if r.status_code != 200:
+                print(f"missing: {fhr}")
+                continue
+
+            outfile = outdir / fname_bz2[:-4]
+
+            with open(outfile, "wb") as f:
+                f.write(bz2.decompress(r.content))
+
+            print(f"downloaded {fhr}")
+
+        except Exception as e:
+
+            print(f"failed {fhr}: {e}")
+
+
 def download_icon_d2_t2m():
     base = (
         "https://opendata.dwd.de/weather/nwp/icon-d2/grib/"
@@ -106,8 +175,10 @@ def download_icon_d2_t2m():
 
 
 def run_main():
-    download_icon_eu_t2m()
-    download_icon_d2_t2m()
+    # download_icon_eu_t2m()
+    # download_icon_d2_t2m()
+    download_icon_t2m(date=datetime.date.today().strftime("%Y%m%d"), run="00", outdir="icon_global_t2m", max_hour=180)
+    
     
 if __name__ == "__main__":
     run_main()
