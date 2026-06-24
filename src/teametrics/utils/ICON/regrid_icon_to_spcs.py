@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Regrid ICON data to SPCS grid
+"""
+
 import xarray as xr
 from pathlib import Path
 

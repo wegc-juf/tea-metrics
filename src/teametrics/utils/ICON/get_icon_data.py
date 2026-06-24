@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 from pathlib import Path
 import requests
 import bz2
@@ -73,7 +75,6 @@ def download_icon_d2_t2m():
             f"icon-d2_germany_regular-lat-lon_single-level_"
             f"{date}{run}_{fhr}_2d_t_2m.grib2.bz2"
         )
-        
 
         grib_name = bz2_name[:-4]  # remove .bz2
 

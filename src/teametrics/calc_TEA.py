@@ -242,6 +242,7 @@ def calc_annual_ctp_indicators(tea, opts, start, end):
         # apply criterion that DTEA_GR > DTEA_min and all GR variables use same dates,
         # dtea_min is given in areals (1 areal = 100 km2)
         dtea_min = opts.min_exceedance_area  # according to equation 03
+        logger.info(f'Applying minimum exceedance area of {dtea_min} areal (100 km2) to all GR variables')
         tea.update_min_area(dtea_min)
 
     if 'agr' in opts:
