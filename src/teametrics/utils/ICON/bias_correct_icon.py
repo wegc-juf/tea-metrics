@@ -101,14 +101,11 @@ def compute_bias_field_rolling(
     """
 
     common_days = np.intersect1d(
-        spartacus_tmax.time.values + hack_time_shift,
+        spartacus_tmax.time.values,
         icon_hist_tmax.time.values,
     )
 
-    obs = spartacus_tmax.sel(time=common_days - hack_time_shift)
-    # shift time of observations to match ICON forecast time (valid_time)
-    if hack_time_shift != 0:
-        obs = obs.assign_coords(time=common_days)
+    obs = spartacus_tmax.sel(time=common_days)
     fc = icon_hist_tmax.sel(time=common_days)
     # convert K to °C
     fc = fc - 273.15
@@ -220,7 +217,7 @@ def run_main():
     spartacus_data = "/data/reloclim/backup/ZAMG_SPARTACUS/data/current/SPARTACUS2-DAILY_TX_2026.nc"
     spartacus_tmax = xr.open_dataarray(spartacus_data)
     
-    for icon_dir in ["icon_eu_t2m_regridded", "icon_d2_t2m_regridded", "icon_t2m_regridded"]:
+    for icon_dir in ["icon_eu_t2m_regridded"]:
         if not Path(icon_dir).exists():
             print(f"Directory {icon_dir} does not exist. Please run regrid_icon_to_spcs.py first.")
             continue
@@ -245,11 +242,29 @@ def run_main():
             corrected_hourly[:-1],
             spartacus_tmax.name
         )
-        print(corrected_tmax)
+        
+        def expand_forecast(corrected_tmax):
+            # now add two additional days to the forecast
+            last_day = corrected_tmax.time.max()
+            last_day_index = corrected_tmax.time.get_index("time").get_loc(last_day.values)
+            offsets = [-5., -5.]
+            for i in range(1, 3):
+                next_day = last_day + np.timedelta64(i, "D")
+                next_day_tmax = corrected_tmax[last_day_index].expand_dims(time=[next_day.values]) + offsets[i-1]
+                corrected_tmax = xr.concat([corrected_tmax, next_day_tmax], dim="time")
+            return corrected_tmax
+        # corrected_tmax = expand_forecast(corrected_tmax)
+        
         filename = f"{icon_dir}_bias_corr/bias_corrected_tmax_{todays_run.stem}.nc"
         if not Path(f"{icon_dir}_bias_corr").exists():
             Path(f"{icon_dir}_bias_corr").mkdir(parents=True, exist_ok=True)
         corrected_tmax.to_netcdf(filename)
+        
+        # expand spartacus_tmax to include the new forecast days
+        spartacus_tmax = xr.concat([spartacus_tmax, corrected_tmax], dim="time")
+        spartacus_basename = Path(spartacus_data).stem
+        spartacus_tmax.to_netcdf(f"{spartacus_basename}_extended.nc")
+
 
 if __name__ == "__main__":
     run_main()
