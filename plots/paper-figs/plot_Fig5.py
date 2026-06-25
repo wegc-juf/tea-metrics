@@ -15,24 +15,27 @@ from plot_fig4 import find_range
 
 from teametrics.common.general_functions import ref_cc_params
 
-INPUT_DATA_PATH = Path('/data/users/hst/TEA-clean/TEA/paper_data/')
+INPUT_DATA_PATH = Path('/home/wegnet/results/TEA_indicators_test/')
 MASK_PATH = Path('/data/arsclisys/normal/clim-hydro/TEA-Indicators/masks/')
 
 PARAMS = ref_cc_params()
 
+END_YEAR = 2026
 
-def get_data():
+def get_data(varname='Tx30.0degC', ctp='june'):
     dec = xr.open_dataset(INPUT_DATA_PATH / 'dec_indicator_variables' /
-                          'DEC_Tx99.0p_AUT_annual_SPARTACUS_1961to2024.nc')
+                          f'DEC_{varname}_AUT_{ctp}_SPARTACUS_1961to{END_YEAR}.nc')
 
-    ctp = xr.open_mfdataset(
-        sorted((INPUT_DATA_PATH / 'ctp_indicator_variables').glob('CTP_Tx99.0p_AUT_annual_SPARTACUS_*.nc')),
+    ctp_data = xr.open_mfdataset(
+        sorted((INPUT_DATA_PATH / 'ctp_indicator_variables').glob(f'CTP_{varname}_AUT_{ctp}_SPARTACUS_*.nc')),
         data_vars='minimal')
+    
+    af_path = (INPUT_DATA_PATH / 'dec_indicator_variables' /
+                         f'amplification/AF_{varname}_AUT_{ctp}_SPARTACUS_1961to{END_YEAR}.nc')
+    print(f"Loading amplification factors from {af_path}")
+    af = xr.open_dataset(af_path)
 
-    af = xr.open_dataset(INPUT_DATA_PATH / 'dec_indicator_variables' /
-                         'amplification/AF_Tx99.0p_AUT_annual_SPARTACUS_1961to2024.nc')
-
-    return dec, ctp, af
+    return dec, ctp_data, af
 
 
 def gr_plot_params(vname):
@@ -81,7 +84,7 @@ def gr_plot_params(vname):
 def plot_gr_data(ax, adata, ddata, afdata, su, sl):
     props = gr_plot_params(vname=ddata.name)
 
-    xticks = np.arange(1961, 2025)
+    xticks = np.arange(1961, END_YEAR + 1)
 
     ref = gmean(ddata.sel(time=slice(PARAMS['REF']['start_cy'], PARAMS['REF']['end_cy'])))
     cc = gmean(ddata.sel(time=slice(PARAMS['CC']['start_cy'], PARAMS['CC']['end_cy'])))
@@ -113,8 +116,8 @@ def plot_gr_data(ax, adata, ddata, afdata, su, sl):
         ax.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
     else:
         ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-    ax.set_xlim(1960, 2025)
-    ax.xaxis.set_minor_locator(FixedLocator(np.arange(1960, 2025)))
+    ax.set_xlim(1960, END_YEAR + 1)
+    ax.xaxis.set_minor_locator(FixedLocator(np.arange(1960, END_YEAR + 1)))
     ax.set_title(props['title'], fontsize=14)
     ax.set_ylim(0, props['yx'])
     ax.yaxis.set_major_locator(FixedLocator(np.arange(0, props['yx'] + props['dy'], props['dy'])))
@@ -151,15 +154,15 @@ def plot_gr_data(ax, adata, ddata, afdata, su, sl):
 def map_plot_params(vname):
     params = {'EF': {'cmap': 'Blues',
                      'lbl': r'EF$_\mathrm{CC}$(i,j) (ev/yr)',
-                     'title': 'Event Frequency (Annual) (CC2010-2024)',
+                     'title': f'Event Frequency (Annual) (CC2010-{END_YEAR})',
                      'lvls': np.arange(1, 11)},
               'ED_avg': {'cmap': 'Purples',
                          'lbl': r'ED$_\mathrm{CC}$(i,j) (days)',
-                         'title': 'Avarage Event Duration (CC2010-2024)',
+                         'title': f'Avarage Event Duration (CC2010-{END_YEAR})',
                          'lvls': np.arange(1, 3.75, 0.25)},
               'EM_avg': {'cmap': 'Oranges',
                          'lbl': r'EM$_\mathrm{CC}$(i,j) (°C)',
-                         'title': 'Average Exceedance Magnitude (CC2010-2024)',
+                         'title': f'Average Exceedance Magnitude (CC2010-{END_YEAR})',
                          'lvls': np.arange(1, 2.6, 0.2)}
               }
 
@@ -240,6 +243,7 @@ def run():
                 va='top', ha='left')
 
     fig.subplots_adjust(wspace=0.2, hspace=0.33)
+    print("Saving Figure 5 to ./Figure5.png")
     plt.savefig('./Figure5.png', dpi=300, bbox_inches='tight')
 
 
