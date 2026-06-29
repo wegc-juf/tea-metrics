@@ -3,10 +3,10 @@ common_params:
   input_data: &DATA
     dataset: SPARTACUS
   GeoRegion: &GR
-    region: AUT
-    agr: Steiermark
-    grg_grid_spacing: 10000
-    agr_cell_size: 100000
+    region: Steiermark
+#    agr: AUT
+#    grg_grid_spacing: 10000
+#    agr_cell_size: 100000
   parameter: &PARAM
     parameter: Tx
     precip: false
@@ -17,7 +17,7 @@ common_params:
   time_params: &TIME
     start: 1961
     end: 2025
-    period: annual
+    period: JJA
     ref_period: 1961-1990
     cc_period: 2011-2025
   paths: &PATHS
@@ -26,7 +26,7 @@ common_params:
     statpath: &statpath /data/users/mop/arsclisys/TEA/static/
     maskpath: *statpath
     mask_sub: masks/
-    outpath: /data/users/mop/arsclisys/TEA/results/new/
+    outpath: /home/wegnet/results/TEA_indicators_test/
   general: &GENERAL
     use_dask: false
 
@@ -62,8 +62,8 @@ calc_TEA:
   decadal: true
   recalc_decadal: true
   spreads: true
-  annual_spreads: true
-  decadal_only: true
+  annual_spreads: false
+  decadal_only: false
 
 regrid_SPARTACUS_to_WEGNext:
   <<: *GR
