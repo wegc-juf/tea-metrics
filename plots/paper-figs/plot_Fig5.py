@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 Plot Figure 5
 """
@@ -22,15 +24,16 @@ PARAMS = ref_cc_params()
 
 END_YEAR = 2026
 
-def get_data(varname='Tx30.0degC', ctp='june'):
-    dec = xr.open_dataset(INPUT_DATA_PATH / 'dec_indicator_variables' /
+
+def get_data(varname='Tx30.0degC', ctp='june', input_data_path=INPUT_DATA_PATH):
+    dec = xr.open_dataset(input_data_path / 'dec_indicator_variables' /
                           f'DEC_{varname}_AUT_{ctp}_SPARTACUS_1961to{END_YEAR}.nc')
 
     ctp_data = xr.open_mfdataset(
-        sorted((INPUT_DATA_PATH / 'ctp_indicator_variables').glob(f'CTP_{varname}_AUT_{ctp}_SPARTACUS_*.nc')),
+        sorted((input_data_path / 'ctp_indicator_variables').glob(f'CTP_{varname}_AUT_{ctp}_SPARTACUS_*.nc')),
         data_vars='minimal')
     
-    af_path = (INPUT_DATA_PATH / 'dec_indicator_variables' /
+    af_path = (input_data_path / 'dec_indicator_variables' /
                          f'amplification/AF_{varname}_AUT_{ctp}_SPARTACUS_1961to{END_YEAR}.nc')
     print(f"Loading amplification factors from {af_path}")
     af = xr.open_dataset(af_path)
@@ -154,15 +157,15 @@ def plot_gr_data(ax, adata, ddata, afdata, su, sl):
 def map_plot_params(vname):
     params = {'EF': {'cmap': 'Blues',
                      'lbl': r'EF$_\mathrm{CC}$(i,j) (ev/yr)',
-                     'title': f'Event Frequency (Annual) (CC2010-{END_YEAR})',
+                     'title': f'Event Frequency (Annual) (CC{END_YEAR-14}-{END_YEAR})',
                      'lvls': np.arange(1, 11)},
               'ED_avg': {'cmap': 'Purples',
                          'lbl': r'ED$_\mathrm{CC}$(i,j) (days)',
-                         'title': f'Avarage Event Duration (CC2010-{END_YEAR})',
+                         'title': f'Avarage Event Duration (CC{END_YEAR-14}-{END_YEAR})',
                          'lvls': np.arange(1, 3.75, 0.25)},
               'EM_avg': {'cmap': 'Oranges',
                          'lbl': r'EM$_\mathrm{CC}$(i,j) (°C)',
-                         'title': f'Average Exceedance Magnitude (CC2010-{END_YEAR})',
+                         'title': f'Average Exceedance Magnitude (CC{END_YEAR-14}-{END_YEAR})',
                          'lvls': np.arange(1, 2.6, 0.2)}
               }
 
@@ -210,8 +213,23 @@ def plot_map(fig, ax, data):
             fontsize=9)
 
 
-def run():
-    dec, ann, af = get_data()
+def run(run_name):
+    if run_name == 'RW1':
+        input_data_path = INPUT_DATA_PATH
+        ctp = 'june'
+    elif run_name == 'RW2':
+        input_data_path = INPUT_DATA_PATH
+        ctp = 'JJA'
+    elif run_name == 'CW1':
+        input_data_path = Path('/home/wegnet/results/SPARTACUS_DETRENDED_June')
+        ctp = 'june'
+    elif run_name == 'CW2':
+        input_data_path = Path('/home/wegnet/results/SPARTACUS_DETRENDED_JJA')
+        ctp = 'JJA'
+    elif run_name == 'CW3':
+        input_data_path = Path('/home/wegnet/results/SPARTACUS_DETRENDED_JJA')
+        ctp = 'june'
+    dec, ann, af = get_data(varname='Tx30.0degC', ctp=ctp, input_data_path=input_data_path)
 
     fig, axs = plt.subplots(4, 2, figsize=(14, 16))
 
@@ -220,13 +238,19 @@ def run():
         plot_gr_data(ax=axs[irow, 0], adata=ann[gr_var], ddata=dec[gr_var],
                      afdata=af[f'{gr_var}_AF_CC'],
                      su=dec[f'{gr_var}_supp'], sl=dec[f'{gr_var}_slow'])
+        su_mean = dec[f'{gr_var}_supp'].sel(time=slice(f'1961-01-01', f'1985-12-31')).mean().values
+        sl_mean = dec[f'{gr_var}_slow'].sel(time=slice(f'1961-01-01', f'1985-12-31')).mean().values
+        print(f"{gr_var}: mean supp = {su_mean:.3f}, mean slow = {sl_mean:.3f}")
 
     plot_gr_data(ax=axs[3, 1], adata=ann['TEX_GR'], ddata=dec['TEX_GR'], afdata=af['TEX_GR_AF_CC'],
                  su=dec['TEX_GR_supp'], sl=dec['TEX_GR_slow'])
+    su_mean = dec['TEX_GR_supp'].sel(time=slice(f'1961-01-01', f'1985-12-31')).mean().values
+    sl_mean = dec['TEX_GR_slow'].sel(time=slice(f'1961-01-01', f'1985-12-31')).mean().values
+    print(f"TEX_GR: mean supp = {su_mean:.3f}, mean slow = {sl_mean:.3f}")
 
     map_vars = ['EF', 'ED_avg', 'EM_avg']
     for irow, map_var in enumerate(map_vars):
-        mdata = gmean(dec[map_var].sel(time=slice('2015-01-01', '2020-12-31')), axis=0)
+        mdata = gmean(dec[map_var].sel(time=slice(f'{END_YEAR-9}-01-01', f'{END_YEAR-4}-12-31')), axis=0)
         mdata = xr.DataArray(data=mdata, coords={'y': (['y'], dec.y.values),
                                                  'x': (['x'], dec.x.values)}, name=map_var)
         plot_map(fig=fig, ax=axs[irow, 1], data=mdata)
@@ -243,9 +267,15 @@ def run():
                 va='top', ha='left')
 
     fig.subplots_adjust(wspace=0.2, hspace=0.33)
-    print("Saving Figure 5 to ./Figure5.png")
-    plt.savefig('./Figure5.png', dpi=300, bbox_inches='tight')
+    print(f"Saving Figure 5 to ./Figure5_{run_name}.png")
+    plt.savefig(f'./Figure5_{run_name}.png', dpi=300, bbox_inches='tight')
+    plt.show()
 
 
 if __name__ == '__main__':
-    run()
+    # run()
+    run('RW1')
+    run('RW2')
+    run('CW1')
+    run('CW2')
+    run('CW3')
