@@ -1,0 +1,61 @@
+common_params:
+  GeoRegion: &GR
+    region: AUT
+  parameter: &PARAM
+    parameter: Tx
+    precip: false
+    threshold: 30
+    threshold_type: abs
+    unit: degC
+    low_extreme: false
+  time_params: &TIME
+    start: 1961
+    end: 2026
+    period: JJA
+    ref_period: 1961-1990
+    cc_period: 2012-2026
+  dataset: &DATA
+    dataset: SPARTACUS
+  paths: &PATHS
+    data_path: &data_path /home/wegnet/SPARTACUS_DETRENDED_JJA/
+    input_data_path: *data_path
+    statpath: &statpath /home/wegnet/results/static/
+    maskpath: *statpath
+    mask_sub: masks/
+
+calc_TEA:
+  <<: *GR
+  <<: *PARAM
+  <<: *TIME
+  <<: *DATA
+  <<: *PATHS
+  outpath: /home/wegnet/results/SPARTACUS_DETRENDED_JJA/
+  recalc_threshold: false
+  recalc_daily: false
+  decadal: true
+  spreads: true
+  decadal_only: false
+  recalc_decadal: true
+  use_dask: false
+
+create_region_masks:
+  <<: *GR
+  <<: *PARAM
+  <<: *TIME
+  <<: *DATA
+  <<: *PATHS
+  gr_type: polygon
+  shpfile: /data/reloclim/backup/GEO/shapefiles/OEKS15/good/AUSTRIA.shp
+  target_sys: 32633
+  orofile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS/SPARTACUSreg_orography.nc
+
+regrid_SPARTACUS_to_WEGNext:
+  <<: *PARAM
+  <<: *DATA
+  parameter: Tx
+  raw_data_path: &raw_data_path /home/wegnet/SPARTACUS_EXTENDED/
+  input_data_path: *raw_data_path
+  orography: false
+  orog_file: /data/reloclim/backup/ZAMG_INCA/data/original/INCA_orog_corrected_y_dim.nc
+  wegn_file: /var/wegnet/netcdf/WEA/WN_L2_DD_v7_UTM_TF1_UTC_2020-08.nc
+  regridded_data_path: /home/wegnet/SPARTACUS_EXTENDED_REGRID/

@@ -24,3 +24,13 @@ __pycache__
 /internal/config/WEGC/ERA5H_COMMON_UTCI26.yaml
 *.grib2
 /src/teametrics/utils/ICON/icon_eu_t2m_regridded/*.nc
+/src/teametrics/utils/ICON/icon_d2_t2m_regridded_bias_corr/*.nc
+/src/teametrics/utils/ICON/icon_eu_t2m_regridded_bias_corr/*.nc
+/src/teametrics/utils/ICON/*.nc
+/plots/heatwave/old/*.png
+/plots/heatwave/*.csv
+/plots/heatwave/*.png
+/src/teametrics/utils/ICON/icon_d2_t2m_regridded/*.nc
+/src/teametrics/utils/ICON/icon_global_t2m/*.idx
+/src/teametrics/utils/ICON/icon_global_t2m/*.grib2
+
