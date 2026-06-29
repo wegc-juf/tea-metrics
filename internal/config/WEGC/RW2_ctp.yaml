@@ -9,15 +9,15 @@ common_params:
     unit: degC
     low_extreme: false
   time_params: &TIME
-    start: 1961
+    start: 2021
     end: 2026
-    period: june
+    period: JJA
     ref_period: 1961-1990
     cc_period: 2012-2026
   dataset: &DATA
     dataset: SPARTACUS
   paths: &PATHS
-    data_path: &data_path /home/wegnet/SPARTACUS_DETRENDED_JJA/
+    data_path: &data_path /home/wegnet/SPARTACUS_EXTENDED_REGRID/
     input_data_path: *data_path
     statpath: &statpath /home/wegnet/results/static/
     maskpath: *statpath
@@ -29,13 +29,13 @@ calc_TEA:
   <<: *TIME
   <<: *DATA
   <<: *PATHS
-  outpath: /home/wegnet/results/SPARTACUS_DETRENDED_JJA/
+  outpath: /home/wegnet/results/TEA_indicators_test/
   recalc_threshold: false
   recalc_daily: false
-  decadal: true
-  spreads: true
+  decadal: false
+  spreads: false
   decadal_only: false
-  recalc_decadal: true
+  recalc_decadal: false
   use_dask: false
 
 create_region_masks:

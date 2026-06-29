@@ -17,7 +17,7 @@ common_params:
   dataset: &DATA
     dataset: SPARTACUS
   paths: &PATHS
-    data_path: &data_path /home/wegnet/SPARTACUS_DETRENDED_JJA/
+    data_path: &data_path /home/wegnet/SPARTACUS_EXTENDED_REGRID/
     input_data_path: *data_path
     statpath: &statpath /home/wegnet/results/static/
     maskpath: *statpath
@@ -29,12 +29,12 @@ calc_TEA:
   <<: *TIME
   <<: *DATA
   <<: *PATHS
-  outpath: /home/wegnet/results/SPARTACUS_DETRENDED_JJA/
+  outpath: /home/wegnet/results/TEA_indicators_test/
   recalc_threshold: false
   recalc_daily: false
   decadal: true
   spreads: true
-  decadal_only: false
+  decadal_only: true
   recalc_decadal: true
   use_dask: false
 

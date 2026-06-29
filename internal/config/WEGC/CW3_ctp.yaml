@@ -9,7 +9,7 @@ common_params:
     unit: degC
     low_extreme: false
   time_params: &TIME
-    start: 1961
+    start: 2021
     end: 2026
     period: june
     ref_period: 1961-1990
@@ -32,10 +32,10 @@ calc_TEA:
   outpath: /home/wegnet/results/SPARTACUS_DETRENDED_JJA/
   recalc_threshold: false
   recalc_daily: false
-  decadal: true
-  spreads: true
+  decadal: false
+  spreads: false
   decadal_only: false
-  recalc_decadal: true
+  recalc_decadal: false
   use_dask: false
 
 create_region_masks:

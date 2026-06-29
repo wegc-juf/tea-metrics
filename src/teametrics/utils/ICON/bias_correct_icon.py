@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Bias correction of ICON forecasts using SPARTACUS Tmax data.
+"""
+
 import xarray as xr
 from pathlib import Path
 import numpy as np

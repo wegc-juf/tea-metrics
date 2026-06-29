@@ -7,9 +7,9 @@ import xarray as xr
 import numpy as np
 import matplotlib.pyplot as plt
 
-detrend_CTP = "June"
+detrend_CTP = "JJA"
 plot_data = True
-show_plots = False
+show_plots = True
 save_data = True
 
 
@@ -115,7 +115,7 @@ def calc_heatwave_metrics(data, heatwave_period, data_var="DTEMA_GR", add_values
     # Select the heatwave period
     heatwave_data = data.sel(time=slice(heatwave_period[0], heatwave_period[1]))[data_var]
     if add_values is not None:
-        new_times = [np.datetime64("2026-06-29"), np.datetime64("2026-06-30")]
+        new_times = [np.datetime64("2026-06-30")]
         new_data = xr.DataArray(add_values, coords=[new_times], dims=["time"])
         heatwave_data = xr.concat([heatwave_data, new_data], dim="time")
     heatwave_total = heatwave_data.sum(dim='time')
@@ -127,7 +127,7 @@ def calc_heatwave_metrics(data, heatwave_period, data_var="DTEMA_GR", add_values
 def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended_data=None):
     
     heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave = calc_heatwave_metrics(
-        data, heatwave_period, data_var=data_var, add_values=[900, 300] if heatwave_period[0] == "2026-06-17" else None)
+        data, heatwave_period, data_var=data_var, add_values=[300] if heatwave_period[0] == "2026-06-17" else None)
     print(f"Heatwave TEX_GR = S_GR for period {heatwave_period[0]} to {heatwave_period[1]}:"
           f" {heatwave_total.values:.0f} areal degC days / event, event_mean MA_GR = {mean_heatwave.values:.0f} "
           f"areal degC, event_max MA_GR = {heatwave_data.max().values:.0f} areal degC")
@@ -139,7 +139,7 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
     if detrended_data is not None:
         detrended_heatwave_data, detrended_heatwave_total, detrended_heatwave_cumulative, detrended_mean_heatwave = (
             calc_heatwave_metrics(
-                detrended_data, heatwave_period, data_var=data_var, add_values=[150, 50] if
+                detrended_data, heatwave_period, data_var=data_var, add_values=[50] if
             heatwave_period[0] == "2026-06-17" else None))
         print(f"Detrended Heatwave TEX_GR = S_GR for period {heatwave_period[0]} to {heatwave_period[1]}:"
               f" {detrended_heatwave_total.values:.0f} areal degC days / event, event_mean MA_GR ="

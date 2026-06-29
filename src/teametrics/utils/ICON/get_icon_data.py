@@ -175,8 +175,8 @@ def download_icon_d2_t2m():
 
 
 def run_main():
-    # download_icon_eu_t2m()
-    # download_icon_d2_t2m()
+    download_icon_eu_t2m()
+    download_icon_d2_t2m()
     download_icon_t2m(date=datetime.date.today().strftime("%Y%m%d"), run="00", outdir="icon_global_t2m", max_hour=180)
     
     
