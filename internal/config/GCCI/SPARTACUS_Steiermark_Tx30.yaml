@@ -17,7 +17,7 @@ common_params:
   time_params: &TIME
     start: 1961
     end: 2025
-    period: JJA
+    period: annual
     ref_period: 1961-1990
     cc_period: 2011-2025
   paths: &PATHS
