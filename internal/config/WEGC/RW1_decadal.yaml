@@ -17,7 +17,7 @@ common_params:
   dataset: &DATA
     dataset: SPARTACUS
   paths: &PATHS
-    data_path: &data_path /home/wegnet/SPARTACUS_EXTENDED_REGRID/
+    data_path: &data_path /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS/reproj_UTM33N/v2.1/
     input_data_path: *data_path
     statpath: &statpath /home/wegnet/results/static/
     maskpath: *statpath
@@ -53,9 +53,9 @@ regrid_SPARTACUS_to_WEGNext:
   <<: *PARAM
   <<: *DATA
   parameter: Tx
-  raw_data_path: &raw_data_path /home/wegnet/SPARTACUS_EXTENDED/
+  raw_data_path: &raw_data_path /data/reloclim/backup/ZAMG_SPARTACUS/data/current/
   input_data_path: *raw_data_path
   orography: false
   orog_file: /data/reloclim/backup/ZAMG_INCA/data/original/INCA_orog_corrected_y_dim.nc
   wegn_file: /var/wegnet/netcdf/WEA/WN_L2_DD_v7_UTM_TF1_UTC_2020-08.nc
-  regridded_data_path: /home/wegnet/SPARTACUS_EXTENDED_REGRID/
+  regridded_data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS/reproj_UTM33N/v2.1/
