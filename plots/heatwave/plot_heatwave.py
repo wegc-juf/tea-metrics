@@ -127,7 +127,7 @@ def calc_heatwave_metrics(data, heatwave_period, data_var="DTEMA_GR", add_values
 def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended_data=None):
     
     heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave = calc_heatwave_metrics(
-        data, heatwave_period, data_var=data_var, add_values=[300] if heatwave_period[0] == "2026-06-17" else None)
+        data, heatwave_period, data_var=data_var, add_values=None)
     print(f"Heatwave TEX_GR = S_GR for period {heatwave_period[0]} to {heatwave_period[1]}:"
           f" {heatwave_total.values:.0f} areal degC days / event, event_mean MA_GR = {mean_heatwave.values:.0f} "
           f"areal degC, event_max MA_GR = {heatwave_data.max().values:.0f} areal degC")
@@ -139,8 +139,7 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
     if detrended_data is not None:
         detrended_heatwave_data, detrended_heatwave_total, detrended_heatwave_cumulative, detrended_mean_heatwave = (
             calc_heatwave_metrics(
-                detrended_data, heatwave_period, data_var=data_var, add_values=[50] if
-            heatwave_period[0] == "2026-06-17" else None))
+                detrended_data, heatwave_period, data_var=data_var, add_values=None))
         print(f"Detrended Heatwave TEX_GR = S_GR for period {heatwave_period[0]} to {heatwave_period[1]}:"
               f" {detrended_heatwave_total.values:.0f} areal degC days / event, event_mean MA_GR ="
               f" {detrended_mean_heatwave.values:.0f} "
@@ -172,11 +171,11 @@ def run_main():
     
     daily_data_path_detrended = f"/home/wegnet/results/SPARTACUS_DETRENDED_{detrend_CTP}/daily_basis_variables/"
     # Add plotting code here
-    heatwave_period = ["2026-06-17", "2026-06-30"]
+    heatwave_period = ["2026-06-17", "2026-07-01"]
     data = get_data(data_var, daily_data_path_real_world, heatwave_period)
     
     # expand the data to include the new values
-    new_times = [np.datetime64("2026-06-29"), np.datetime64("2026-06-30")]
+    new_times = [np.datetime64("2026-06-29"), np.datetime64("2026-07-01")]
     detrended_data = get_data(data_var, daily_data_path_detrended, heatwave_period)
     calc_and_plot_heatwave(data, heatwave_period, detrended_data=detrended_data)
     
