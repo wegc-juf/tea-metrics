@@ -93,6 +93,7 @@ You can use the following variables as placeholders in your config files, values
 |-----------------------|-----------------------------------------|------|---------|
 | *raw_data_path*       | Path of input data.                     | path | null    |
 | *target_grid*         | Target grid: `wegn` (EPSG:32633) or `statat` (EPSG:3035). | str  | wegn    |
+| *shpfile*             | Optional shapefile containing raster-cell polygons of the target grid; if set, regridding grid edges and resolution are inferred from this file. | path | null    |
 | *orography*           | Marks if orography should be regridded. | bool | false   |
 | *orog_file*           | Path of orography file.                 | path | null    |
 | *wegn_file*           | Dummy WEGN file to extract grid (required when `target_grid=wegn`). | path | null    |

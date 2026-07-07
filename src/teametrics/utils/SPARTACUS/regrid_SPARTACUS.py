@@ -8,6 +8,7 @@
 import numpy as np
 import os
 from pathlib import Path
+import geopandas as gpd
 import pyproj
 from tqdm import trange
 import xarray as xr
@@ -119,6 +120,70 @@ def define_statat_grid_1000x1000(opts):
     return grid
 
 
+def define_grid_from_shapefile(opts, target_grid):
+    """
+    Derive target raster grid from a shapefile that contains raster cell polygons.
+    Grid edges and resolution are extracted from polygon bounds.
+
+    Args:
+        opts: CLI/config parameters
+        target_grid: target grid definition dict
+
+    Returns:
+        grid: dummy ds with new grid coordinates
+    """
+    print(f'Deriving target grid from shapefile {opts.shpfile} for target grid {target_grid["name"]}...')
+    
+    if not hasattr(opts, 'shpfile') or opts.shpfile is None:
+        raise ValueError('shpfile must be set to derive target grid from shapefile.')
+
+    gdf = gpd.read_file(opts.shpfile)
+    if gdf.empty:
+        raise ValueError(f'Shapefile {opts.shpfile} is empty.')
+    if gdf.crs is None:
+        raise ValueError(f'Shapefile {opts.shpfile} has no CRS.')
+
+    gdf = gdf.to_crs(epsg=int(target_grid['epsg']))
+    bounds = gdf.geometry.bounds
+
+    dx_cells = (bounds['maxx'] - bounds['minx']).to_numpy()
+    dy_cells = (bounds['maxy'] - bounds['miny']).to_numpy()
+    dx_cells = dx_cells[dx_cells > 0]
+    dy_cells = dy_cells[dy_cells > 0]
+    if len(dx_cells) == 0 or len(dy_cells) == 0:
+        raise ValueError(f'Could not infer grid resolution from shapefile {opts.shpfile}.')
+
+    x_res = float(np.median(dx_cells))
+    y_res = float(np.median(dy_cells))
+    if not np.isclose(x_res, y_res, rtol=1e-6, atol=1e-6):
+        raise ValueError(f'Non-square cells in shapefile {opts.shpfile}: dx={x_res}, dy={y_res}.')
+
+    xmin_edge = float(bounds['minx'].min())
+    xmax_edge = float(bounds['maxx'].max())
+    ymin_edge = float(bounds['miny'].min())
+    ymax_edge = float(bounds['maxy'].max())
+
+    nx = int(np.rint((xmax_edge - xmin_edge) / x_res))
+    ny = int(np.rint((ymax_edge - ymin_edge) / y_res))
+    if nx <= 0 or ny <= 0:
+        raise ValueError(f'Invalid raster extent derived from shapefile {opts.shpfile}.')
+
+    if not np.isclose(xmin_edge + nx * x_res, xmax_edge, rtol=1e-6, atol=1e-6):
+        raise ValueError(f'X edges in shapefile {opts.shpfile} are not aligned to a regular raster grid.')
+    if not np.isclose(ymin_edge + ny * y_res, ymax_edge, rtol=1e-6, atol=1e-6):
+        raise ValueError(f'Y edges in shapefile {opts.shpfile} are not aligned to a regular raster grid.')
+
+    x_new = xmin_edge + (np.arange(nx) + 0.5) * x_res
+    y_new = ymin_edge + (np.arange(ny) + 0.5) * y_res
+
+    dummy_data = np.zeros((len(y_new), len(x_new)))
+    grid = xr.Dataset(data_vars=dict(data=(["y", "x"], dummy_data), ),
+                      coords=dict(x=(["x"], x_new), y=(["y"], y_new), ), )
+    grid.attrs['grid_resolution'] = x_res
+
+    return grid
+
+
 def utm_to_epsg3416_grid(x, y):
     """
     transform UTM33N coords to EPSG:3416 grid
@@ -222,16 +287,19 @@ def regrid_spartacus(opts, ds_in, method="linear"):
     """
 
     target_grid = get_target_grid_definition(opts)
-    if target_grid['name'] == 'wegn':
+    if hasattr(opts, 'shpfile') and opts.shpfile is not None:
+        grid = define_grid_from_shapefile(opts=opts, target_grid=target_grid)
+    elif target_grid['name'] == 'wegn':
         grid = define_wegn_grid_1000x1000(opts=opts)
-        x_new = grid.x.values
-        y_new = grid.y.values
+    else:
+        grid = define_statat_grid_1000x1000(opts=opts)
+
+    x_new = grid.x.values
+    y_new = grid.y.values
+    if target_grid['name'] == 'wegn':
         # UTM to EPSG because input dataset is SPARTACUS, which is in EPSG3416
         x_new_epsg3416, y_new_epsg3416 = utm_to_epsg3416_grid(x_new, y_new)
     else:
-        grid = define_statat_grid_1000x1000(opts=opts)
-        x_new = grid.x.values
-        y_new = grid.y.values
         # EPSG:3035 to EPSG:3416 for interpolation from SPARTACUS source grid
         x_new_epsg3416, y_new_epsg3416 = epsg3035_to_epsg3416_grid(x_new, y_new)
 
@@ -241,6 +309,8 @@ def regrid_spartacus(opts, ds_in, method="linear"):
 
     # Interpolation
     ds_regridded = ds_in.interp(x=x, y=y, method=method)
+    if 'grid_resolution' in grid.attrs:
+        ds_regridded.attrs['grid_resolution'] = grid.attrs['grid_resolution']
 
     return ds_regridded
 
@@ -293,6 +363,11 @@ def _getopts():
                         choices=['wegn', 'statat'],
                         help='Target grid: "wegn" (EPSG:32633) or "statat" (EPSG:3035). '
                              'Overrides config value if set.')
+    parser.add_argument('--shpfile', '-shp',
+                        dest='shpfile',
+                        type=str,
+                        help='Optional shapefile with raster-cell polygons. If set, '
+                             'grid edges and resolution are derived from it.')
 
     myopts = parser.parse_args()
     
@@ -307,6 +382,10 @@ def run():
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
     if cmd_opts.target_grid is not None:
         opts.target_grid = cmd_opts.target_grid
+    if cmd_opts.shpfile is not None:
+        if not Path(cmd_opts.shpfile).is_file():
+            raise FileNotFoundError(f'Shapefile not found: {cmd_opts.shpfile}')
+        opts.shpfile = cmd_opts.shpfile
     target_grid = get_target_grid_definition(opts)
 
     if opts.orography:
