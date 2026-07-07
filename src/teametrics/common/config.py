@@ -227,6 +227,8 @@ def _get_default_opts(fname, opts):
             opts.orography = False
         if 'target_grid' not in opts:
             opts.target_grid = 'wegn'
+        if 'statat_file' not in opts:
+            opts.statat_file = None
 
     if 'primary_threshold' not in opts:
         opts.primary_threshold = None
@@ -317,6 +319,7 @@ def check_type(key, value):
         'raw_data_path': 'path',
         'regridded_data_path': 'path',
         'wegn_file': 'path',
+        'statat_file': 'path',
         'orography': bool,
         'target_grid': str,
 

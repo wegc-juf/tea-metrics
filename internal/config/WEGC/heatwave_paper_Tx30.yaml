@@ -57,6 +57,6 @@ regrid_SPARTACUS:
   input_data_path: *raw_data_path
   orography: true
   orog_file: /data/reloclim/backup/ZAMG_INCA/data/original/INCA_orog_corrected_y_dim.nc
-  shpfile: /data/users/alm/StatAT_data/OGDEXT_RASTER_1_STATISTIK_AUSTRIA_L001000_LAEA/STATISTIK_AUSTRIA_RASTER_L001000.shp
+  statat_file: /data/users/alm/StatAT_data/OGDEXT_RASTER_1_STATISTIK_AUSTRIA_L001000_LAEA/Austria_population_1km_2019.nc
   target_grid: statat
   regridded_data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS/reproj_StatAT/v2.1/

@@ -89,15 +89,16 @@ You can use the following variables as placeholders in your config files, values
 
 ## regrid_SPARTACUS_to_WEGNext
 ### Only necessary for SPARTACUS data, to regrid SPARTACUS data to WEGNext grid.
-| NAME                  | DESCRIPTION                                                                                                                                       | TYPE | DEFAULT |
-|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|------|---------|
-| *raw_data_path*       | Path of input data.                                                                                                                               | path | null    |
-| *target_grid*         | Target grid: `wegn` (EPSG:32633) or `statat` (EPSG:3035).                                                                                         | str  | wegn    |
-| *shpfile*             | Optional shapefile containing raster-cell polygons of the target grid; if set, regridding grid edges and resolution are inferred from this file.  | path | null    |
-| *orography*           | Marks if orography should be regridded.                                                                                                           | bool | false   |
-| *orog_file*           | Path of orography file.                                                                                                                           | path | null    |
-| *wegn_file*           | Dummy WEGN file to extract grid (required when `target_grid=wegn`).                                                                               | path | null    |
-| *regridded_data_path* | Path of output directory.                                                                                                                         | path | null    |
+| NAME                  | DESCRIPTION                                                                                                                                      | TYPE | DEFAULT |
+|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------|------|---------|
+| *raw_data_path*       | Path of input data.                                                                                                                              | path | null    |
+| *target_grid*         | Target grid: `wegn` (EPSG:32633) or `statat` (EPSG:3035).                                                                                        | str  | wegn    |
+| *shpfile*             | Optional shapefile containing raster-cell polygons of the target grid; if set, regridding grid edges and resolution are inferred from this file. | path | null    |
+| *wegn_file*           | Dummy WEGN file to extract grid (required when `target_grid=wegn`).                                                                              | path | null    |
+| *statat_file*         | Optional sample Statistik Austria (EPSG:3035) file to extract grid from (used when `target_grid=statat`).                                        | path | null    |
+| *orography*           | Marks if orography should be regridded.                                                                                                          | bool | false   |
+| *orog_file*           | Path of orography file.                                                                                                                          | path | null    |
+| *regridded_data_path* | Path of output directory.                                                                                                                        | path | null    |
 
 
 ## List of allowed variables

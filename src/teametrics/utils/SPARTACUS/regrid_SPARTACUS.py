@@ -88,28 +88,91 @@ def define_wegn_grid_1000x1000(opts):
     return grid
 
 
-def define_statat_grid_1000x1000(opts):
+def find_spatial_coords(ds):
+    """
+    Find x and y coordinate names in an xarray Dataset.
+    
+    Args:
+        ds: xarray Dataset
+    
+    Returns:
+        tuple (x_name, y_name) or raises ValueError if not found
+    """
+    # Try common coordinate name pairs
+    coord_pairs = [
+        ('x', 'y'),
+        ('X', 'Y'),
+        ('lon', 'lat'),
+        ('longitude', 'latitude'),
+        ('Longitude', 'Latitude'),
+        ('easting', 'northing'),
+        ('Easting', 'Northing'),
+    ]
+    
+    for x_name, y_name in coord_pairs:
+        if x_name in ds.coords and y_name in ds.coords:
+            return x_name, y_name
+    
+    # If no standard names found, look for any 1D coordinates that could be spatial
+    coords = list(ds.coords.keys())
+    if len(coords) >= 2:
+        # Filter out time-like coordinates
+        spatial_coords = [c for c in coords if c not in ['time', 'Time', 'date', 'Date']]
+        if len(spatial_coords) >= 2:
+            # Sort alphabetically and take first two (heuristic)
+            spatial_coords.sort()
+            return spatial_coords[0], spatial_coords[1]
+    
+    raise ValueError(f'Could not find spatial x,y coordinates in file. Available coords: {list(ds.coords.keys())}')
+
+
+def define_statat_grid(opts):
     """
     create 1 km resolution Statistik Austria-like grid in EPSG:3035
-    over the SPARTACUS domain
+    over the SPARTACUS domain. If statat_file is provided, extract grid and
+    resolution from it; otherwise compute from SPARTACUS extent.
     Args:
         opts: CLI parameter
 
     Returns:
-        grid: dummy ds with new grid coordinates
+        grid: dummy ds with new grid coordinates and resolution attribute
 
     """
-    # Load sample SPARTACUS data
-    original_grid = xr.open_dataset(Path(opts.raw_data_path) / f'SPARTACUS2-DAILY_{opts.parameter.upper()}_2000.nc')
+    grid_resolution = None
+    if hasattr(opts, 'statat_file') and opts.statat_file is not None:
+        # Load sample Statistik Austria data
+        statat_data = xr.open_dataset(opts.statat_file)
+        # Auto-detect coordinate names
+        x_name, y_name = find_spatial_coords(statat_data)
+        x_new = statat_data[x_name].values
+        y_new = statat_data[y_name].values
+        # Infer grid resolution from coordinate spacing
+        if len(x_new) > 1:
+            dx = np.abs(np.diff(x_new)[0])
+        else:
+            dx = None
+        if len(y_new) > 1:
+            dy = np.abs(np.diff(y_new)[0])
+        else:
+            dy = None
+        if dx is not None and dy is not None and np.isclose(dx, dy, rtol=1e-6, atol=1e-6):
+            grid_resolution = float(dx)
+            print(f'Extracted grid resolution from statat_file: {grid_resolution} m')
+        else:
+            print(f'Warning: unequal x,y spacing (dx={dx}, dy={dy}) from statat_file')
+    else:
+        # Load sample SPARTACUS data
+        original_grid = xr.open_dataset(Path(opts.raw_data_path) / f'SPARTACUS2-DAILY_{opts.parameter.upper()}_2000.nc')
 
-    # Change SPARTACUS projection to EPSG:3035
-    x_spa, y_spa = epsg3416_to_epsg3035_grid(original_grid.x, original_grid.y)
+        # Change SPARTACUS projection to EPSG:3035
+        x_spa, y_spa = epsg3416_to_epsg3035_grid(original_grid.x, original_grid.y)
 
-    # Round corners to 1000 m and build regular 1 km target grid
-    xmin, xmax = np.round(np.min(x_spa) / 1000) * 1000, np.round(np.max(x_spa) / 1000) * 1000
-    ymin, ymax = np.round(np.min(y_spa) / 1000) * 1000, np.round(np.max(y_spa) / 1000) * 1000
-    x_new = np.arange(xmin, xmax + 1000, 1000)
-    y_new = np.arange(ymin, ymax + 1000, 1000)
+        # Round corners to 1000 m and build regular 1 km target grid
+        xmin, xmax = np.round(np.min(x_spa) / 1000) * 1000, np.round(np.max(x_spa) / 1000) * 1000
+        ymin, ymax = np.round(np.min(y_spa) / 1000) * 1000, np.round(np.max(y_spa) / 1000) * 1000
+        x_new = np.arange(xmin, xmax + 1000, 1000)
+        y_new = np.arange(ymin, ymax + 1000, 1000)
+        grid_resolution = 1000.0
 
     # Create DataArray with new grid and dummy values
     dummy_data = np.zeros((len(y_new), len(x_new)))
@@ -117,9 +180,13 @@ def define_statat_grid_1000x1000(opts):
     grid = xr.Dataset(data_vars=dict(data=(["y", "x"], dummy_data), ),
                       coords=dict(x=(["x"], x_new), y=(["y"], y_new), ), )
 
+    if grid_resolution is not None:
+        grid.attrs['grid_resolution'] = grid_resolution
+
     return grid
 
 
+# noinspection DuplicatedCode
 def define_grid_from_shapefile(opts, target_grid):
     """
     Derive target raster grid from a shapefile that contains raster cell polygons.
@@ -243,8 +310,8 @@ def epsg3035_to_epsg3416_grid(x, y):
      """
     transformer = pyproj.Transformer.from_crs('EPSG:3035', 'EPSG:3416')
     ny, nx = len(y), len(x)
-    x, y = np.meshgrid(x, y)
-    newx, newy = transformer.transform(x.flatten(), y.flatten())
+    x_grid, y_grid = np.meshgrid(x, y)
+    newx, newy = transformer.transform(x_grid.flatten(), y_grid.flatten())
     newx = np.asarray(newx).reshape((ny, nx))
     newy = np.asarray(newy).reshape((ny, nx))
     return newx, newy
@@ -292,7 +359,7 @@ def regrid_spartacus(opts, ds_in, method="linear"):
     elif target_grid['name'] == 'wegn':
         grid = define_wegn_grid_1000x1000(opts=opts)
     else:
-        grid = define_statat_grid_1000x1000(opts=opts)
+        grid = define_statat_grid(opts=opts)
 
     x_new = grid.x.values
     y_new = grid.y.values
@@ -368,6 +435,12 @@ def _getopts():
                         type=str,
                         help='Optional shapefile with raster-cell polygons. If set, '
                              'grid edges and resolution are derived from it.')
+    parser.add_argument('--statat-file', '-stf',
+                        dest='statat_file',
+                        type=str,
+                        help='Optional sample Statistik Austria (EPSG:3035) file to extract '
+                             'grid from. Only used when target_grid=statat. '
+                             'Overrides config value if set.')
 
     myopts = parser.parse_args()
     
@@ -386,6 +459,10 @@ def run():
         if not Path(cmd_opts.shpfile).is_file():
             raise FileNotFoundError(f'Shapefile not found: {cmd_opts.shpfile}')
         opts.shpfile = cmd_opts.shpfile
+    if cmd_opts.statat_file is not None:
+        if not Path(cmd_opts.statat_file).is_file():
+            raise FileNotFoundError(f'Statat file not found: {cmd_opts.statat_file}')
+        opts.statat_file = cmd_opts.statat_file
     target_grid = get_target_grid_definition(opts)
 
     if opts.orography:

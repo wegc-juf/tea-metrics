@@ -35,6 +35,7 @@ regrid_SPARTACUS_to_WEGNext:
   orography: false
   orofile: /data/reloclim/backup/ZAMG_INCA/data/original/INCA_orog_corrected_y_dim.nc
   wegnfile: /data/users/hst/cdrDPS/wegnet/WN_L2_DD_v7_UTM_TF1_UTC_2020-08.nc
+  # statat_file: /path/to/statat/sample.nc  # Optional; used only when target_grid=statat
   outpath: /home/wegnet/results/TEA_indicators_hst/
 
 create_region_masks:
