@@ -31,6 +31,7 @@ common_params:
 regrid_SPARTACUS_to_WEGNext:
   <<: *PARAM
   inpath: /data/users/hst/TEA-clean/SPARTACUS/
+  target_grid: wegn
   orography: false
   orofile: /data/reloclim/backup/ZAMG_INCA/data/original/INCA_orog_corrected_y_dim.nc
   wegnfile: /data/users/hst/cdrDPS/wegnet/WN_L2_DD_v7_UTM_TF1_UTC_2020-08.nc

@@ -221,10 +221,12 @@ def _get_default_opts(fname, opts):
         if 'altitude_threshold' not in opts:
             opts.altitude_threshold = 1500
 
-    # regrid_SPARTACUS_to_WEGNext.py options
+    # regrid_SPARTACUS.py options
     if fname == 'regrid_SPARTACUS_to_WEGNext':
         if 'orography' not in opts:
             opts.orography = False
+        if 'target_grid' not in opts:
+            opts.target_grid = 'wegn'
 
     if 'primary_threshold' not in opts:
         opts.primary_threshold = None
@@ -311,11 +313,12 @@ def check_type(key, value):
         'altitude_threshold': int,
         'lsmfile': 'path',
 
-        # regrid_SPARTACUS_to_WEGNext.py
+        # regrid_SPARTACUS.py
         'raw_data_path': 'path',
         'regridded_data_path': 'path',
         'wegn_file': 'path',
         'orography': bool,
+        'target_grid': str,
 
         # hidden parameters
         'script': str,  # name of the script
@@ -386,6 +389,7 @@ def check_config(opts_dict):
         'perc_period': ['monthly', 'seasonal', 'annual', 'WAS', 'ESS', 'MAM', 'JJA', 'SON', 'DJF', 'june', 'jan',
                         'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'],
         'gr_type': ['polygon', 'corners', 'center'],
+        'target_grid': ['wegn', 'statat'],
     }
 
     for param in opts_dict.keys():

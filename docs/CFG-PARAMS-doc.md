@@ -92,9 +92,10 @@ You can use the following variables as placeholders in your config files, values
 | NAME                  | DESCRIPTION                             | TYPE | DEFAULT |
 |-----------------------|-----------------------------------------|------|---------|
 | *raw_data_path*       | Path of input data.                     | path | null    |
+| *target_grid*         | Target grid: `wegn` (EPSG:32633) or `statat` (EPSG:3035). | str  | wegn    |
 | *orography*           | Marks if orography should be regridded. | bool | false   |
 | *orog_file*           | Path of orography file.                 | path | null    |
-| *wegn_file*           | Dummy WEGN file to extract grid.        | path | null    |
+| *wegn_file*           | Dummy WEGN file to extract grid (required when `target_grid=wegn`). | path | null    |
 | *regridded_data_path* | Path of output directory.               | path | null    |
 
 
@@ -104,4 +105,3 @@ You can use the following variables as placeholders in your config files, values
 | NAME         | DESCRIPTION                                |
 |--------------|--------------------------------------------|
 | $script_path | Path to the script that is being executed. |
-
