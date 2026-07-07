@@ -81,3 +81,8 @@ persistent-substitution = true
 include = ["src/teametrics/config/*.yaml", "src/teametrics/data/examples/ERA5_Tx_1956-2024_CH.nc", "README.md",
     "LICENSE"]
 version = "0.10.14a0"
+
+[dependency-groups]
+dev = [
+    "pytest (>=9.1.1,<10.0.0)"
+]
