@@ -263,10 +263,10 @@ def utm_to_epsg3416_grid(x, y):
         newy: y-coordinates in EPSG:3416
 
      """
-    transformer = pyproj.Transformer.from_crs('EPSG:32633', 'EPSG:3416')
+    transformer = pyproj.Transformer.from_crs('EPSG:32633', 'EPSG:3416', always_xy=True)
     ny, nx = len(y), len(x)
-    x, y = np.meshgrid(x, y)
-    newy, newx = transformer.transform(x.flatten(), y.flatten())
+    x_grid, y_grid = np.meshgrid(x, y)
+    newx, newy = transformer.transform(x_grid.flatten(), y_grid.flatten())
     newx = np.asarray(newx).reshape((ny, nx))
     newy = np.asarray(newy).reshape((ny, nx))
     return newx, newy
@@ -284,13 +284,11 @@ def epsg3416_to_utm_grid(x, y):
         newy: y-coordinates in UTM33N
 
     """
-    transformer = pyproj.Transformer.from_crs('EPSG:3416', 'EPSG:32633')
+    transformer = pyproj.Transformer.from_crs('EPSG:3416', 'EPSG:32633', always_xy=True)
     ny, nx = len(y), len(x)
-    y, x = np.meshgrid(y, x)
-    newx, newy = transformer.transform(y.flatten(), x.flatten())
-    newy = np.sort(newy)
-    newx = np.asarray(newx).reshape((nx, ny))
-    newx = newx.T
+    x_grid, y_grid = np.meshgrid(x, y)
+    newx, newy = transformer.transform(x_grid.flatten(), y_grid.flatten())
+    newx = np.asarray(newx).reshape((ny, nx))
     newy = np.asarray(newy).reshape((ny, nx))
 
     return newx, newy
@@ -308,7 +306,7 @@ def epsg3035_to_epsg3416_grid(x, y):
         newy: y-coordinates in EPSG:3416
 
      """
-    transformer = pyproj.Transformer.from_crs('EPSG:3035', 'EPSG:3416')
+    transformer = pyproj.Transformer.from_crs('EPSG:3035', 'EPSG:3416', always_xy=True)
     ny, nx = len(y), len(x)
     x_grid, y_grid = np.meshgrid(x, y)
     newx, newy = transformer.transform(x_grid.flatten(), y_grid.flatten())
@@ -329,13 +327,11 @@ def epsg3416_to_epsg3035_grid(x, y):
         newy: y-coordinates in EPSG:3035
 
     """
-    transformer = pyproj.Transformer.from_crs('EPSG:3416', 'EPSG:3035')
+    transformer = pyproj.Transformer.from_crs('EPSG:3416', 'EPSG:3035', always_xy=True)
     ny, nx = len(y), len(x)
-    y, x = np.meshgrid(y, x)
-    newx, newy = transformer.transform(y.flatten(), x.flatten())
-    newy = np.sort(newy)
-    newx = np.asarray(newx).reshape((nx, ny))
-    newx = newx.T
+    x_grid, y_grid = np.meshgrid(x, y)
+    newx, newy = transformer.transform(x_grid.flatten(), y_grid.flatten())
+    newx = np.asarray(newx).reshape((ny, nx))
     newy = np.asarray(newy).reshape((ny, nx))
 
     return newx, newy
