@@ -1,16 +1,18 @@
 """
 Threshold Exceedance Amount (TEA) indicators Class implementation
 Based on: https://doi.org/10.1016/j.wace.2026.100855
-Equation numbers refer to Supplementary Notes therin
+Equation numbers refer to Supplementary Notes therein
 """
 import warnings
 import os
 import gc
 
 import xarray as xr
+import rioxarray  # noqa: F401 - imported to enable .rio accessor
 import pandas as pd
 import numpy as np
 from xarray import Dataset
+from pathlib import Path
 
 from .common.var_attrs import get_attrs, equal_vars
 from .common.TEA_logger import logger
@@ -127,20 +129,23 @@ class TEAIndicators:
             self.CTP_freqs = {'annual': 'YS', 'seasonal': 'QS-DEC', 'WAS': 'YS-APR',
                               'ESS': 'YS-MAY', 'JJA': 'YS-JUN',
                               'DJF': 'YS-DEC', 'EWS': 'YS-NOV', 'monthly': 'MS', 'june': 'YS-JUN', 'jan': 'YS-JAN',
-                              'feb': 'YS-FEB', 'mar': 'YS-MAR', 'apr': 'YS-APR', 'may': 'YS-MAY', 'jun': 'YS-JUN', 'jul': 'YS-JUL', 'aug': 'YS-AUG',
+                              'feb': 'YS-FEB', 'mar': 'YS-MAR', 'apr': 'YS-APR', 'may': 'YS-MAY', 'jun': 'YS-JUN',
+                              'jul': 'YS-JUL', 'aug': 'YS-AUG',
                               'sep': 'YS-SEP', 'oct': 'YS-OCT', 'nov': 'YS-NOV', 'dec': 'YS-DEC'}
         else:
             self.CTP_freqs = {'annual': 'AS', 'seasonal': 'QS-DEC', 'WAS': 'AS-APR',
                               'ESS': 'AS-MAY', 'JJA': 'AS-JUN',
                               'DJF': 'AS-DEC', 'EWS': 'AS-NOV', 'monthly': 'MS', 'june': 'YS-JUN', 'jan': 'YS-JAN',
                               'feb': 'YS-FEB',
-                              'mar': 'YS-MAR', 'apr': 'YS-APR', 'may': 'YS-MAY', 'jun': 'YS-JUN', 'jul': 'YS-JUL', 'aug': 'YS-AUG',
+                              'mar': 'YS-MAR', 'apr': 'YS-APR', 'may': 'YS-MAY', 'jun': 'YS-JUN', 'jul': 'YS-JUL',
+                              'aug': 'YS-AUG',
                               'sep': 'YS-SEP', 'oct': 'YS-OCT', 'nov': 'YS-NOV', 'dec': 'YS-DEC'}
         self._overlap_ctps = ['EWS', 'DJF']
         self.CTP_months = {'WAS': [4, 5, 6, 7, 8, 9, 10], 'ESS': [5, 6, 7, 8, 9],
                            'EWS': [11, 12, 1, 2, 3],
                            'JJA': [6, 7, 8], 'DJF': [12, 1, 2], 'june': [6], 'jan': [1], 'feb': [2], 'mar': [3],
-                           'apr': [4], 'may': [5], 'jun': [6], 'jul': [7], 'aug': [8], 'sep': [9], 'oct': [10], 'nov': [11],
+                           'apr': [4], 'may': [5], 'jun': [6], 'jul': [7], 'aug': [8], 'sep': [9], 'oct': [10],
+                           'nov': [11],
                            'dec': [12]}
         self._CTP_resample_sum = None
         self._CTP_resample_mean = None
@@ -527,18 +532,23 @@ class TEAIndicators:
         if not self.use_dask:
             self.daily_results = self.daily_results.compute()
 
-    def save_daily_results(self, filepath):
+    def save_daily_results(self, filepath, variables=None, save_tiff=False):
         """
         save all variables to filepath
         Args:
             filepath: path to save the results.
+            variables: list of specific variable names to save. If None, saves all raster variables.
+                      Only used for GeoTIFF format. Ignored for NetCDF.
+            save_tiff: if True, save results as GeoTIFF in addition to NetCDF. Default: False
         """
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
-            logger.info(f"Saving daily results to {filepath}")
 
             try:
+                if save_tiff:
+                    self._save_geotiff(filepath, variables)
+                logger.info(f"Saving daily results to {filepath}")
                 self._to_netcdf(dataset=self.daily_results, filepath=filepath)
             except PermissionError as err:
                 if not DEBUG:
@@ -575,6 +585,112 @@ class TEAIndicators:
             dataset.round(decimals=digits).to_netcdf(filepath, encoding=encoding)
         else:
             dataset.to_netcdf(filepath)
+
+    def _is_raster_variable(self, var_data):
+        """
+        Check if a variable is raster data (contains spatial dimensions).
+        
+        Args:
+            var_data: xarray DataArray to check
+            
+        Returns:
+            bool: True if variable has spatial dimensions, False otherwise
+        """
+        try:
+            spatial_dims = [dim for dim in var_data.dims if dim != 'time']
+            return self.xdim in spatial_dims or self.ydim in spatial_dims
+        except (AttributeError, ValueError):
+            return False
+
+    def _get_raster_variables(self, dataset):
+        """
+        Get all raster variables (variables with spatial dimensions) from a dataset.
+        
+        Args:
+            dataset: xarray Dataset
+            
+        Returns:
+            list: variable names that contain spatial dimensions
+        """
+        raster_vars = []
+        for var in dataset.data_vars:
+            if self._is_raster_variable(dataset[var]):
+                raster_vars.append(var)
+        return raster_vars
+
+    def _save_geotiff(self, filepath, variables=None, dataset=None, split_by_year=True):
+        """
+        Save dataset to GeoTIFF format.
+        Only processes raster data (variables with spatial dimensions).
+        
+        Args:
+            filepath: path to save the results (without variable suffix)
+            variables: optional list of specific variable names to save.
+                      If None, saves all raster variables.
+            dataset: xarray Dataset to save. If None, daily_results is used.
+            split_by_year: if True, writes one file per year and variable (requires time dimension).
+                          if False, writes one file per variable and keeps all time steps.
+                      
+        Raises:
+            ValueError: if no raster variables are found or invalid variable names provided
+        """
+        if isinstance(filepath, Path):
+            filepath = str(filepath)
+            
+        ext = os.path.splitext(filepath)[1].lower()
+        if dataset is None:
+            dataset = self.daily_results
+        
+        # Get all raster variables
+        raster_vars = self._get_raster_variables(dataset)
+        
+        if not raster_vars:
+            raise ValueError("No raster variables (with spatial dimensions) found in dataset. "
+                           f"Available variables: {list(dataset.data_vars)}")
+        
+        # Filter variables if specified
+        if variables is not None:
+            if isinstance(variables, str):
+                variables = [variables]
+            invalid_vars = [v for v in variables if v not in raster_vars]
+            if invalid_vars:
+                raise ValueError(f"Invalid variable(s): {invalid_vars}. "
+                               f"Available raster variables: {raster_vars}")
+            vars_to_save = variables
+        else:
+            vars_to_save = raster_vars
+        
+        # Save each variable as a separate GeoTIFF file
+        saved_files = []
+        if split_by_year and 'time' in dataset.dims:
+            start_year = int(dataset.time.dt.year.min().values)
+            end_year = int(dataset.time.dt.year.max().values)
+            for year in range(start_year, end_year + 1):
+                yearly_filepath = filepath.replace(f'{start_year}to{end_year}', f'{year}')
+                year_data = dataset.sel(time=str(year))
+                for var in vars_to_save:
+                    try:
+                        var_data = year_data[var]
+                        var_filepath = yearly_filepath.replace(ext, f'_{var}.tiff')
+                        logger.info(f"Saving raster variable '{var}' for year {year} to {var_filepath}")
+                        var_data.rio.to_raster(var_filepath, compress='LZW')
+                        saved_files.append(var_filepath)
+                    except Exception as e:
+                        logger.error(f"Failed to save variable '{var}' for year {year} to GeoTIFF: {str(e)}")
+                        raise
+        else:
+            for var in vars_to_save:
+                try:
+                    var_data = dataset[var]
+                    var_filepath = filepath.replace(ext, f'_{var}.tiff')
+                    logger.info(f"Saving raster variable '{var}' to {var_filepath}")
+                    var_data.rio.to_raster(var_filepath, compress='LZW')
+                    saved_files.append(var_filepath)
+                except Exception as e:
+                    logger.error(f"Failed to save variable '{var}' to GeoTIFF: {str(e)}")
+                    raise
+        
+        logger.info(f"Successfully saved {len(saved_files)} raster variable(s) to GeoTIFF format")
 
     def load_daily_results(self, filepath):
         """
@@ -1095,7 +1211,7 @@ class TEAIndicators:
             m: average exceedance magnitude
             a: average exceedance area
             s: event severity
-        Either f, d, m, and a, or f and s must be provided
+        Either f, d, m, and a - or f and s must be provided
         """
         # equation 21_4
         if s is None:
@@ -1330,15 +1446,21 @@ class TEAIndicators:
         self.ctp_results['time'].attrs = ctp_attrs
         self.ctp_results.attrs['CTP'] = self.CTP
 
-    def save_ctp_results(self, filepath):
+    def save_ctp_results(self, filepath, variables=None, save_tiff=False):
         """
         save all CTP results to filepath
+        Args:
+            filepath: path to save the results.
+            variables: list of specific variable names to save as GeoTIFF. If None, saves all raster variables.
+            save_tiff: if True, save results as GeoTIFF in addition to NetCDF. Default: False
         """
 
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
             try:
+                if save_tiff:
+                    self._save_geotiff(filepath, variables, dataset=self.ctp_results, split_by_year=False)
                 self._to_netcdf(self.ctp_results, filepath)
             except PermissionError as err:
                 if not DEBUG:
@@ -1356,10 +1478,14 @@ class TEAIndicators:
         self.ctp_results = xr.open_mfdataset(filepath, data_vars='minimal', combine='by_coords',
                                              coords='minimal', compat='override', join='exact',
                                              chunks='auto' if use_dask else None)
+        
         # TODO: optimize code in TEA._calc_spread_estimators
         if not use_dask:
             # avoid using dask when calculating spreads
             self.ctp_results.load()
+            
+        self._find_dim_names(self.ctp_results)
+        
         if 'units' not in self.ctp_results.EM_avg.attrs:
             logger.warning(
                 "No unit attribute found in CTP results. Please set the unit attribute manually.")
@@ -1400,6 +1526,7 @@ class TEAIndicators:
             min_duration: minimum cumulative duration of events in days/decade to keep in decadal results (default: 7)
                 if 0, no minimum duration is applied
                 if > 0, only events with a duration of at least min_duration years are kept
+            calc_annual_ref: calculate reference mean for decadal results (default: False)
         """
         if decadal_window is None:
             decadal_window = [10, 5, 4]
@@ -1442,9 +1569,13 @@ class TEAIndicators:
             {var: self.decadal_results[var] for var in self.decadal_results.data_vars if
              'ED' in var})
 
-    def save_decadal_results(self, filepath):
+    def save_decadal_results(self, filepath, variables=None, save_tiff=False):
         """
         save all decadal results to filepath
+        Args:
+            filepath: path to save the results.
+            variables: list of specific variable names to save as GeoTIFF. If None, saves all raster variables.
+            save_tiff: if True, save results as GeoTIFF in addition to NetCDF. Default: False
         """
         
         if self._cc_mean is not None and self._ref_mean is not None:
@@ -1470,6 +1601,8 @@ class TEAIndicators:
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
+            if save_tiff:
+                self._save_geotiff(filepath, variables, dataset=self.decadal_results, split_by_year=False)
             self._to_netcdf(self.decadal_results, filepath)
 
     def load_decadal_results(self, filepath):
@@ -1813,7 +1946,8 @@ class TEAIndicators:
         Args:
             ds: Xarray dataset (must contain 'ED' variable)
             min_duration: minimum duration in days
-            duration_data: optional Xarray dataset with cumulative event duration data (e.g. decadal ED), else uses ED from ds
+            duration_data: optional Xarray dataset with cumulative event duration data (e.g. decadal ED),
+            else uses ED from ds
         """
         for vvar in ds.data_vars:
             if 'threshold' in vvar:

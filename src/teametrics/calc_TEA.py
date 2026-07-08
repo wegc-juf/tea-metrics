@@ -207,7 +207,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
 
         # save results
         create_tea_history(cfg_params=opts, tea=tea, dataset='daily_results')
-        tea.save_daily_results(filepath=dbv_filename)
+        tea.save_daily_results(filepath=dbv_filename, save_tiff=opts.file_format == 'GeoTiff')
     else:
         # load existing results
         if 'agr' in opts:
@@ -381,7 +381,7 @@ def _save_ctp_output(opts, tea, start, end):
     path_ref = outpath.replace('.nc', '_ref.nc')
 
     logger.info(f'Saving CTP indicators to {outpath}')
-    tea.save_ctp_results(filepath=outpath)
+    tea.save_ctp_results(filepath=outpath, save_tiff=opts.file_format == 'GeoTiff')
 
     if opts.compare_to_ref:
         _compare_to_ctp_ref(tea, path_ref)
@@ -670,7 +670,7 @@ def _calc_agr_mean_and_spread(opts, tea):
             if os.path.exists(outpath_decadal):
                 os.remove(outpath_decadal)
     create_tea_history(cfg_params=opts, tea=tea, dataset='decadal_results')
-    tea.save_decadal_results(filepath=outpath_decadal)
+    tea.save_decadal_results(filepath=outpath_decadal, save_tiff=opts.file_format == 'GeoTiff')
 
     # # annual
     if opts.annual_spreads:
@@ -680,7 +680,7 @@ def _calc_agr_mean_and_spread(opts, tea):
         # drop 3D vars already saved in GRG files
         tea.ctp_results = tea.ctp_results.drop_vars(
             [var for var in tea.ctp_results.data_vars if 'AGR' not in var])
-        tea.save_ctp_results(filepath=filepath_annual)
+        tea.save_ctp_results(filepath=filepath_annual, save_tiff=opts.file_format == 'GeoTiff')
 
     # # amplification factors
     outpath_ampl = get_amplification_outpath(opts, opts.agr)

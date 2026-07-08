@@ -8,6 +8,7 @@ common_params:
     threshold_type: abs
     unit: degC
     low_extreme: false
+    file_format: GeoTiff
   time_params: &TIME
     start: 1961
     end: 2026

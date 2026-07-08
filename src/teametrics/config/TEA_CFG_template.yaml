@@ -20,6 +20,7 @@ common_params:
     unit: degC
     low_extreme: false
     significant_digits: 3
+    # file_format: NetCDF4  # output format for daily basis variables: "NetCDF4" (default) or "GeoTiff"
   time_params: &TIME
     start: 1961
     end: 2024

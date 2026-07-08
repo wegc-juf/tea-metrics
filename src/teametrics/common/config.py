@@ -126,6 +126,8 @@ def _get_default_opts(fname, opts):
         opts.min_exceedance_area = 1
     if 'significant_digits' not in opts:
         opts.significant_digits = 3
+    if 'file_format' not in opts:
+        opts.file_format = 'NetCDF4'
 
     # time_params options
     if 'start' not in opts:
@@ -267,6 +269,7 @@ def check_type(key, value):
         'min_exceedance_area': float,
         'min_duration': float,
         'significant_digits': int,
+        'file_format': str,
 
         # time parameters
         'start': int,
@@ -393,16 +396,17 @@ def check_config(opts_dict):
                         'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'],
         'gr_type': ['polygon', 'corners', 'center'],
         'target_grid': ['wegn', 'statat'],
+        'file_format': ['NetCDF4', 'GeoTiff'],
     }
 
     for param in opts_dict.keys():
-        if 'path' in param or 'file' in param:
+        if param != 'file_format' and ('path' in param or 'file' in param):
             if 'example' in str(opts_dict[param]):
                 continue
             is_dir_path(opts_dict[param])
         else:
             check_type(param, opts_dict[param])
-        if 'file' in param:
+        if param != 'file_format' and 'file' in param:
             is_file(opts_dict[param])
         if param == 'threshold':
             float_1pcd(opts_dict[param])

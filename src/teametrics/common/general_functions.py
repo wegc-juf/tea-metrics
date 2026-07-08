@@ -329,7 +329,7 @@ def get_gridded_data(start, end, opts, period='annual', hourly=False):
             data = data.resample(time='1D').mean()
 
     if opts.dataset == 'SPARTACUS':
-        data = data.drop('lambert_conformal_conic')
+        data = data.drop_vars('lambert_conformal_conic')
 
     if not opts.use_dask:
         # load data into memory

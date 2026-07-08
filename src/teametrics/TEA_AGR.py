@@ -203,14 +203,20 @@ class TEAAgr(TEAIndicators):
         """
         return self.ctp_results
 
-    def save_ctp_results(self, filepath):
+    def save_ctp_results(self, filepath, variables=None, save_tiff=False):
         """
         save all CTP results to filepath
+        Args:
+            filepath: path to save the results.
+            variables: list of specific variable names to save as GeoTIFF. If None, saves all raster variables.
+            save_tiff: if True, save results as GeoTIFF in addition to NetCDF. Default: False
         """
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
             try:
+                if save_tiff:
+                    self._save_geotiff(filepath, variables, dataset=self.ctp_results, split_by_year=False)
                 self._to_netcdf(self.ctp_results, filepath)
             except PermissionError as err:
                 if not DEBUG:
