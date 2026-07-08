@@ -157,7 +157,8 @@ def define_statat_grid(opts):
             dy = None
         if dx is not None and dy is not None and np.isclose(dx, dy, rtol=1e-6, atol=1e-6):
             grid_resolution = float(dx)
-            print(f'Extracted grid resolution from statat_file: {grid_resolution} m')
+            if opts.verbose:
+                print(f'Extracted grid resolution from statat_file: {grid_resolution} m')
         else:
             print(f'Warning: unequal x,y spacing (dx={dx}, dy={dy}) from statat_file')
     else:
@@ -398,6 +399,7 @@ def regrid_orog(opts):
 
     path = Path(opts.regridded_data_path)
     path.mkdir(parents=True, exist_ok=True)
+    print(f"Saving regridded orography to {path / 'SPARTACUSreg_orography.nc'}")
     oro_new.to_netcdf(path / 'SPARTACUSreg_orography.nc')
 
 
@@ -437,6 +439,11 @@ def _getopts():
                         help='Optional sample Statistik Austria (EPSG:3035) file to extract '
                              'grid from. Only used when target_grid=statat. '
                              'Overrides config value if set.')
+    
+    parser.add_argument('--verbose', '-v',
+                        dest='verbose',
+                        action='store_true',
+                        help='Enable verbose output')
 
     myopts = parser.parse_args()
     
@@ -459,6 +466,11 @@ def run():
         if not Path(cmd_opts.statat_file).is_file():
             raise FileNotFoundError(f'Statat file not found: {cmd_opts.statat_file}')
         opts.statat_file = cmd_opts.statat_file
+    if cmd_opts.verbose:
+        opts.verbose = True
+    else:
+        opts.verbose = False
+        
     target_grid = get_target_grid_definition(opts)
 
     if opts.orography:
