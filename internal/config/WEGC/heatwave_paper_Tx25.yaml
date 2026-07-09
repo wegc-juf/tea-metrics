@@ -4,7 +4,7 @@ common_params:
   parameter: &PARAM
     parameter: Tx
     precip: false
-    threshold: 30
+    threshold: 25
     threshold_type: abs
     unit: degC
     low_extreme: false
@@ -31,8 +31,7 @@ calc_TEA:
   <<: *DATA
   <<: *PATHS
   outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/
-  recalc_threshold: false
-  recalc_daily: false
+  recalc_daily: true
   decadal: true
   spreads: false
   decadal_only: false
