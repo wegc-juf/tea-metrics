@@ -467,7 +467,8 @@ def _load_or_generate_gr_grid_static(opts, tea):
     # load static GR grid files
     gr_grid_mask, gr_grid_areas = _load_gr_grid_static(opts)
     # generate GR grid mask and area if necessary
-    if tea._ref_mean is not None:
+    mismatch = False
+    if tea._ref_mean is not None and gr_grid_mask is not None:
         mismatch = gr_grid_mask[tea.xdim][0].values not in tea._ref_mean[tea.xdim].values
     if gr_grid_mask is None or gr_grid_areas is None or mismatch:
         tea.generate_gr_grid_mask()
