@@ -1207,6 +1207,11 @@ class TEAIndicators:
         tex = self._CTP_resample_sum.DTEMA_GR
         tex.attrs = get_attrs(vname='TEX_GR', data_unit=self.unit)
         self.ctp_results['TEX_GR'] = tex
+        
+        if 'DTEMA' in self._CTP_resample_sum:
+            tex_nl = self._CTP_resample_sum.DTEMA
+            tex_nl.attrs = get_attrs(vname='TEX', data_unit=self.unit)
+            self.ctp_results['TEX'] = tex_nl
 
     def _calc_total_events_extremity(self, f, d=None, m=None, a=None, s=None):
         """
@@ -1266,6 +1271,11 @@ class TEAIndicators:
             self._calc_annual_total_events_extremity()
         if self.ctp_results['EM_GR'] is None:
             self._calc_annual_exceedance_magnitude()
+            
+        if 'DTEA' in self._CTP_resample_sum:
+            ea = self._CTP_resample_sum.DTEA
+            ea.attrs = get_attrs(vname='EA')
+            self.ctp_results['EA'] = ea
 
         # equation 21_1
         ea_avg = self.ctp_results.TEX_GR / self.ctp_results.EM_GR

@@ -68,6 +68,7 @@ def get_attrs(vname=None, dec=False, spread=None, period='', data_unit=''):
                    'units': f'{data_unit} d yr^-1', 'metric_type': 'compound'},
         'EM_avg_Max': {'long_name': 'average maximum exceedance magnitude',
                        'units': data_unit, 'metric_type': 'basic'},
+        'EA': {'long_name': 'exceedance area', 'units': '100 km^2', 'metric_type': 'basic'},
         'EA_avg': {'long_name': 'average exceedance area', 'units': '100 km^2',
                    'metric_type': 'basic'},
         'DM_avg': {'long_name': 'average duration-magnitude indicator', 'units': f'{data_unit} d',
