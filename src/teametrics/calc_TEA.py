@@ -242,15 +242,16 @@ def calc_annual_ctp_indicators(tea, opts, start, end):
         # apply criterion that DTEA_GR > DTEA_min and all GR variables use same dates,
         # dtea_min is given in areals (1 areal = 100 km2)
         dtea_min = opts.min_exceedance_area  # according to equation 03
-        logger.info(f'Applying minimum exceedance area of {dtea_min} areal (100 km2) to all GR variables')
-        tea.update_min_area(dtea_min)
+        if dtea_min > 0:
+            logger.info(f'Applying minimum exceedance area of {dtea_min} areal (100 km2) to all GR variables')
+            tea.update_min_area(dtea_min)
 
     if 'agr' in opts:
         tea.land_frac_min = opts.land_frac_min
         tea.min_duration = opts.min_duration
 
     # calculate annual climatic time period indicators
-    logger.info('Calculating annual CTP indicators')
+    logger.info('Calculating annual CTP indicators...')
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="invalid value encountered in multiply")
         tea.calc_annual_ctp_indicators(opts.period, drop_daily_results=True)

@@ -1213,6 +1213,68 @@ class TEAIndicators:
             tex_nl.attrs = get_attrs(vname='TEX', data_unit=self.unit)
             self.ctp_results['TEX'] = tex_nl
 
+    @staticmethod
+    def _calc_maximum_event_extremity_1d(dtec_cell, dtema_cell, time_cell):
+        """
+        calculate maximum event extremity for one CTP slice.
+
+        Args:
+            dtec_cell: 1D daily threshold exceedance count (GR)
+            dtema_cell: 1D daily threshold exceedance magnitude * area (GR)
+            time_cell: 1D time axis for the same CTP slice
+        """
+        dtec_np = np.nan_to_num(dtec_cell, nan=0)
+        dtema_np = np.nan_to_num(dtema_cell, nan=0)
+        event_idx = np.where(dtec_np > 0)[0]
+        if len(event_idx) == 0:
+            return 0.0
+
+        time_np = np.asarray(time_cell)
+        if len(event_idx) == 1:
+            return float(dtema_np[event_idx[0]])
+
+        # Split events at index gaps and non-consecutive calendar days.
+        idx_gaps = np.diff(event_idx) != 1
+        time_gaps = (time_np[event_idx[1:]] - time_np[event_idx[:-1]]) != np.timedelta64(1, 'D')
+        split_idx = np.where(idx_gaps | time_gaps)[0] + 1
+        events = np.split(event_idx, split_idx)
+        return float(max(dtema_np[event_days].sum() for event_days in events))
+
+    def _calc_maximum_event_extremity(self):
+        """
+        calculate maximum event extremity per CTP:
+        max(sum(DTEMA_GR[event_start_idx:event_end_idx+1])).
+        """
+        logger.info("Calculating maximum event extremity per CTP...")
+        if self.CTP is None:
+            return
+        if self._CTP_resample_sum is None:
+            self._resample_to_CTP()
+        if 'DTEMA_GR' not in self._CTP_resample_sum:
+            return
+        if 'DTEC_GR' not in self._daily_results_filtered or 'DTEMA_GR' not in self._daily_results_filtered:
+            return
+
+        tex_gr_max = xr.full_like(self._CTP_resample_sum.DTEMA_GR, self.null_val)
+        ctp_times = set(pd.to_datetime(tex_gr_max.time.values))
+        dtec_resampler = self._daily_results_filtered.DTEC_GR.resample(time=self.CTP_freqs[self.CTP])
+        dtema_gr = self._daily_results_filtered.DTEMA_GR
+
+        for ctp_start, dtec_period in dtec_resampler:
+            ctp_ts = pd.Timestamp(ctp_start)
+            if ctp_ts not in ctp_times or len(dtec_period.time) == 0:
+                continue
+            dtema_period = dtema_gr.sel(time=dtec_period.time)
+            max_event_extremity = self._calc_maximum_event_extremity_1d(
+                dtec_cell=dtec_period.values,
+                dtema_cell=dtema_period.values,
+                time_cell=dtec_period.time.values
+            )
+            tex_gr_max.loc[dict(time=ctp_start)] = max_event_extremity
+
+        tex_gr_max.attrs = get_attrs(vname='TEX_max_GR', data_unit=self.unit)
+        self.ctp_results['TEX_max_GR'] = tex_gr_max
+
     def _calc_total_events_extremity(self, f, d=None, m=None, a=None, s=None):
         """
         calculate total events extremity (equation 21_4)
@@ -1449,6 +1511,7 @@ class TEAIndicators:
         self._calc_annual_event_severity()
         self._calc_annual_hourly_event_severity()
         self._calc_annual_exceedance_heat_content()
+        self._calc_maximum_event_extremity()
 
         # copy average threshold value from daily results to ctp results
         if 'threshold_avg_GR' in self.daily_results:

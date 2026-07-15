@@ -76,6 +76,8 @@ def get_attrs(vname=None, dec=False, spread=None, period='', data_unit=''):
         'TEX': {'long_name': 'total events extremity',
                 'units': f'100 km^2 {data_unit} d yr^-1', 'metric_type':
                     'compound'},
+        'TEX_max': {'long_name': 'maximum event extremity',
+                    'units': f'100 km^2 {data_unit}', 'metric_type': 'basic'},
         'hTEX': {'long_name': 'hourly total events extremity',
                  'units': f'100 km^2 {data_unit} h yr^-1',
                  'metric_type': 'compound'},
