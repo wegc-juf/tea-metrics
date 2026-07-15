@@ -1214,7 +1214,7 @@ class TEAIndicators:
             self.ctp_results['TEX'] = tex_nl
 
     @staticmethod
-    def _calc_maximum_event_extremity_1d(dtec_cell, dtema_cell, time_cell):
+    def _calc_maximum_event_extremity_1d(dtec_cell, dtema_cell, time_cell, min_duration=1):
         """
         calculate maximum event extremity for one CTP slice.
 
@@ -1222,6 +1222,7 @@ class TEAIndicators:
             dtec_cell: 1D daily threshold exceedance count (GR)
             dtema_cell: 1D daily threshold exceedance magnitude * area (GR)
             time_cell: 1D time axis for the same CTP slice
+            min_duration: minimum event duration in days
         """
         dtec_np = np.nan_to_num(dtec_cell, nan=0)
         dtema_np = np.nan_to_num(dtema_cell, nan=0)
@@ -1230,22 +1231,25 @@ class TEAIndicators:
             return 0.0
 
         time_np = np.asarray(time_cell)
-        if len(event_idx) == 1:
-            return float(dtema_np[event_idx[0]])
-
         # Split events at index gaps and non-consecutive calendar days.
-        idx_gaps = np.diff(event_idx) != 1
-        time_gaps = (time_np[event_idx[1:]] - time_np[event_idx[:-1]]) != np.timedelta64(1, 'D')
-        split_idx = np.where(idx_gaps | time_gaps)[0] + 1
-        events = np.split(event_idx, split_idx)
-        return float(max(dtema_np[event_days].sum() for event_days in events))
+        if len(event_idx) == 1:
+            events = [event_idx]
+        else:
+            idx_gaps = np.diff(event_idx) != 1
+            time_gaps = (time_np[event_idx[1:]] - time_np[event_idx[:-1]]) != np.timedelta64(1, 'D')
+            split_idx = np.where(idx_gaps | time_gaps)[0] + 1
+            events = np.split(event_idx, split_idx)
 
-    def _calc_maximum_event_extremity(self):
+        valid_events = [event_days for event_days in events if len(event_days) >= min_duration]
+        if not valid_events:
+            return 0.0
+        return float(max(dtema_np[event_days].sum() for event_days in valid_events))
+
+    def _calc_maximum_event_extremity_for_duration(self, min_duration, output_var, metric_label):
         """
-        calculate maximum event extremity per CTP:
-        max(sum(DTEMA_GR[event_start_idx:event_end_idx+1])).
+        calculate maximum event extremity per CTP with a minimum event duration.
         """
-        logger.info("Calculating maximum event extremity per CTP...")
+        logger.info(f"Calculating {metric_label} per CTP...")
         if self.CTP is None:
             return
         if self._CTP_resample_sum is None:
@@ -1268,12 +1272,34 @@ class TEAIndicators:
             max_event_extremity = self._calc_maximum_event_extremity_1d(
                 dtec_cell=dtec_period.values,
                 dtema_cell=dtema_period.values,
-                time_cell=dtec_period.time.values
+                time_cell=dtec_period.time.values,
+                min_duration=min_duration,
             )
             tex_gr_max.loc[dict(time=ctp_start)] = max_event_extremity
 
-        tex_gr_max.attrs = get_attrs(vname='TEX_max_GR', data_unit=self.unit)
-        self.ctp_results['TEX_max_GR'] = tex_gr_max
+        tex_gr_max.attrs = get_attrs(vname=output_var, data_unit=self.unit)
+        self.ctp_results[output_var] = tex_gr_max
+
+    def _calc_maximum_event_extremity(self):
+        """
+        calculate maximum event extremity per CTP:
+        max(sum(DTEMA_GR[event_start_idx:event_end_idx+1])).
+        """
+        self._calc_maximum_event_extremity_for_duration(
+            min_duration=1,
+            output_var='TEX_max_GR',
+            metric_label='maximum event extremity',
+        )
+
+    def _calc_maximum_heatwave_extremity(self):
+        """
+        calculate maximum heatwave extremity per CTP (minimum event duration of three days).
+        """
+        self._calc_maximum_event_extremity_for_duration(
+            min_duration=3,
+            output_var='TEX_HW_max_GR',
+            metric_label='maximum heatwave extremity',
+        )
 
     def _calc_total_events_extremity(self, f, d=None, m=None, a=None, s=None):
         """
@@ -1512,6 +1538,7 @@ class TEAIndicators:
         self._calc_annual_hourly_event_severity()
         self._calc_annual_exceedance_heat_content()
         self._calc_maximum_event_extremity()
+        self._calc_maximum_heatwave_extremity()
 
         # copy average threshold value from daily results to ctp results
         if 'threshold_avg_GR' in self.daily_results:
