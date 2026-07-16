@@ -580,6 +580,14 @@ class TEAIndicators:
         """
         digits = self.significant_digits
 
+        # Drop object-dtype variables (e.g. interval DataArrays) that cannot be
+        # serialised to netCDF; they remain available in-memory via ctp_results.
+        serialisable = [v for v in dataset.data_vars if dataset[v].dtype != object]
+        if len(serialisable) < len(dataset.data_vars):
+            dropped = set(dataset.data_vars) - set(serialisable)
+            logger.debug(f"Skipping non-serialisable variables for netCDF output: {dropped}")
+            dataset = dataset[serialisable]
+
         # save to netCDF with compression and rounding to reduce file size
         if digits >= 0:
             encoding = {
@@ -1223,12 +1231,17 @@ class TEAIndicators:
             dtema_cell: 1D daily threshold exceedance magnitude * area (GR)
             time_cell: 1D time axis for the same CTP slice
             min_duration: minimum event duration in days
+
+        Returns:
+            tuple of (max_extremity: float, interval: pd.Interval | None) where interval
+            is a closed pd.Interval of pd.Timestamps covering the event with the maximum
+            extremity, or None when no qualifying event exists.
         """
         dtec_np = np.nan_to_num(dtec_cell, nan=0)
         dtema_np = np.nan_to_num(dtema_cell, nan=0)
         event_idx = np.where(dtec_np > 0)[0]
         if len(event_idx) == 0:
-            return 0.0
+            return 0.0, None
 
         time_np = np.asarray(time_cell)
         # Split events at index gaps and non-consecutive calendar days.
@@ -1242,8 +1255,16 @@ class TEAIndicators:
 
         valid_events = [event_days for event_days in events if len(event_days) >= min_duration]
         if not valid_events:
-            return 0.0
-        return float(max(dtema_np[event_days].sum() for event_days in valid_events))
+            return 0.0, None
+
+        best_event = max(valid_events, key=lambda event_days: dtema_np[event_days].sum())
+        max_val = float(dtema_np[best_event].sum())
+        interval = pd.Interval(
+            pd.Timestamp(time_np[best_event[0]]),
+            pd.Timestamp(time_np[best_event[-1]]),
+            closed='both',
+        )
+        return max_val, interval
 
     def _calc_maximum_event_extremity_for_duration(self, min_duration, output_var, metric_label):
         """
@@ -1260,6 +1281,11 @@ class TEAIndicators:
             return
 
         tex_gr_max = xr.full_like(self._CTP_resample_sum.DTEMA_GR, self.null_val)
+        tex_gr_max_interval = xr.DataArray(
+            data=np.full(tex_gr_max.shape, None, dtype=object),
+            coords=tex_gr_max.coords,
+            dims=tex_gr_max.dims,
+        )
         ctp_times = set(pd.to_datetime(tex_gr_max.time.values))
         dtec_resampler = self._daily_results_filtered.DTEC_GR.resample(time=self.CTP_freqs[self.CTP])
         dtema_gr = self._daily_results_filtered.DTEMA_GR
@@ -1269,16 +1295,20 @@ class TEAIndicators:
             if ctp_ts not in ctp_times or len(dtec_period.time) == 0:
                 continue
             dtema_period = dtema_gr.sel(time=dtec_period.time)
-            max_event_extremity = self._calc_maximum_event_extremity_1d(
+            max_event_extremity, interval = self._calc_maximum_event_extremity_1d(
                 dtec_cell=dtec_period.values,
                 dtema_cell=dtema_period.values,
                 time_cell=dtec_period.time.values,
                 min_duration=min_duration,
             )
             tex_gr_max.loc[dict(time=ctp_start)] = max_event_extremity
+            tex_gr_max_interval.loc[dict(time=ctp_start)] = interval
 
+        interval_var = output_var.replace('_GR', '_interval_GR')
         tex_gr_max.attrs = get_attrs(vname=output_var, data_unit=self.unit)
+        tex_gr_max_interval.attrs = get_attrs(vname=interval_var)
         self.ctp_results[output_var] = tex_gr_max
+        self.ctp_results[interval_var] = tex_gr_max_interval
 
     def _calc_maximum_event_extremity(self):
         """
@@ -1553,6 +1583,39 @@ class TEAIndicators:
         self.ctp_results['time'].attrs = ctp_attrs
         self.ctp_results.attrs['CTP'] = self.CTP
 
+    def _save_interval_csv(self, filepath):
+        """
+        Save TEX_max_GR and TEX_HW_max_GR interval variables to a CSV file
+        alongside the main netCDF output.  Rows contain the CTP start time,
+        the extremity value, and the interval start/end dates.
+        """
+        interval_vars = {
+            'TEX_max_GR': 'TEX_max_interval_GR',
+            'TEX_HW_max_GR': 'TEX_HW_max_interval_GR',
+        }
+        frames = []
+        for value_var, interval_var in interval_vars.items():
+            if value_var not in self.ctp_results or interval_var not in self.ctp_results:
+                continue
+            val_da = self.ctp_results[value_var]
+            iv_da = self.ctp_results[interval_var]
+            times = pd.to_datetime(val_da.time.values)
+            df = pd.DataFrame({
+                'time': times,
+                'variable': value_var,
+                'value': val_da.values,
+                'interval_start': [iv.left if iv is not None else pd.NaT for iv in iv_da.values],
+                'interval_end': [iv.right if iv is not None else pd.NaT for iv in iv_da.values],
+            })
+            frames.append(df)
+
+        if not frames:
+            return
+
+        csv_path = Path(filepath).with_suffix('.intervals.csv')
+        pd.concat(frames, ignore_index=True).to_csv(csv_path, index=False, date_format='%Y-%m-%d')
+        logger.info(f"Saved interval CSV to {csv_path}")
+
     def save_ctp_results(self, filepath, variables=None, save_tiff=False):
         """
         save all CTP results to filepath
@@ -1569,6 +1632,7 @@ class TEAIndicators:
                 if save_tiff:
                     self._save_geotiff(filepath, variables, dataset=self.ctp_results, split_by_year=False)
                 self._to_netcdf(self.ctp_results, filepath)
+                self._save_interval_csv(filepath)
             except PermissionError as err:
                 if not DEBUG:
                     raise err
