@@ -68,11 +68,14 @@ class TEAIndicators:
         self.ydim = 'lat'
 
         self.mask = mask
+        self._crs = None
         if mask is not None:
             self._find_dim_names(data=mask)
+            self._crs = self._read_crs(mask)
         elif area_grid is not None:
             self._find_dim_names(data=area_grid)
-            
+            self._crs = self._read_crs(area_grid)
+
         self.apply_mask = apply_mask
 
         self.use_dask = use_dask
@@ -241,6 +244,73 @@ class TEAIndicators:
                              "Please provide data with common time names (time, days).")
         return xdim, ydim
 
+    @staticmethod
+    def _read_crs(data):
+        """
+        Return the CRS for a DataArray or Dataset, or None if absent.
+
+        Checks (in order):
+          1. The ``coordinate_sys`` attribute (e.g. ``'EPSG:32633'``) set by
+             create_region_masks / regrid_SPARTACUS on mask and area_grid objects.
+          2. The ``coordinate_sys`` attribute on the ``area_grid`` variable inside
+             a Dataset (for round-trips through load_daily_results).
+          3. rioxarray ``rio.crs`` as a fallback for data that already carries a
+             proper ``spatial_ref`` coordinate.
+        """
+        # 1. Direct attribute on the object itself
+        crs_str = getattr(data, 'attrs', {}).get('coordinate_sys')
+        if crs_str:
+            return crs_str
+
+        # 1b. Dataset-level attribute written by TEA outputs
+        try:
+            crs_str = data.attrs.get('coordinate_sys')
+            if crs_str:
+                return crs_str
+        except Exception:
+            pass
+
+        # 2. attribute on area_grid variable inside a Dataset
+        try:
+            crs_str = data['area_grid'].attrs.get('coordinate_sys')
+            if crs_str:
+                return crs_str
+        except Exception:
+            pass
+
+        # 3. rioxarray spatial_ref coordinate
+        try:
+            return data.rio.crs or None
+        except Exception:
+            return None
+
+    def _ensure_crs(self, var_data):
+        """
+        Write self._crs onto var_data if it does not already carry a CRS.
+        Returns the (possibly updated) DataArray.
+        """
+        if self._crs is None:
+            return var_data
+        try:
+            if var_data.rio.crs is None:
+                var_data = var_data.rio.write_crs(self._crs)
+        except Exception:
+            pass
+        return var_data
+
+    def _propagate_crs(self, dataset):
+        """
+        Attach CRS metadata to a dataset and its raster variables.
+        """
+        if self._crs is None:
+            return dataset
+
+        dataset.attrs['coordinate_sys'] = self._crs
+        for var in dataset.data_vars:
+            if 'coordinate_sys' not in dataset[var].attrs:
+                dataset[var].attrs['coordinate_sys'] = self._crs
+        return dataset
+
     def _set_input_data_grid(self, input_data_grid):
         """
         set input data grid
@@ -249,6 +319,11 @@ class TEAIndicators:
         """
         # add dim names
         self._find_dim_names(data=input_data_grid)
+
+        # input_data is the most authoritative CRS source; override any earlier fallback
+        crs = self._read_crs(input_data_grid)
+        if crs is not None:
+            self._crs = crs
 
         if self.mask is not None and self.apply_mask:
             self.input_data = input_data_grid.where(self.mask > 0)
@@ -375,7 +450,10 @@ class TEAIndicators:
         dtea = self._calc_TEA(dtec)
         dtea.attrs = get_attrs(vname='DTEA')
         self.daily_results['DTEA'] = dtea
-        self.daily_results['area_grid'] = self.area_grid
+        area_grid = self.area_grid
+        if self._crs is not None and 'coordinate_sys' not in area_grid.attrs:
+            area_grid = area_grid.assign_attrs(coordinate_sys=self._crs)
+        self.daily_results['area_grid'] = area_grid
 
     def _calc_TEA(self, tec):
         """
@@ -686,6 +764,7 @@ class TEAIndicators:
                 for var in vars_to_save:
                     try:
                         var_data = year_data[var]
+                        var_data = self._ensure_crs(var_data)
                         var_filepath = yearly_filepath.replace(ext, f'_{var}.tiff')
                         logger.info(f"Saving raster variable '{var}' for year {year} to {var_filepath}")
                         var_data.rio.to_raster(var_filepath, compress='LZW')
@@ -697,6 +776,7 @@ class TEAIndicators:
             for var in vars_to_save:
                 try:
                     var_data = dataset[var]
+                    var_data = self._ensure_crs(var_data)
                     var_filepath = filepath.replace(ext, f'_{var}.tiff')
                     logger.info(f"Saving raster variable '{var}' to {var_filepath}")
                     var_data.rio.to_raster(var_filepath, compress='LZW')
@@ -716,6 +796,9 @@ class TEAIndicators:
         self.gr_size = self.area_grid.sum().values
         self.unit = self.daily_results.DTEM.attrs['units']
         self._find_dim_names(data=self.daily_results)
+        crs = self._read_crs(self.area_grid)
+        if crs is not None:
+            self._crs = crs
 
     def set_daily_results(self, daily_results):
         """
@@ -1582,6 +1665,7 @@ class TEAIndicators:
         ctp_attrs = get_attrs(vname='CTP', period=self.CTP)
         self.ctp_results['time'].attrs = ctp_attrs
         self.ctp_results.attrs['CTP'] = self.CTP
+        self.ctp_results = self._propagate_crs(self.ctp_results)
 
     def _save_interval_csv(self, filepath):
         """
@@ -1646,9 +1730,12 @@ class TEAIndicators:
         load all CTP results from filepath
         """
         logger.info(f"Loading CTP results from {filepath}")
-        self.ctp_results = xr.open_mfdataset(filepath, data_vars='minimal', combine='by_coords',
-                                             coords='minimal', compat='override', join='exact',
-                                             chunks='auto' if use_dask else None)
+        if use_dask:
+            self.ctp_results = xr.open_mfdataset(filepath, data_vars='minimal', combine='by_coords',
+                                                 coords='minimal', compat='override', join='exact',
+                                                 chunks='auto')
+        else:
+            self.ctp_results = xr.open_dataset(filepath)
         
         # TODO: optimize code in TEA._calc_spread_estimators
         if not use_dask:
@@ -1656,6 +1743,7 @@ class TEAIndicators:
             self.ctp_results.load()
             
         self._find_dim_names(self.ctp_results)
+        self._crs = self._read_crs(self.ctp_results) or self._crs
         
         if 'units' not in self.ctp_results.EM_avg.attrs:
             logger.warning(
@@ -1724,6 +1812,7 @@ class TEAIndicators:
         self.decadal_results['time'].attrs = get_attrs(vname='decadal', period=self.CTP)
         self.decadal_results.attrs['CTP'] = self.CTP
         self.decadal_results = self._duplicate_vars(self.decadal_results)
+        self.decadal_results = self._propagate_crs(self.decadal_results)
 
         if drop_annual_results:
             self.ctp_results.close()
@@ -1757,6 +1846,7 @@ class TEAIndicators:
             ref_mean = self._ref_mean.rename(rename_dict)
             # save
             self.decadal_results = xr.merge([self.decadal_results, cc_mean, ref_mean])
+            self.decadal_results = self._propagate_crs(self.decadal_results)
 
         if os.path.exists(filepath):
             try:
@@ -1783,6 +1873,7 @@ class TEAIndicators:
         self.decadal_results = xr.open_dataset(filepath)
         if 'CTP' in self.decadal_results.attrs:
             self.CTP = self.decadal_results.attrs['CTP']
+        self._crs = self._read_crs(self.decadal_results) or self._crs
         self._backup_decadal_ED()
 
     def _calc_decadal_mean(self, decadal_window):
@@ -1795,19 +1886,21 @@ class TEAIndicators:
                 "For calculating decadal results, CTP results and daily data must contain at least a "
                 "decade of data")
         for var in self.ctp_results.data_vars:
-            if self.ctp_results[var].attrs['metric_type'] == 'basic':
-                if 'time' in self.ctp_results[var].dims:
-                    self.decadal_results[var] = self.ctp_results[var].rolling(time=decadal_window[0],
-                                                                              center=True,
-                                                                              min_periods=1).mean(
-                        skipna=True)
-                    # set first and last 5 years to nan
-                    self.decadal_results[var][:decadal_window[1]] = np.nan
-                    self.decadal_results[var][-decadal_window[2]:] = np.nan
-                else:
-                    self.decadal_results[var] = self.ctp_results[var]
-                self.decadal_results[var].attrs = get_attrs(vname=var, dec=True,
-                                                            data_unit=self.unit)
+            var_data = self.ctp_results[var]
+            if var_data.attrs['metric_type'] != 'basic' or var_data.dtype == object:
+                continue
+            if 'time' in var_data.dims:
+                self.decadal_results[var] = var_data.rolling(time=decadal_window[0],
+                                                            center=True,
+                                                            min_periods=1).mean(
+                    skipna=True)
+                # set first and last 5 years to nan
+                self.decadal_results[var][:decadal_window[1]] = np.nan
+                self.decadal_results[var][-decadal_window[2]:] = np.nan
+            else:
+                self.decadal_results[var] = var_data
+            self.decadal_results[var].attrs = get_attrs(vname=var, dec=True,
+                                                       data_unit=self.unit)
 
     def _calc_decadal_compound_vars(self):
         """
@@ -2190,6 +2283,7 @@ class TEAIndicators:
         self.amplification_factors.time.attrs = get_attrs(vname='amplification',
                                                           period=self.CTP)
         self.amplification_factors = self._duplicate_vars(self.amplification_factors)
+        self.amplification_factors = self._propagate_crs(self.amplification_factors)
 
     @staticmethod
     def _duplicate_vars(ds):
@@ -2232,6 +2326,7 @@ class TEAIndicators:
         load amplification factors from filepath
         """
         self.amplification_factors = xr.open_dataset(filepath)
+        self._crs = self._read_crs(self.amplification_factors) or self._crs
 
     @staticmethod
     def _gmean_custom(x, dim, skipna=True):
