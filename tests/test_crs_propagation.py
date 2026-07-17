@@ -75,8 +75,21 @@ def test_crs_propagates_through_ctp_decadal_and_amplification(tmp_path):
     tea.save_decadal_results(decadal_path)
     tea.save_amplification_factors(amplification_path)
 
+    interval_vars = {
+        "TEX_max_interval_start_GR",
+        "TEX_max_interval_end_GR",
+        "TEX_HW_max_interval_start_GR",
+        "TEX_HW_max_interval_end_GR",
+    }
+    with xr.open_dataset(ctp_path) as saved_ctp:
+        assert interval_vars <= set(saved_ctp.data_vars)
+        for variable in interval_vars:
+            assert np.issubdtype(saved_ctp[variable].dtype, np.datetime64)
+    assert not ctp_path.with_suffix(".intervals.csv").exists()
+
     loaded = TEAIndicators()
     loaded.load_ctp_results(ctp_path, use_dask=False)
+    assert interval_vars <= set(loaded.ctp_results.data_vars)
     assert loaded._crs == EXPECTED_CRS
     assert loaded._read_crs(loaded.ctp_results) == EXPECTED_CRS
 
