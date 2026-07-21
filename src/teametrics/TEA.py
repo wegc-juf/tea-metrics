@@ -535,10 +535,6 @@ class TEAIndicators:
         dtec_gr = dtec_gr.where(dtec_gr > 0, np.nan)
         if self.area_grid is None:
             self._create_area_grid(dtem)
-            
-        if 'DTEA' not in self.daily_results:
-            self._calc_DTEA()
-        dtea = self.daily_results.DTEA
 
         # calculate area-weighted mean of DTEM for GR (equation 08)
         area_fac = self.area_grid / dtea_gr
@@ -546,13 +542,37 @@ class TEAIndicators:
         dtem_gr = dtem_gr.where(dtec_gr == 1, self.null_val)
         dtem_gr = dtem_gr.rename(f'{dtem.name}_GR')
         dtem_gr.attrs = get_attrs(vname='DTEM_GR', data_unit=self.unit)
-        dtema = dtem * dtea
-        dtema_gr = dtem_gr * dtea_gr
-        dtema_gr.attrs = get_attrs(vname='DTEMA_GR', data_unit=self.unit)
-        dtema.attrs = get_attrs(vname='DTEMA', data_unit=self.unit)
         self.daily_results['DTEM_GR'] = dtem_gr
-        self.daily_results['DTEMA_GR'] = dtema_gr
+
+    def _calc_DTEMA(self):
+        """
+        calculate Daily Threshold Exceedance Magnitude * Area (auxiliary)
+        """
+        if 'DTEMA' in self.daily_results:
+            return
+        if 'DTEM' not in self.daily_results:
+            self._calc_DTEM()
+        if 'DTEA' not in self.daily_results:
+            self._calc_DTEA()
+        dtema = self.daily_results.DTEM * self.daily_results.DTEA
+        dtema.attrs = get_attrs(vname='DTEMA', data_unit=self.unit)
         self.daily_results['DTEMA'] = dtema
+
+    def _calc_DTEMA_GR(self):
+        """
+        calculate GR Daily Threshold Exceedance Magnitude * Area (auxiliary)
+        """
+        if 'DTEMA_GR' in self.daily_results:
+            return
+        if 'DTEM_GR' not in self.daily_results:
+            self._calc_DTEM_GR()
+            if 'DTEMA_GR' in self.daily_results:
+                return
+        if 'DTEA_GR' not in self.daily_results:
+            self._calc_DTEA_GR()
+        dtema_gr = self.daily_results.DTEM_GR * self.daily_results.DTEA_GR
+        dtema_gr.attrs = get_attrs(vname='DTEMA_GR', data_unit=self.unit)
+        self.daily_results['DTEMA_GR'] = dtema_gr
 
     def _calc_avg_threshold_GR(self):
         """
@@ -596,6 +616,8 @@ class TEAIndicators:
             self._calc_DTEA()
             logger.debug("Calculating DTEEC")
             self._calc_DTEEC()
+            logger.debug("Calculating DTEMA")
+            self._calc_DTEMA()
             self._calc_grid = True
         if gr:
             logger.debug("Calculating DTEA_GR")
@@ -604,7 +626,10 @@ class TEAIndicators:
             self._calc_DTEC_GR()
             logger.debug("Calculating DTEM_GR")
             self._calc_DTEM_GR()
+            logger.debug("Calculating DTEMA_GR")
+            self._calc_DTEMA_GR()
             self._calc_avg_threshold_GR()
+            logger.debug("Calculating DTEM_Max_GR")
             self._calc_DTEM_Max_GR()
             logger.debug("Calculating DTEEC_GR")
             self._calc_DTEEC_GR()
@@ -827,6 +852,7 @@ class TEAIndicators:
         self._min_area = min_area
         self._calc_DTEC_GR()
         self._calc_DTEM_GR()
+        self._calc_DTEMA_GR()
         self._calc_DTEM_Max_GR()
         self._calc_DTEEC_GR()
 
