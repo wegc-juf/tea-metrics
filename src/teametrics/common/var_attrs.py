@@ -36,6 +36,7 @@ def get_attrs(vname=None, dec=False, spread=None, period='', data_unit=''):
         'DTED': {'long_name': 'daily threshold exceedance duration', 'units': 'h'},
         'DTEM': {'long_name': 'daily threshold exceedance magnitude', 'units': data_unit},
         'DTEA': {'long_name': 'daily threshold exceedance area', 'units': data_unit},
+        'DTEP': {'long_name': 'daily threshold exceedance population', 'units': '10^4 persons'},
         'DTEMA': {'long_name': 'daily threshold exceedance magnitude * area (auxiliary)',
                   'units': f'100 km^2 {data_unit}'},
         'DTEM_Max': {'long_name': 'daily maximum grid cell exceedance magnitude',

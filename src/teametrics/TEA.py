@@ -32,6 +32,7 @@ class TEAIndicators:
     """
 
     def __init__(self, input_data=None, threshold=None, min_area=1., area_grid=None,
+                 population_grid=None,
                  low_extreme=False,
                  unit='', mask=None, apply_mask=True, ctp=None, use_dask=False, significant_digits: int = 2,
                  ref_period=(1961, 1990), **kwargs):
@@ -43,6 +44,7 @@ class TEAIndicators:
             min_area: minimum area for a timestep to be considered as exceedance. Default: 1
                       (1 areal according to equation 03)
             area_grid: grid containing the area of each grid cell in areals (1 areal = 100 m²)
+            population_grid: grid containing the population of each grid cell
             low_extreme: set to True if values below the threshold are considered as extreme events. Default: False
             unit: unit of the input data. Default: ''
             mask: mask grid for input data containing nan values for cells that should be masked. Default: None
@@ -105,6 +107,7 @@ class TEAIndicators:
             self.area_grid = area_grid
             self.gr_size = area_grid.sum().values
 
+        self.population_grid = population_grid
         self.input_data = None
         self.daily_results = xr.Dataset()
         self._daily_results_filtered = None
@@ -454,6 +457,20 @@ class TEAIndicators:
             area_grid = area_grid.assign_attrs(coordinate_sys=self._crs)
         self.daily_results['area_grid'] = area_grid
 
+    def _calc_DTEP(self):
+        """
+        calculate Daily Threshold Exceedance Population
+        """
+        if self.population_grid is None:
+            return
+        if 'DTEC' not in self.daily_results:
+            self._calc_DTEC()
+        dtec = self.daily_results.DTEC
+        dtep = self._calc_TEP(dtec)
+        dtep.attrs = get_attrs(vname='DTEP')
+        self.daily_results['DTEP'] = dtep
+        self.daily_results['population_grid'] = population_grid
+
     def _calc_TEA(self, tec):
         """
         calculate Threshold Exceedance Area (equation 02)
@@ -462,6 +479,15 @@ class TEAIndicators:
         # equation 02_2
         tea = tec * self.area_grid
         return tea
+
+    def _calc_TEP(self, tec):
+        """
+        calculate Threshold Exceedance Population
+        """
+        if self.population_grid is None:
+            raise ValueError("Population grid must be set for threshold exceedance population calculations")
+        tep = tec * self.population_grid
+        return tep
 
     def _calc_DTEA_GR(self, relative=False):
         """
@@ -614,6 +640,8 @@ class TEAIndicators:
             self._calc_DTEC()
             logger.debug("Calculating DTEA")
             self._calc_DTEA()
+            logger.debug("Calculating DTEP")
+            self._calc_DTEP()
             logger.debug("Calculating DTEEC")
             self._calc_DTEEC()
             logger.debug("Calculating DTEMA")
