@@ -1394,12 +1394,11 @@ class TEAIndicators:
         """
         calculate annual total events extremity (equation 21_3)
         """
-        if 'DTEMA_GR' not in self._CTP_resample_sum:
-            return
-        # equation 21_3
-        tex = self._CTP_resample_sum.DTEMA_GR
-        tex.attrs = get_attrs(vname='TEX_GR', data_unit=self.unit)
-        self.ctp_results['TEX_GR'] = tex
+        if 'DTEMA_GR' in self._CTP_resample_sum:
+            # equation 21_3
+            tex = self._CTP_resample_sum.DTEMA_GR
+            tex.attrs = get_attrs(vname='TEX_GR', data_unit=self.unit)
+            self.ctp_results['TEX_GR'] = tex
         
         if 'DTEMA' in self._CTP_resample_sum:
             tex_nl = self._CTP_resample_sum.DTEMA
