@@ -23,7 +23,7 @@ class TEAAgr(TEAIndicators):
     """
     Class for Threshold Exceedance Amount (TEA) indicators for aggregated georegions (AGR)
 
-    as defined in https://doi.org/10.48550/arXiv.2504.18964 and
+    as defined in https://doi.org/10.1016/j.wace.2026.100855 and
     Methods as defined in
     Kirchengast, G., Haas, S. J. & Fuchsberger, J. Compound event metrics detect and explain ten-fold
     increase of extreme heat over Europe—Supplementary Note: Detailed methods description for
