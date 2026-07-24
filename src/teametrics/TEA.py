@@ -1405,6 +1405,17 @@ class TEAIndicators:
             tex_nl.attrs = get_attrs(vname='TEX', data_unit=self.unit)
             self.ctp_results['TEX'] = tex_nl
 
+    def _calc_annual_ptex(self):
+        if 'DTEMP_GR' in self._CTP_resample_sum:
+            ptex = self._CTP_resample_sum.DTEMP_GR
+            ptex.attrs = get_attrs(vname='pTEX_GR', data_unit=self.unit)
+            self.ctp_results['pTEX_GR'] = ptex
+
+        if 'DTEMP' in self._CTP_resample_sum:
+            ptex_nl = self._CTP_resample_sum.DTEMP
+            ptex_nl.attrs = get_attrs(vname='pTEX', data_unit=self.unit)
+            self.ctp_results['pTEX'] = ptex_nl
+
     @staticmethod
     def _calc_maximum_event_extremity_1d(dtec_cell, dtema_cell, time_cell, min_duration=1):
         """
@@ -1751,6 +1762,7 @@ class TEAIndicators:
         self._calc_annual_avg_duration_magnitude()
         self._calc_annual_htEX()
         self._calc_annual_total_events_extremity()
+        self._calc_annual_ptex()
         self._calc_annual_hourly_total_events_extremity()
         self._calc_annual_exceedance_area()
         self._calc_annual_event_severity()
