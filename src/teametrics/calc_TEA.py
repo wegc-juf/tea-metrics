@@ -20,6 +20,7 @@ from .common.general_functions import (create_history_from_cfg, create_tea_histo
                                        get_csv_data, create_threshold_grid)
 from .common.config import load_opts
 from .common.TEA_logger import logger
+from .common.async_save import wait_for_pending_copies
 from .utils.calc_decadal_indicators import (calc_decadal_indicators, calc_amplification_factors,
                                             get_decadal_outpath, get_amplification_outpath)
 from .TEA import TEAIndicators
@@ -100,6 +101,8 @@ def calc_tea_indicators(opts):
             _load_or_generate_gr_grid_static(opts, tea)
             # TODO calc also for annual data
             _calc_agr_mean_and_spread(opts=opts, tea=tea)
+
+    wait_for_pending_copies()
 
 
 def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
@@ -217,7 +220,8 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
 
         # save results
         create_tea_history(cfg_params=opts, tea=tea, dataset='daily_results')
-        tea.save_daily_results(filepath=dbv_filename, save_tiff=opts.file_format == 'GeoTiff')
+        tea.save_daily_results(filepath=dbv_filename, save_tiff=opts.file_format == 'GeoTiff',
+                               async_copy=opts.async_save)
     else:
         # load existing results
         if 'agr' in opts:
@@ -421,7 +425,8 @@ def _save_ctp_output(opts, tea, start, end):
     path_ref = outpath.replace('.nc', '_ref.nc')
 
     logger.info(f'Saving CTP indicators to {outpath}')
-    tea.save_ctp_results(filepath=outpath, save_tiff=opts.file_format == 'GeoTiff')
+    tea.save_ctp_results(filepath=outpath, save_tiff=opts.file_format == 'GeoTiff',
+                         async_copy=opts.async_save)
 
     if opts.compare_to_ref:
         _compare_to_ctp_ref(tea, path_ref)
@@ -716,7 +721,8 @@ def _calc_agr_mean_and_spread(opts, tea):
             if os.path.exists(outpath_decadal):
                 os.remove(outpath_decadal)
     create_tea_history(cfg_params=opts, tea=tea, dataset='decadal_results')
-    tea.save_decadal_results(filepath=outpath_decadal, save_tiff=opts.file_format == 'GeoTiff')
+    tea.save_decadal_results(filepath=outpath_decadal, save_tiff=opts.file_format == 'GeoTiff',
+                             async_copy=opts.async_save)
 
     # # annual
     if opts.annual_spreads:
@@ -726,13 +732,14 @@ def _calc_agr_mean_and_spread(opts, tea):
         # drop 3D vars already saved in GRG files
         tea.ctp_results = tea.ctp_results.drop_vars(
             [var for var in tea.ctp_results.data_vars if 'AGR' not in var])
-        tea.save_ctp_results(filepath=filepath_annual, save_tiff=opts.file_format == 'GeoTiff')
+        tea.save_ctp_results(filepath=filepath_annual, save_tiff=opts.file_format == 'GeoTiff',
+                             async_copy=opts.async_save)
 
     # # amplification factors
     outpath_ampl = get_amplification_outpath(opts, opts.agr)
     logger.info(f'Saving AGR amplification factors to {outpath_ampl}')
     create_tea_history(cfg_params=opts, tea=tea, dataset='amplification_factors')
-    tea.save_amplification_factors(filepath=outpath_ampl)
+    tea.save_amplification_factors(filepath=outpath_ampl, async_copy=opts.async_save)
 
 
 def _load_gr_grid_static(opts):

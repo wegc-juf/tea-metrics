@@ -65,6 +65,7 @@ calc_TEA:
   recalc_threshold: false
   recalc_daily: true
   hourly: false
+  async_save: true
   decadal: true
   recalc_decadal: true
   spreads: true

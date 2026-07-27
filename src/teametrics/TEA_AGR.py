@@ -203,7 +203,7 @@ class TEAAgr(TEAIndicators):
         """
         return self.ctp_results
 
-    def save_ctp_results(self, filepath, variables=None, save_tiff=False):
+    def save_ctp_results(self, filepath, variables=None, save_tiff=False, async_copy=False):
         """
         save all CTP results to filepath
         Args:
@@ -216,8 +216,9 @@ class TEAAgr(TEAIndicators):
             warnings.simplefilter("ignore")
             try:
                 if save_tiff:
-                    self._save_geotiff(filepath, variables, dataset=self.ctp_results, split_by_year=False)
-                self._to_netcdf(self.ctp_results, filepath)
+                    self._save_geotiff(filepath, variables, dataset=self.ctp_results, split_by_year=False,
+                                       async_copy=async_copy)
+                self._to_netcdf(self.ctp_results, filepath, async_copy=async_copy)
             except PermissionError as err:
                 if not DEBUG:
                     raise err

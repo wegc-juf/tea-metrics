@@ -111,7 +111,8 @@ def calc_decadal_indicators(opts, tea, outpath=None):
         path = Path(f'{opts.outpath}/dec_indicator_variables/')
         path.mkdir(parents=True, exist_ok=True)
         logger.info(f'Saving decadal indicators to {outpath}')
-        tea.save_decadal_results(filepath=outpath, save_tiff=opts.file_format == 'GeoTiff')
+        tea.save_decadal_results(filepath=outpath, save_tiff=opts.file_format == 'GeoTiff',
+                                 async_copy=getattr(opts, 'async_save', False))
     else:
         logger.info(
             f'Loading decadal indicators from {outpath}. To recalculate use --recalc-decadal')

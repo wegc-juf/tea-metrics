@@ -180,6 +180,8 @@ def _get_default_opts(fname, opts):
             opts.recalc_decadal = True
         if 'hourly' not in opts:
             opts.hourly = False
+        if 'async_save' not in opts:
+            opts.async_save = True
         if 'compare_to_ref' not in opts:
             opts.compare_to_ref = False
         if 'spreads' not in opts:
@@ -298,6 +300,7 @@ def check_type(key, value):
         # calc_TEA.py
         'recalc_threshold': bool,
         'hourly': bool,
+        'async_save': bool,
         'recalc_daily': bool,
         'decadal': bool,
         'recalc_decadal': bool,
