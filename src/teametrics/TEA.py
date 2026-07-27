@@ -108,6 +108,8 @@ class TEAIndicators:
             self.gr_size = area_grid.sum().values
 
         self.population_grid = population_grid
+        if input_data is None:
+            self._normalize_population_grid_dims()
         self.input_data = None
         self.daily_results = xr.Dataset()
         self._daily_results_filtered = None
@@ -213,6 +215,24 @@ class TEAIndicators:
 
     def _find_dim_names(self, data):
         self.xdim, self.ydim = self.find_dim_names(data)
+
+    def _normalize_population_grid_dims(self):
+        """Rename population-grid spatial dimensions to the active grid dimensions."""
+        if self.population_grid is None:
+            return
+
+        dim_map = {}
+        if 'easting' in self.population_grid.dims:
+            dim_map['easting'] = self.xdim
+        if 'northing' in self.population_grid.dims:
+            dim_map['northing'] = self.ydim
+        if dim_map:
+            self.population_grid = self.population_grid.rename(dim_map)
+
+        missing_dims = {self.xdim, self.ydim}.difference(self.population_grid.dims)
+        if missing_dims:
+            raise ValueError("Population grid must contain the active spatial dimensions "
+                             f"'{self.xdim}' and '{self.ydim}'. Missing: {sorted(missing_dims)}")
         
     @staticmethod
     def find_dim_names(data):
@@ -323,6 +343,7 @@ class TEAIndicators:
         """
         # add dim names
         self._find_dim_names(data=input_data_grid)
+        self._normalize_population_grid_dims()
 
         # input_data is the most authoritative CRS source; override any earlier fallback
         crs = self._read_crs(input_data_grid)

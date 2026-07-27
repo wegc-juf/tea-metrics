@@ -156,6 +156,35 @@ class TestCropToRect:
         t._crop_to_rect(x_range=(14.5, 15.5), y_range=(47.5, 48.5))
         assert t.area_grid is not None
 
+    def test_population_grid_easting_northing_dims(self):
+        times = pd.date_range("1980-01-01", periods=3, freq="D")
+        data = xr.DataArray(
+            np.ones((3, 2, 2)),
+            coords={"time": times, "y": [47.0, 48.0], "x": [15.0, 16.0]},
+            dims=("time", "y", "x"),
+        )
+        threshold = xr.DataArray(
+            np.zeros((2, 2)),
+            coords={"y": [47.0, 48.0], "x": [15.0, 16.0]},
+            dims=("y", "x"),
+        )
+        population = xr.DataArray(
+            np.ones((2, 2)),
+            coords={"northing": [47.0, 48.0], "easting": [15.0, 16.0]},
+            dims=("northing", "easting"),
+        )
+        area = xr.DataArray(
+            np.ones((2, 2)), coords={"y": [47.0, 48.0], "x": [15.0, 16.0]},
+            dims=("y", "x"),
+        )
+
+        tea = TEAIndicators(input_data=data, threshold=threshold,
+                            population_grid=population, area_grid=area, unit="K")
+
+        assert tea.population_grid.dims == ("y", "x")
+        tea.calc_daily_basis_vars(grid=True, gr=False)
+        assert "DTEP" in tea.daily_results
+
 
 class TestSetCtp:
     def test_set_ctp_annual(self, tea):
