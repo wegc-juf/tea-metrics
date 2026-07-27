@@ -2,11 +2,12 @@ import pytest
 import numpy as np
 import xarray as xr
 
+_import_error = None
 try:
     from teametrics.calc_TEA import (
         _getopts, _get_ctp_filepath, _calc_x_y_range, _reduce_region,
         _get_threshold, _load_mask_file, _load_gr_grid_static,
-        _compare_to_ctp_ref, calc_dbv_indicators,
+        _compare_to_ctp_ref, _load_population_grid, _reduce_region, calc_dbv_indicators,
     )
     HAS_CALC_TEA = True
 except (ImportError, FileNotFoundError) as e:
@@ -115,6 +116,41 @@ class TestLoadMaskFile:
                                reg_name="test")
         result = _load_mask_file(opts)
         assert result is None
+
+
+class TestLoadPopulationGrid:
+    def test_load_named_population_variable(self, tmp_path):
+        from types import SimpleNamespace
+        population = xr.DataArray(
+            np.ones((2, 2)), dims=("y", "x"), coords={"y": [1, 2], "x": [3, 4]},
+            name="population")
+        path = tmp_path / "population.nc"
+        population.to_dataset().to_netcdf(path)
+
+        result = _load_population_grid(SimpleNamespace(population_grid_path=str(path)))
+
+        xr.testing.assert_equal(result, population)
+
+    def test_no_population_path(self):
+        from types import SimpleNamespace
+        assert _load_population_grid(SimpleNamespace(population_grid_path=None)) is None
+
+
+class TestReduceRegionPopulation:
+    def test_population_grid_is_reduced_with_region(self):
+        from types import SimpleNamespace
+        opts = SimpleNamespace(region="test", agr_cell_size=0.5, threshold_type="perc")
+        coords = {"y": [47.0, 47.5, 48.0, 48.5], "x": [15.0, 15.5, 16.0]}
+        mask = xr.DataArray(
+            np.array([[0, 0, 0], [0, 1, 0], [0, 1, 0], [0, 0, 0]]),
+            dims=("y", "x"), coords=coords)
+        population = xr.DataArray(
+            np.ones((4, 3)), dims=("y", "x"), coords=coords)
+
+        result = _reduce_region(opts, None, mask, population_grid=population)
+
+        assert len(result) == 4
+        assert result[3].sizes == result[1].sizes
 
 
 class TestLoadGrGridStatic:

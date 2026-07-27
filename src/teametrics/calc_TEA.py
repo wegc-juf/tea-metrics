@@ -133,6 +133,8 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
         agr_str = ''
         TEA_class_obj = TEAIndicators
 
+    population_grid = _load_population_grid(opts)
+
     # load land-sea mask for AGR
     if 'agr' in opts and 'maskpath' in opts:
         # load land-sea mask for AGR
@@ -163,7 +165,11 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
         # reduce extent of data to the region of interest
         # TODO: use this also for non-AGR and test
         if 'agr' in opts:
-            data, mask, threshold = _reduce_region(opts, data, mask, threshold)
+            reduced = _reduce_region(opts, data, mask, threshold, population_grid=population_grid)
+            if population_grid is None:
+                data, mask, threshold = reduced
+            else:
+                data, mask, threshold, population_grid = reduced
 
         if opts.primary_threshold is not None:
             logger.info(f'Applying primary threshold of {opts.primary_threshold} to input data')
@@ -184,6 +190,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
         # initialize TEA object
         if 'agr' in opts:
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
+                                population_grid=population_grid,
                                 min_area=min_area, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
                                 cell_size_y=opts.agr_cell_size,
@@ -191,6 +198,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
                                 land_frac_min=opts.land_frac_min, min_duration=opts.min_duration)
         else:
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
+                                population_grid=population_grid,
                                 min_area=min_area, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, significant_digits=opts.significant_digits)
 
@@ -212,13 +220,19 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
         # load existing results
         if 'agr' in opts:
             # TODO: use this also for non-AGR and test
-            data, mask, threshold = _reduce_region(opts, None, mask, threshold)
+            reduced = _reduce_region(opts, None, mask, threshold, population_grid=population_grid)
+            if population_grid is None:
+                data, mask, threshold = reduced
+            else:
+                data, mask, threshold, population_grid = reduced
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
+                                population_grid=population_grid,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
                                 cell_size_y=opts.agr_cell_size,
                                 significant_digits=opts.significant_digits, agr_frac_min=opts.agr_frac_min)
         else:
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
+                                population_grid=population_grid,
                                 unit=opts.unit,
                                 land_sea_mask=lsm, significant_digits=opts.significant_digits)
         logger.info(
@@ -326,6 +340,27 @@ def _load_mask_file(opts):
     mask_file = xr.open_dataset(maskpath)
 
     return mask_file.mask
+
+
+def _load_population_grid(opts):
+    """
+    Load the optional population grid configured for population-dependent TEA variables.
+
+    The preferred variable name is ``population``. A file with exactly one data variable
+    is also accepted to support population datasets using a different variable name.
+    """
+    population_path = getattr(opts, 'population_grid_path', None)
+    if population_path is None:
+        return None
+
+    logger.info(f'Loading population grid from {population_path}')
+    population_file = xr.open_dataset(population_path)
+    if 'population' in population_file.data_vars:
+        return population_file.population
+    if len(population_file.data_vars) == 1:
+        return population_file[next(iter(population_file.data_vars))]
+    raise ValueError(f'Population grid file {population_path} must contain a "population" '
+                     'variable or exactly one data variable.')
 
 
 def _load_lsm_file(opts):
@@ -524,7 +559,7 @@ def _calc_x_y_range(cell_size_y, mask):
     return x_min, y_min, x_max, y_max
 
 
-def _reduce_region(opts, data, mask, threshold=None, full_region=False):
+def _reduce_region(opts, data, mask, threshold=None, full_region=False, population_grid=None):
     """
     reduce data to the region of interest
     Args:
@@ -570,6 +605,11 @@ def _reduce_region(opts, data, mask, threshold=None, full_region=False):
     if threshold is not None and opts.threshold_type != 'abs':
         threshold = threshold.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
 
+    if population_grid is not None:
+        population_grid = population_grid.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
+
+    if population_grid is not None:
+        return proc_data, proc_mask, threshold, population_grid
     return proc_data, proc_mask, threshold
 
 

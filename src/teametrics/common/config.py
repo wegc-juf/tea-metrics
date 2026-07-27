@@ -155,6 +155,8 @@ def _get_default_opts(fname, opts):
             opts.input_data_path = opts.data_path
     if 'hourly_data_path' not in opts:
         opts.hourly_data_path = None
+    if 'population_grid_path' not in opts:
+        opts.population_grid_path = None
 
     # general options
     if 'use_dask' not in opts:
@@ -284,6 +286,7 @@ def check_type(key, value):
         # paths
         'input_data_path': str,
         'hourly_data_path': str,
+        'population_grid_path': 'path',
         'statpath': 'path',
         'maskpath': 'path',
         'mask_sub': str,

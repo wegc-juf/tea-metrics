@@ -188,6 +188,8 @@ class TEAIndicators:
         self.area_grid = self.area_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
         self.mask = self.mask.sel({self.ydim: slice_y, self.xdim: slice_x})
         self.threshold_grid = self.threshold_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
+        if self.population_grid is not None:
+            self.population_grid = self.population_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
 
     def _crop_to_mask_extents(self):
         """
@@ -347,6 +349,8 @@ class TEAIndicators:
                     raise ValueError("Input data and threshold results must have the same area")
                 if self.input_data.shape[-2:] != self.area_grid.shape:
                     raise ValueError("Input data and area results must have the same shape")
+                if self.population_grid is not None and self.population_grid.shape != self.area_grid.shape:
+                    raise ValueError("Input data and population grid must have the same shape")
 
     def _calc_DTEC(self):
         """
