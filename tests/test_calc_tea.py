@@ -118,6 +118,7 @@ class TestLoadMaskFile:
 
 
 class TestLoadPopulationGrid:
+    @pytest.mark.filterwarnings("ignore:numpy.ndarray size changed:RuntimeWarning")
     def test_load_named_population_variable(self, tmp_path):
         from types import SimpleNamespace
         population = xr.DataArray(

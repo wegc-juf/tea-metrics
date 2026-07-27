@@ -337,6 +337,8 @@ def _load_mask_file(opts):
         ne_coords = '_'.join([f'{float(coord):.1f}' for coord in ne_coords])
         maskpath = Path(opts.maskpath) / opts.mask_sub / f'SW_{sw_coords}-NE_{ne_coords}_mask_{opts.dataset}.nc'
     logger.info(f'Loading mask from {maskpath}')
+    if not maskpath.is_file():
+        raise FileNotFoundError(maskpath)
     mask_file = xr.open_dataset(maskpath)
 
     return mask_file.mask

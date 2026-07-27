@@ -252,6 +252,19 @@ def define_grid_from_shapefile(opts, target_grid):
     return grid
 
 
+def _transform_grid(transformer, x, y):
+    """Transform a coordinate mesh while avoiding scalar-array conversions in pyproj."""
+    ny, nx = len(y), len(x)
+    x_grid, y_grid = np.meshgrid(x, y)
+    x_flat = np.asarray(x_grid).reshape(-1)
+    y_flat = np.asarray(y_grid).reshape(-1)
+    if x_flat.size == 1:
+        newx, newy = transformer.transform(float(x_flat[0]), float(y_flat[0]))
+    else:
+        newx, newy = transformer.transform(x_flat, y_flat)
+    return np.asarray(newx).reshape((ny, nx)), np.asarray(newy).reshape((ny, nx))
+
+
 def utm_to_epsg3416_grid(x, y):
     """
     transform UTM33N coords to EPSG:3416 grid
@@ -265,12 +278,7 @@ def utm_to_epsg3416_grid(x, y):
 
      """
     transformer = pyproj.Transformer.from_crs('EPSG:32633', 'EPSG:3416', always_xy=True)
-    ny, nx = len(y), len(x)
-    x_grid, y_grid = np.meshgrid(x, y)
-    newx, newy = transformer.transform(x_grid.flatten(), y_grid.flatten())
-    newx = np.asarray(newx).reshape((ny, nx))
-    newy = np.asarray(newy).reshape((ny, nx))
-    return newx, newy
+    return _transform_grid(transformer, x, y)
 
 
 def epsg3416_to_utm_grid(x, y):
@@ -286,13 +294,7 @@ def epsg3416_to_utm_grid(x, y):
 
     """
     transformer = pyproj.Transformer.from_crs('EPSG:3416', 'EPSG:32633', always_xy=True)
-    ny, nx = len(y), len(x)
-    x_grid, y_grid = np.meshgrid(x, y)
-    newx, newy = transformer.transform(x_grid.flatten(), y_grid.flatten())
-    newx = np.asarray(newx).reshape((ny, nx))
-    newy = np.asarray(newy).reshape((ny, nx))
-
-    return newx, newy
+    return _transform_grid(transformer, x, y)
 
 
 def epsg3035_to_epsg3416_grid(x, y):
@@ -308,12 +310,7 @@ def epsg3035_to_epsg3416_grid(x, y):
 
      """
     transformer = pyproj.Transformer.from_crs('EPSG:3035', 'EPSG:3416', always_xy=True)
-    ny, nx = len(y), len(x)
-    x_grid, y_grid = np.meshgrid(x, y)
-    newx, newy = transformer.transform(x_grid.flatten(), y_grid.flatten())
-    newx = np.asarray(newx).reshape((ny, nx))
-    newy = np.asarray(newy).reshape((ny, nx))
-    return newx, newy
+    return _transform_grid(transformer, x, y)
 
 
 def epsg3416_to_epsg3035_grid(x, y):
@@ -329,13 +326,7 @@ def epsg3416_to_epsg3035_grid(x, y):
 
     """
     transformer = pyproj.Transformer.from_crs('EPSG:3416', 'EPSG:3035', always_xy=True)
-    ny, nx = len(y), len(x)
-    x_grid, y_grid = np.meshgrid(x, y)
-    newx, newy = transformer.transform(x_grid.flatten(), y_grid.flatten())
-    newx = np.asarray(newx).reshape((ny, nx))
-    newy = np.asarray(newy).reshape((ny, nx))
-
-    return newx, newy
+    return _transform_grid(transformer, x, y)
 
 
 def regrid_spartacus(opts, ds_in, method="linear"):
