@@ -994,7 +994,7 @@ class TEAIndicators:
         # TODO: try to drop non-exceedance days before resampling, then fill up timeseries again (runtime improvement?)
 
         # calculate exceedance hours per day (equation 10_3)
-        N_hours = htec.resample(time='1d').sum('time')
+        N_hours = htec.resample(time='1D').sum('time')
 
         # filter mask
         if self.mask is not None and self.apply_mask:
@@ -1046,19 +1046,19 @@ class TEAIndicators:
         t_tec = t_tec * hours_full[:, np.newaxis, np.newaxis]
 
         # calculate first exceedance hour
-        t_hfirst = t_tec.resample(time='1d').min(skipna=True, dim='time')
+        t_hfirst = t_tec.resample(time='1D').min(skipna=True, dim='time')
         t_hfirst.attrs = get_attrs(vname='t_hfirst')
         self.daily_results['t_hfirst'] = t_hfirst
 
         # calculate last exceedance hour
-        t_hlast = t_tec.resample(time='1d').max(skipna=True, dim='time')
+        t_hlast = t_tec.resample(time='1D').max(skipna=True, dim='time')
         t_hlast.attrs = get_attrs(vname='t_hlast')
         self.daily_results['t_hlast'] = t_hlast
 
         # calculate maximum exceedance hour
         htem = self._hourly_results.HTEM
         htem = htem.where(htem > 0, 0)
-        t_hmax = htem.resample(time='1d').map(xr.DataArray.argmax, dim='time')
+        t_hmax = htem.resample(time='1D').map(xr.DataArray.argmax, dim='time')
         t_hmax = t_hmax.where(t_hfirst >= 0, np.nan)
         t_hmax.attrs = get_attrs(vname='t_hmax')
         self.daily_results['t_hmax'] = t_hmax
@@ -1480,7 +1480,7 @@ class TEAIndicators:
 
         tex_gr_max = xr.full_like(self._CTP_resample_sum.DTEMA_GR, self.null_val)
         interval_start = xr.DataArray(
-            data=np.full(tex_gr_max.shape, np.datetime64('NaT'), dtype='datetime64[ns]'),
+            data=np.full(tex_gr_max.shape, np.datetime64('NaT', 'ns'), dtype='datetime64[ns]'),
             coords=tex_gr_max.coords,
             dims=tex_gr_max.dims,
         )
