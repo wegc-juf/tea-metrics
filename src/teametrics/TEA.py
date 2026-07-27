@@ -12,6 +12,7 @@ import rioxarray  # noqa: F401 - imported to enable .rio accessor
 import pandas as pd
 import numpy as np
 from xarray import Dataset
+from pathlib import Path
 
 from .common.var_attrs import get_attrs, equal_vars
 from .common.TEA_logger import logger
