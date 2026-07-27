@@ -414,8 +414,18 @@ class TEAIndicators:
         self.daily_results['DTEC_GR'] = dtec_gr
 
     def _calc_DTEEC(self):
+        """Calculate DTEEC using the configured serial or parallel implementation."""
+        if self.use_dask and self.gridded:
+            self._calc_DTEEC_parallel()
+        else:
+            self._calc_DTEEC_legacy()
+
+    def _calc_DTEEC_legacy(self):
         """
-        calculate Daily Threshold Exceedance Event Count (equation 04)
+        Calculate DTEEC with the original row-wise NumPy implementation.
+
+        This implementation is retained for compatibility and for small eager
+        calculations where Dask overhead is not useful.
         """
         if self.daily_results['DTEC'] is None:
             self._calc_DTEC()
@@ -449,6 +459,32 @@ class TEAIndicators:
         else:
             dteec[:] = self._calc_dteec_1d(dtec_cell=dtec.values)
 
+        if self.mask is not None and self.apply_mask:
+            dteec = dteec.where(self.mask > 0)
+        dteec.attrs = get_attrs(vname='DTEEC')
+        self.daily_results['DTEEC'] = dteec
+
+    def _calc_DTEEC_parallel(self):
+        """Calculate DTEEC over spatial chunks using Dask-compatible ufuncs."""
+        if 'DTEC' not in self.daily_results:
+            self._calc_DTEC()
+        dtec = self.daily_results.DTEC
+
+        if self.tdim not in dtec.dims:
+            raise ValueError(f"Time dimension '{self.tdim}' not found in DTEC data. "
+                             f"Available dimensions: {dtec.dims}")
+
+        dteec = xr.apply_ufunc(
+            self._calc_dteec_1d,
+            dtec,
+            input_core_dims=[[self.tdim]],
+            output_core_dims=[[self.tdim]],
+            vectorize=True,
+            dask='parallelized',
+            output_dtypes=[dtec.dtype],
+            dask_gufunc_kwargs={'allow_rechunk': True},
+        )
+        dteec = dteec.transpose(*dtec.dims)
         if self.mask is not None and self.apply_mask:
             dteec = dteec.where(self.mask > 0)
         dteec.attrs = get_attrs(vname='DTEEC')

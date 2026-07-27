@@ -77,6 +77,21 @@ class TestCalcDTEM:
 
 
 class TestCalcDTEEC:
+    def test_DTEEC_parallel_matches_legacy(self, tea_constant):
+        tea_constant._calc_DTEM()
+        tea_constant._calc_DTEC()
+        tea_constant._calc_DTEEC_legacy()
+        legacy = tea_constant.daily_results.DTEEC.copy()
+
+        tea_constant.daily_results = tea_constant.daily_results.drop_vars('DTEEC')
+        tea_constant.use_dask = True
+        tea_constant.daily_results['DTEC'] = tea_constant.daily_results.DTEC.chunk(
+            {tea_constant.tdim: -1, tea_constant.ydim: 1, tea_constant.xdim: 1})
+        tea_constant._calc_DTEEC_parallel()
+        parallel = tea_constant.daily_results.DTEEC.compute()
+
+        xr.testing.assert_equal(parallel, legacy)
+
     def test_DTEEC_exists(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=False)
         assert "DTEEC" in tea_constant.daily_results

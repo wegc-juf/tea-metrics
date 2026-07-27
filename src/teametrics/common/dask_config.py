@@ -34,7 +34,7 @@ def configure_dask(data, use_dask='auto'):
         return False
 
     workers_by_memory = max(1, available_memory // _GIB)
-    workers = min(cpu_count, workers_by_memory, 32)
+    workers = min(cpu_count, workers_by_memory, 64)
     dask.config.set(scheduler='threads', num_workers=workers)
     logger.info(f"Dask enabled with {workers} threaded workers "
                 f"({available_memory / _GIB:.1f} GiB available, "
