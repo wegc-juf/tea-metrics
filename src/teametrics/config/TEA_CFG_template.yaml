@@ -69,4 +69,4 @@ calc_TEA:
   recalc_decadal: true
   spreads: true
   decadal_only: false
-  use_dask: false
+  use_dask: auto

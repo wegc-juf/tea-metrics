@@ -14,6 +14,7 @@ from pathlib import Path
 from .. import __version__
 from .TEA_logger import logger
 from .var_attrs import get_global_attrs
+from .dask_config import configure_dask_data
 
 
 def create_history_from_cli_params(cli_params, ds, dsname):
@@ -331,9 +332,7 @@ def get_gridded_data(start, end, opts, period='annual', hourly=False):
     if opts.dataset == 'SPARTACUS':
         data = data.drop_vars('lambert_conformal_conic')
 
-    if not opts.use_dask:
-        # load data into memory
-        data.load()
+    data, opts.use_dask = configure_dask_data(data, use_dask=opts.use_dask)
 
     return data
 

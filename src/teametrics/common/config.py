@@ -160,7 +160,7 @@ def _get_default_opts(fname, opts):
 
     # general options
     if 'use_dask' not in opts:
-        opts.use_dask = False
+        opts.use_dask = 'auto'
 
     # calc_TEA.py options
     if fname == 'calc_TEA':
@@ -293,7 +293,7 @@ def check_type(key, value):
         'outpath': 'path',
 
         # general options
-        'use_dask': bool,
+        'use_dask': (bool, str),
 
         # calc_TEA.py
         'recalc_threshold': bool,
@@ -351,6 +351,8 @@ def check_type(key, value):
     if not isinstance(value, expected_type):
         raise argparse.ArgumentTypeError(f'Expected type {expected_type} for {key}, '
                                          f'but got {value} of type {type(value)} instead.')
+    if key == 'use_dask' and isinstance(value, str) and value != 'auto':
+        raise argparse.ArgumentTypeError("use_dask must be True, False, or 'auto'.")
     # check for correct unit
     if key == 'unit':
         unit = cfunits.Units(value)
