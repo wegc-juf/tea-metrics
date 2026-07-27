@@ -7,7 +7,7 @@ try:
     from teametrics.calc_TEA import (
         _getopts, _get_ctp_filepath, _calc_x_y_range, _reduce_region,
         _get_threshold, _load_mask_file, _load_gr_grid_static,
-        _compare_to_ctp_ref, _load_population_grid, _reduce_region, calc_dbv_indicators,
+        _compare_to_ctp_ref, _load_population_grid, calc_dbv_indicators,
     )
     HAS_CALC_TEA = True
 except (ImportError, FileNotFoundError) as e:
@@ -30,25 +30,27 @@ class TestGetopts:
     def test_getopts_version(self, monkeypatch):
         monkeypatch.setattr("sys.argv", ["calc_tea", "--config-file",
                                          "test.yaml", "--version"])
-        opts = _getopts()
-        assert opts.version
+        with pytest.raises(SystemExit) as exc_info:
+            _getopts()
+        assert exc_info.value.code == 0
 
 
 class TestGetCTPFilepath:
     def test_get_ctp_filepath_creates_dir(self, tmp_path):
-        from types import SimpleNamespace
+        from argparse import Namespace
         output_path = str(tmp_path / "output" / "test")
-        opts = SimpleNamespace(output_path=output_path, reg_name="test",
-                               version="v1", variable="tas")
+        opts = Namespace(outpath=output_path, region="test", param_str="Tx99p",
+                         period="annual", dataset="ERA5")
         path = _get_ctp_filepath(1980, 1990, opts)
         assert path.endswith(".nc")
         assert "test" in path
 
     def test_get_ctp_filepath_agr(self, tmp_path):
-        from types import SimpleNamespace
+        from argparse import Namespace
         output_path = str(tmp_path / "output")
-        opts = SimpleNamespace(output_path=output_path, reg_name="at",
-                               version="v1", variable="tas")
+        opts = Namespace(outpath=output_path, region="AUT", agr="EUR",
+                         grg_grid_spacing=0.5, param_str="Tx99p", period="annual",
+                         dataset="ERA5")
         path = _get_ctp_filepath(1980, 1990, opts, annual_agr=True)
         assert path.endswith(".nc")
         assert "agr" in path.lower()
@@ -63,9 +65,9 @@ class TestCalcXYRange:
             coords={"y": [47.0, 47.5, 48.0, 48.5],
                     "x": [15.0, 15.5, 16.0]},
         )
-        x_range, y_range = _calc_x_y_range(cell_size_y, mask)
-        assert len(x_range) == 2
-        assert len(y_range) == 2
+        x_min, y_min, x_max, y_max = _calc_x_y_range(cell_size_y, mask)
+        assert x_min < x_max
+        assert y_min < y_max
 
     def test_calc_x_y_range_no_valid_cells(self):
         mask = xr.DataArray(
@@ -73,15 +75,14 @@ class TestCalcXYRange:
             dims=("y", "x"),
             coords={"y": range(4), "x": range(3)},
         )
-        x_range, y_range = _calc_x_y_range(0.5, mask)
-        assert x_range is None
-        assert y_range is None
+        with pytest.raises(ValueError):
+            _calc_x_y_range(0.5, mask)
 
 
 class TestReduceRegion:
     def test_reduce_region_no_crop(self):
         from types import SimpleNamespace
-        opts = SimpleNamespace(region=None, full_region=False)
+        opts = SimpleNamespace(region="test", agr_cell_size=0.5, threshold_type="perc")
         data = xr.DataArray(
             np.ones((5, 4, 3)),
             dims=("time", "y", "x"),
@@ -102,20 +103,18 @@ class TestGetThreshold:
     def test_get_threshold_absolute(self):
         from types import SimpleNamespace
         opts = SimpleNamespace(
-            threshold_type="abs", threshold_value=30.0,
-            statpath="/tmp", variable="tas", reg_name="test",
-            cell_size_y=0.5, start_year=1980, end_year=1994)
+            threshold_type="abs", threshold=30.0, unit="degC")
         result = _get_threshold(opts)
         assert result == 30.0
 
 
 class TestLoadMaskFile:
-    def test_load_mask_file_none(self):
+    def test_load_mask_file_missing(self, tmp_path):
         from types import SimpleNamespace
-        opts = SimpleNamespace(mask_type=None, maskpath="/tmp",
-                               reg_name="test")
-        result = _load_mask_file(opts)
-        assert result is None
+        opts = SimpleNamespace(gr_type="polygon", maskpath=str(tmp_path), mask_sub="masks",
+                               region="AUT", dataset="ERA5", altitude_threshold=1500)
+        with pytest.raises(FileNotFoundError):
+            _load_mask_file(opts)
 
 
 class TestLoadPopulationGrid:
@@ -157,8 +156,9 @@ class TestLoadGrGridStatic:
     def test_load_gr_grid_static_not_found(self, tmp_path):
         from types import SimpleNamespace
         statpath = str(tmp_path / "stats")
-        opts = SimpleNamespace(statpath=statpath, reg_name="test",
-                               variable="tas")
+        opts = SimpleNamespace(statpath=statpath, maskpath=str(tmp_path / "masks"), mask_sub="masks",
+                               region="test", dataset="ERA5", grg_grid_spacing=0.5,
+                               altitude_threshold=1500, decadal_only=True)
         mask, areas = _load_gr_grid_static(opts)
         assert mask is None
         assert areas is None
