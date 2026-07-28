@@ -178,12 +178,12 @@ def _get_default_opts(fname, opts):
             opts.decadal_window = '10,5,4'
         if 'decadal_only' not in opts:
             opts.decadal_only = False
+        if 'parallel_chunks' not in opts:
+            opts.parallel_chunks = True
         if 'recalc_decadal' not in opts:
             opts.recalc_decadal = True
         if 'hourly' not in opts:
             opts.hourly = False
-        if 'async_save' not in opts:
-            opts.async_save = True
         if 'compare_to_ref' not in opts:
             opts.compare_to_ref = False
         if 'spreads' not in opts:
@@ -303,11 +303,11 @@ def check_type(key, value):
         # calc_TEA.py
         'recalc_threshold': bool,
         'hourly': bool,
-        'async_save': bool,
         'recalc_daily': bool,
         'decadal': bool,
         'recalc_decadal': bool,
         'decadal_only': bool,
+        'parallel_chunks': bool,
         'spreads': bool,
         'annual_spreads': bool,
         'compare_to_ref': bool,

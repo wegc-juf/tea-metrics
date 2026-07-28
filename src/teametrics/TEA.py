@@ -6,7 +6,6 @@ Equation numbers refer to Supplementary Notes therein
 import warnings
 import os
 import gc
-import tempfile
 import time
 
 import xarray as xr
@@ -18,7 +17,6 @@ from pathlib import Path
 
 from .common.var_attrs import get_attrs, equal_vars
 from .common.TEA_logger import logger
-from .common.async_save import submit_copy, temporary_path
 
 DEBUG = False
 DEFAULT_MIN_DURATION = 2.5
@@ -558,7 +556,7 @@ class TEAIndicators:
         """
         if self.population_grid is None:
             raise ValueError("Population grid must be set for threshold exceedance population calculations")
-        tep = tec * self.population_grid
+        tep = tec * self.population_grid / 10000
         return tep
 
     def _calc_DTEA_GR(self, relative=False):
@@ -793,7 +791,7 @@ class TEAIndicators:
         if not self.use_dask:
             self.daily_results = self.daily_results.compute()
 
-    def save_daily_results(self, filepath, variables=None, save_tiff=False, async_copy=False):
+    def save_daily_results(self, filepath, variables=None, save_tiff=False):
         """
         save all variables to filepath
         Args:
@@ -808,12 +806,9 @@ class TEAIndicators:
 
             try:
                 if save_tiff:
-                    self._save_geotiff(filepath, variables, async_copy=async_copy)
-                if async_copy:
-                    logger.info(f"Saving daily results to temporary storage before background copy to {filepath}")
-                else:
-                    logger.info(f"Saving daily results to {filepath}")
-                self._to_netcdf(dataset=self.daily_results, filepath=filepath, async_copy=async_copy)
+                    self._save_geotiff(filepath, variables)
+                logger.info(f"Saving daily results to {filepath}")
+                self._to_netcdf(dataset=self.daily_results, filepath=filepath)
             except PermissionError as err:
                 if not DEBUG:
                     raise err
@@ -824,7 +819,7 @@ class TEAIndicators:
                     os.remove(filepath)
                 self._to_netcdf(dataset=self.daily_results, filepath=filepath)
 
-    def _to_netcdf(self, dataset: Dataset, filepath, async_copy=False):
+    def _to_netcdf(self, dataset: Dataset, filepath):
         """
         save dataset to netCDF with compression and rounding to reduce file size
 
@@ -843,9 +838,7 @@ class TEAIndicators:
             logger.info(f"Computed Dask data for NetCDF serialization in {time.perf_counter() - start:.2f}s")
 
         # save to netCDF with compression and rounding to reduce file size
-        output_path = temporary_path(filepath) if async_copy else filepath
-        if async_copy:
-            logger.info(f"Writing async result to temporary file {output_path}; destination is {filepath}")
+        output_path = filepath
         start = time.perf_counter()
         if digits >= 0:
             logger.debug(f"Rounding all data to {digits} significant digits")
@@ -868,8 +861,6 @@ class TEAIndicators:
             logger.debug(f"Saving dataset to {output_path} without rounding")
             dataset.to_netcdf(output_path)
         logger.info(f"Serialized NetCDF output {output_path} in {time.perf_counter() - start:.2f}s")
-        if async_copy:
-            submit_copy(output_path, filepath)
 
     def _is_raster_variable(self, var_data):
         """
@@ -903,7 +894,7 @@ class TEAIndicators:
                 raster_vars.append(var)
         return raster_vars
 
-    def _save_geotiff(self, filepath, variables=None, dataset=None, split_by_year=True, async_copy=False):
+    def _save_geotiff(self, filepath, variables=None, dataset=None, split_by_year=True):
         """
         Save dataset to GeoTIFF format.
         Only processes raster data (variables with spatial dimensions).
@@ -926,12 +917,6 @@ class TEAIndicators:
         if dataset is None:
             dataset = self.daily_results
         
-        output_dir = None
-        destination_filepath = filepath
-        if async_copy:
-            output_dir = tempfile.mkdtemp(prefix="tea-tiff-")
-            filepath = os.path.join(output_dir, os.path.basename(filepath))
-
         # Get all raster variables
         raster_vars = self._get_raster_variables(dataset)
         
@@ -966,9 +951,6 @@ class TEAIndicators:
                         var_filepath = yearly_filepath.replace(ext, f'_{var}.tiff')
                         logger.info(f"Saving raster variable '{var}' for year {year} to {var_filepath}")
                         var_data.rio.to_raster(var_filepath, compress='LZW')
-                        if async_copy:
-                            submit_copy(var_filepath, str(var_filepath).replace(
-                                output_dir, os.path.dirname(destination_filepath), 1))
                         saved_files.append(var_filepath)
                     except Exception as e:
                         logger.error(f"Failed to save variable '{var}' for year {year} to GeoTIFF: {str(e)}")
@@ -981,9 +963,6 @@ class TEAIndicators:
                     var_filepath = filepath.replace(ext, f'_{var}.tiff')
                     logger.info(f"Saving raster variable '{var}' to {var_filepath}")
                     var_data.rio.to_raster(var_filepath, compress='LZW')
-                    if async_copy:
-                        submit_copy(var_filepath, str(var_filepath).replace(
-                            output_dir, os.path.dirname(destination_filepath), 1))
                     saved_files.append(var_filepath)
                 except Exception as e:
                     logger.error(f"Failed to save variable '{var}' to GeoTIFF: {str(e)}")
@@ -1888,7 +1867,7 @@ class TEAIndicators:
         self.ctp_results.attrs['CTP'] = self.CTP
         self.ctp_results = self._propagate_crs(self.ctp_results)
 
-    def save_ctp_results(self, filepath, variables=None, save_tiff=False, async_copy=False):
+    def save_ctp_results(self, filepath, variables=None, save_tiff=False):
         """
         save all CTP results to filepath
         Args:
@@ -1902,9 +1881,8 @@ class TEAIndicators:
             warnings.simplefilter("ignore")
             try:
                 if save_tiff:
-                    self._save_geotiff(filepath, variables, dataset=self.ctp_results, split_by_year=False,
-                                       async_copy=async_copy)
-                self._to_netcdf(self.ctp_results, filepath, async_copy=async_copy)
+                    self._save_geotiff(filepath, variables, dataset=self.ctp_results, split_by_year=False)
+                self._to_netcdf(self.ctp_results, filepath)
             except PermissionError as err:
                 if not DEBUG:
                     raise err
@@ -2017,7 +1995,7 @@ class TEAIndicators:
             {var: self.decadal_results[var] for var in self.decadal_results.data_vars if
              'ED' in var})
 
-    def save_decadal_results(self, filepath, variables=None, save_tiff=False, async_copy=False):
+    def save_decadal_results(self, filepath, variables=None, save_tiff=False):
         """
         save all decadal results to filepath
         Args:
@@ -2051,9 +2029,8 @@ class TEAIndicators:
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
             if save_tiff:
-                self._save_geotiff(filepath, variables, dataset=self.decadal_results, split_by_year=False,
-                                   async_copy=async_copy)
-            self._to_netcdf(self.decadal_results, filepath, async_copy=async_copy)
+                self._save_geotiff(filepath, variables, dataset=self.decadal_results, split_by_year=False)
+            self._to_netcdf(self.decadal_results, filepath)
 
     def load_decadal_results(self, filepath):
         """
@@ -2491,7 +2468,7 @@ class TEAIndicators:
                     ds[vvar.replace(equal_var, repl_var)] = ds[vvar]
         return ds
 
-    def save_amplification_factors(self, filepath, async_copy=False):
+    def save_amplification_factors(self, filepath):
         """
         save amplification factors to filepath
         """
@@ -2499,7 +2476,7 @@ class TEAIndicators:
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
             try:
-                self._to_netcdf(self.amplification_factors, filepath, async_copy=async_copy)
+                self._to_netcdf(self.amplification_factors, filepath)
             except PermissionError as err:
                 if not DEBUG:
                     raise err

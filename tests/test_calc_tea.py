@@ -7,7 +7,7 @@ try:
     from teametrics.calc_TEA import (
         _getopts, _get_ctp_filepath, _calc_x_y_range, _reduce_region,
         _get_threshold, _load_mask_file, _load_gr_grid_static,
-        _compare_to_ctp_ref, _load_population_grid, calc_dbv_indicators,
+        _compare_to_ctp_ref, _load_population_grid, _get_chunk_workers, calc_dbv_indicators,
     )
     HAS_CALC_TEA = True
 except (ImportError, FileNotFoundError) as e:
@@ -39,6 +39,16 @@ class TestGetopts:
         with pytest.raises(SystemExit) as exc_info:
             _getopts()
         assert exc_info.value.code == 0
+
+
+class TestParallelChunks:
+    def test_chunk_workers_are_bounded(self, monkeypatch):
+        monkeypatch.setattr("teametrics.calc_TEA.os.cpu_count", lambda: 96)
+        monkeypatch.setattr(
+            "teametrics.calc_TEA.psutil.virtual_memory",
+            lambda: type("Memory", (), {"available": 128 * 1024 ** 3})(),
+        )
+        assert _get_chunk_workers(20) == 4
 
 
 class TestGetCTPFilepath:

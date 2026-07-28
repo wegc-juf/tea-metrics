@@ -41,7 +41,6 @@ calc_TEA:
   decadal_only: false
   recalc_decadal: false
   use_dask: auto
-  async_save: true
   compression_level: 1
 
 create_region_masks:

@@ -13,6 +13,8 @@ from copy import deepcopy
 
 import argparse
 import numpy as np
+import psutil
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 import xarray as xr
 
@@ -21,7 +23,6 @@ from .common.general_functions import (create_history_from_cfg, create_tea_histo
                                        get_csv_data, create_threshold_grid)
 from .common.config import load_opts
 from .common.TEA_logger import logger, set_log_level
-from .common.async_save import wait_for_pending_copies
 from .utils.calc_decadal_indicators import (calc_decadal_indicators, calc_amplification_factors,
                                             get_decadal_outpath, get_amplification_outpath)
 from .TEA import TEAIndicators
@@ -66,20 +67,19 @@ def calc_tea_indicators(opts):
             starts = [opts.start]
             ends = [opts.end]
 
-        for p_start, p_end in zip(starts, ends):
-            # calculate daily basis variables
-            tea = calc_dbv_indicators(mask=mask, opts=opts, start=p_start, end=p_end,
-                                      gridded=gridded, threshold=threshold_grid)
-
-            # for aggregate GeoRegion calculation, load GR grid files
-            if 'agr' in opts:
-                _load_or_generate_gr_grid_static(opts, tea)
-
-            # calculate CTP indicators
-            calc_annual_ctp_indicators(tea=tea, opts=opts, start=p_start, end=p_end)
-
-            # collect garbage
-            gc.collect()
+        chunks = list(zip(starts, ends))
+        if (getattr(opts, 'parallel_chunks', True) and gridded and len(chunks) > 1
+                and 'agr' not in opts):
+            workers = _get_chunk_workers(len(chunks))
+            logger.info(f'Calculating {len(chunks)} daily/CTP chunks with {workers} worker processes.')
+            with ProcessPoolExecutor(max_workers=workers) as executor:
+                futures = [executor.submit(_calculate_chunk_worker, opts, int(p_start), int(p_end))
+                           for p_start, p_end in chunks]
+                for future in futures:
+                    future.result()
+        else:
+            for p_start, p_end in chunks:
+                _calculate_chunk(opts, mask, threshold_grid, gridded, int(p_start), int(p_end))
 
     # calculate decadal indicators and amplification factors
     if opts.decadal or opts.decadal_only or opts.recalc_decadal:
@@ -103,7 +103,35 @@ def calc_tea_indicators(opts):
             # TODO calc also for annual data
             _calc_agr_mean_and_spread(opts=opts, tea=tea)
 
-    wait_for_pending_copies()
+
+def _calculate_chunk_worker(opts, start, end):
+    """Calculate one independent gridded chunk in a worker process."""
+    worker_opts = deepcopy(opts)
+    worker_opts.recalc_threshold = False
+    # Chunk-level processes provide the parallelism; avoid nested Dask pools.
+    worker_opts.use_dask = False
+    mask = _load_mask_file(worker_opts)
+    threshold = _get_threshold(worker_opts)
+    _calculate_chunk(worker_opts, mask, threshold, True, start, end)
+
+
+def _calculate_chunk(opts, mask, threshold, gridded, start, end):
+    """Calculate and save daily and CTP results for one time chunk."""
+    tea = calc_dbv_indicators(mask=mask, opts=opts, start=start, end=end,
+                              gridded=gridded, threshold=threshold)
+    if 'agr' in opts:
+        _load_or_generate_gr_grid_static(opts, tea)
+    calc_annual_ctp_indicators(tea=tea, opts=opts, start=start, end=end)
+    gc.collect()
+
+
+def _get_chunk_workers(chunk_count):
+    """Choose a conservative process count for independent time chunks."""
+    cpu_count = max(1, os.cpu_count() or 1)
+    available_memory = max(1, psutil.virtual_memory().available)
+    workers_by_memory = max(1, available_memory // (32 * 1024 ** 3))
+    return min(chunk_count, max(1, cpu_count // 4), workers_by_memory, 8)
+
 
 
 def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
@@ -224,8 +252,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
 
         # save results
         create_tea_history(cfg_params=opts, tea=tea, dataset='daily_results')
-        tea.save_daily_results(filepath=dbv_filename, save_tiff=opts.file_format == 'GeoTiff',
-                               async_copy=opts.async_save)
+        tea.save_daily_results(filepath=dbv_filename, save_tiff=opts.file_format == 'GeoTiff')
     else:
         # load existing results
         if 'agr' in opts:
@@ -430,7 +457,7 @@ def _save_ctp_output(opts, tea, start, end):
 
     logger.info(f'Saving CTP indicators to {outpath}')
     tea.save_ctp_results(filepath=outpath, save_tiff=opts.file_format == 'GeoTiff',
-                         async_copy=opts.async_save)
+                         )
 
     if opts.compare_to_ref:
         _compare_to_ctp_ref(tea, path_ref)
@@ -732,7 +759,7 @@ def _calc_agr_mean_and_spread(opts, tea):
                 os.remove(outpath_decadal)
     create_tea_history(cfg_params=opts, tea=tea, dataset='decadal_results')
     tea.save_decadal_results(filepath=outpath_decadal, save_tiff=opts.file_format == 'GeoTiff',
-                             async_copy=opts.async_save)
+                             )
 
     # # annual
     if opts.annual_spreads:
@@ -743,13 +770,13 @@ def _calc_agr_mean_and_spread(opts, tea):
         tea.ctp_results = tea.ctp_results.drop_vars(
             [var for var in tea.ctp_results.data_vars if 'AGR' not in var])
         tea.save_ctp_results(filepath=filepath_annual, save_tiff=opts.file_format == 'GeoTiff',
-                              async_copy=opts.async_save)
+                              )
 
     # # amplification factors
     outpath_ampl = get_amplification_outpath(opts, opts.agr)
     logger.info(f'Saving AGR amplification factors to {outpath_ampl}')
     create_tea_history(cfg_params=opts, tea=tea, dataset='amplification_factors')
-    tea.save_amplification_factors(filepath=outpath_ampl, async_copy=opts.async_save)
+    tea.save_amplification_factors(filepath=outpath_ampl)
 
 
 def _load_gr_grid_static(opts):
