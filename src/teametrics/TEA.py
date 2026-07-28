@@ -422,10 +422,13 @@ class TEAIndicators:
 
     def _calc_DTEEC(self):
         """Calculate DTEEC using the configured serial or parallel implementation."""
+        start = time.perf_counter()
         if self.use_dask and self.gridded:
             self._calc_DTEEC_parallel()
         else:
             self._calc_DTEEC_legacy()
+        logger.info(f"Calculated DTEEC in {time.perf_counter() - start:.2f}s "
+                    f"({'Dask' if self.use_dask and self.gridded else 'NumPy'} path)")
 
     def _calc_DTEEC_legacy(self):
         """

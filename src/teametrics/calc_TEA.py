@@ -7,6 +7,7 @@
 import os
 import gc
 import math
+import time
 import warnings
 from copy import deepcopy
 
@@ -213,7 +214,9 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
             gr = True
         else:
             gr = False
+        start_calc = time.perf_counter()
         tea.calc_daily_basis_vars(gr=gr)
+        logger.info(f"Calculated daily basis variables in {time.perf_counter() - start_calc:.2f}s")
 
         # calculate hourly indicators
         if opts.hourly:

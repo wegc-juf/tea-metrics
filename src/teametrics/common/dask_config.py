@@ -2,6 +2,7 @@
 
 import math
 import os
+import time
 
 import dask
 import psutil
@@ -29,12 +30,16 @@ def configure_dask(data, use_dask='auto'):
     available_memory = max(1, psutil.virtual_memory().available)
     data_size = data.nbytes if data.nbytes is not None else 0
 
-    if use_dask == 'auto' and (cpu_count == 1 or data_size <= 256 * _MIB):
-        logger.info("Dask auto mode: using eager NumPy execution for small input data.")
+    estimated_working_set = data_size * 6
+    if use_dask == 'auto' and (cpu_count == 1 or estimated_working_set <= available_memory * 0.5):
+        logger.info("Dask auto mode: using eager NumPy execution; estimated working set "
+                    f"is {estimated_working_set / _GIB:.1f} GiB and "
+                    f"{available_memory / _GIB:.1f} GiB is available.")
         return False
 
     workers_by_memory = max(1, available_memory // _GIB)
-    workers = min(cpu_count, workers_by_memory, 64)
+    worker_cap = 64 if use_dask is True else 16
+    workers = min(cpu_count, workers_by_memory, worker_cap)
     dask.config.set(scheduler='threads', num_workers=workers)
     logger.info(f"Dask enabled with {workers} threaded workers "
                 f"({available_memory / _GIB:.1f} GiB available, "
@@ -45,12 +50,16 @@ def configure_dask(data, use_dask='auto'):
 def configure_dask_data(data, use_dask='auto'):
     """Return data with resource-aware Dask settings applied."""
     if use_dask is False:
+        start = time.perf_counter()
         data.load()
+        logger.info(f"Loaded input data eagerly in {time.perf_counter() - start:.2f}s")
         return data, False
 
     resolved = configure_dask(data, use_dask=use_dask)
     if not resolved:
+        start = time.perf_counter()
         data.load()
+        logger.info(f"Loaded input data eagerly in {time.perf_counter() - start:.2f}s")
         return data, False
 
     available_memory = max(1, psutil.virtual_memory().available)
