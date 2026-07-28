@@ -127,7 +127,7 @@ def _get_default_opts(fname, opts):
     if 'significant_digits' not in opts:
         opts.significant_digits = 3
     if 'compression_level' not in opts:
-        opts.compression_level = 4
+        opts.compression_level = 1
     if 'file_format' not in opts:
         opts.file_format = 'NetCDF4'
 

@@ -37,7 +37,7 @@ class TEAIndicators:
                  population_grid=None,
                  low_extreme=False,
                  unit='', mask=None, apply_mask=True, ctp=None, use_dask=False, significant_digits: int = 2,
-                 compression_level: int = 4,
+                 compression_level: int = 1,
                  ref_period=(1961, 1990), **kwargs):
         """
         Initialize TEAIndicators object
