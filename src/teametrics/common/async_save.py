@@ -27,9 +27,11 @@ def submit_copy(source, destination):
 
 def wait_for_pending_copies():
     """Wait for all queued copies and propagate copy errors."""
+    logger.debug("Waiting for pending async file copies")
     while True:
         with _lock:
             if not _pending:
+                logger.debug("No pending async file copies")
                 return
             futures = _pending[:]
             _pending.clear()
