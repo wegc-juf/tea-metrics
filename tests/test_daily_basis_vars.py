@@ -33,7 +33,7 @@ class TestCalcDTEP:
     def test_DTEP_formula(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=False)
         expected = tea_constant.daily_results.DTEC.values * \
-            tea_constant.population_grid.values
+            tea_constant.population_grid.values / 10000
         np.testing.assert_array_equal(
             tea_constant.daily_results.DTEP.values, expected)
 
