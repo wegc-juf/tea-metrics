@@ -19,7 +19,7 @@ from .common.general_functions import (create_history_from_cfg, create_tea_histo
                                        get_gridded_data,
                                        get_csv_data, create_threshold_grid)
 from .common.config import load_opts
-from .common.TEA_logger import logger
+from .common.TEA_logger import logger, set_log_level
 from .common.async_save import wait_for_pending_copies
 from .utils.calc_decadal_indicators import (calc_decadal_indicators, calc_amplification_factors,
                                             get_decadal_outpath, get_amplification_outpath)
@@ -644,6 +644,12 @@ def _getopts():
                         version=TEA_VERSION,
                         help='show version and exit')
 
+    parser.add_argument('--loglevel', '-ll',
+                        type=str.upper,
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+                        default='DEBUG',
+                        help='set logging level (default: DEBUG)')
+
     myopts = parser.parse_args()
 
     return myopts
@@ -792,10 +798,10 @@ def run():
     warnings.filterwarnings(action='ignore', message='divide by zero encountered in divide')
     warnings.filterwarnings(action='ignore', message='invalid value encountered in divide')
     
-    logger.info(f'Running teametrics version {TEA_VERSION}')
-
     # get command line parameters
     cmd_opts = _getopts()
+    set_log_level(cmd_opts.loglevel)
+    logger.info(f'Running teametrics version {TEA_VERSION}')
 
     # load CFG parameters
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)

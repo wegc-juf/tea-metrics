@@ -26,6 +26,12 @@ class TestGetopts:
                                          "test.yaml"])
         opts = _getopts()
         assert opts.config_file == "test.yaml"
+        assert opts.loglevel == "DEBUG"
+
+    def test_getopts_loglevel(self, monkeypatch):
+        monkeypatch.setattr("sys.argv", ["calc_tea", "--loglevel", "warning"])
+        opts = _getopts()
+        assert opts.loglevel == "WARNING"
 
     def test_getopts_version(self, monkeypatch):
         monkeypatch.setattr("sys.argv", ["calc_tea", "--config-file",
