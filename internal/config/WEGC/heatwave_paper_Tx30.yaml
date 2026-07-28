@@ -39,7 +39,8 @@ calc_TEA:
   spreads: true
   decadal_only: false
   recalc_decadal: true
-  use_dask: auto
+  use_dask: false
+  async_save: false
 
 create_region_masks:
   <<: *GR

@@ -38,6 +38,7 @@ class TEAIndicators:
                  population_grid=None,
                  low_extreme=False,
                  unit='', mask=None, apply_mask=True, ctp=None, use_dask=False, significant_digits: int = 2,
+                 compression_level: int = 4,
                  ref_period=(1961, 1990), **kwargs):
         """
         Initialize TEAIndicators object
@@ -66,6 +67,9 @@ class TEAIndicators:
         self.threshold_grid = threshold
 
         self.significant_digits = significant_digits
+        if not 0 <= compression_level <= 9:
+            raise ValueError("compression_level must be between 0 and 9")
+        self.compression_level = compression_level
 
         # set default x and y dim names
         self.xdim = 'lon'
@@ -837,7 +841,7 @@ class TEAIndicators:
             encoding = {
                 v: {
                     "zlib": True,
-                    "complevel": 4,
+                    "complevel": self.compression_level,
                 }
                 for v in dataset.data_vars
             }

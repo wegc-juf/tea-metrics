@@ -6,6 +6,23 @@ from conftest import EXPECTED_CRS
 
 
 class TestSaveLoadDaily:
+    def test_netcdf_compression_level(self, tmp_path, monkeypatch):
+        tea = TEAIndicators(compression_level=1)
+        dataset = xr.Dataset({"value": xr.DataArray([1.0, 2.0], dims="time")})
+        calls = []
+
+        def capture_to_netcdf(self, filepath, encoding=None):
+            calls.append(encoding)
+
+        monkeypatch.setattr(xr.Dataset, "to_netcdf", capture_to_netcdf)
+        tea._to_netcdf(dataset, tmp_path / "compressed.nc")
+        assert calls[-1]["value"]["complevel"] == 1
+        assert calls[-1]["value"]["zlib"] is True
+
+        tea.significant_digits = -1
+        tea._to_netcdf(dataset, tmp_path / "uncompressed.nc")
+        assert calls[-1] is None
+
     def test_save_and_load_daily_roundtrip(self, tea_constant, tmp_path):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
         path = tmp_path / "daily.nc"

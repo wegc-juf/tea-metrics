@@ -66,6 +66,7 @@ calc_TEA:
   recalc_daily: true
   hourly: false
   async_save: true
+  compression_level: 1
   decadal: true
   recalc_decadal: true
   spreads: true

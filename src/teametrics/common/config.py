@@ -126,6 +126,8 @@ def _get_default_opts(fname, opts):
         opts.min_exceedance_area = 1
     if 'significant_digits' not in opts:
         opts.significant_digits = 3
+    if 'compression_level' not in opts:
+        opts.compression_level = 4
     if 'file_format' not in opts:
         opts.file_format = 'NetCDF4'
 
@@ -273,6 +275,7 @@ def check_type(key, value):
         'min_exceedance_area': float,
         'min_duration': float,
         'significant_digits': int,
+        'compression_level': int,
         'file_format': str,
 
         # time parameters
@@ -356,6 +359,8 @@ def check_type(key, value):
                                          f'but got {value} of type {type(value)} instead.')
     if key == 'use_dask' and isinstance(value, str) and value != 'auto':
         raise argparse.ArgumentTypeError("use_dask must be True, False, or 'auto'.")
+    if key == 'compression_level' and not 0 <= value <= 9:
+        raise argparse.ArgumentTypeError("compression_level must be between 0 and 9.")
     # check for correct unit
     if key == 'unit':
         unit = cfunits.Units(value)

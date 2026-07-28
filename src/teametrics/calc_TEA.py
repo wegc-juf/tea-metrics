@@ -195,8 +195,9 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 population_grid=population_grid,
                                 min_area=min_area, low_extreme=opts.low_extreme,
-                                unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                use_dask=opts.use_dask,
+                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
+                                 use_dask=opts.use_dask,
+                                 compression_level=opts.compression_level,
                                 cell_size_y=opts.agr_cell_size,
                                 significant_digits=opts.significant_digits, agr_frac_min=opts.agr_frac_min,
                                 land_frac_min=opts.land_frac_min, min_duration=opts.min_duration)
@@ -205,7 +206,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
                                 population_grid=population_grid,
                                 min_area=min_area, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, significant_digits=opts.significant_digits,
-                                use_dask=opts.use_dask)
+                                use_dask=opts.use_dask, compression_level=opts.compression_level)
 
         # computation of daily basis variables (Methods chapter 3)
         if gridded:

@@ -39,7 +39,7 @@ calc_TEA:
   spreads: true
   decadal_only: false
   recalc_decadal: true
-  use_dask: false
+  use_dask: true
   async_save: false
 
 create_region_masks:
