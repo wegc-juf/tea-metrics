@@ -78,6 +78,7 @@ def calc_tea_indicators(opts):
                 for future in futures:
                     future.result()
         else:
+            logger.info('Only one decade requested. Calculating daily/CTP indicators in one process.')
             for p_start, p_end in chunks:
                 _calculate_chunk(opts, mask, threshold_grid, gridded, int(p_start), int(p_end))
 
