@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import xarray as xr
+import dask.array as da
 from teametrics.TEA import TEAIndicators
 from conftest import EXPECTED_CRS
 
@@ -22,6 +23,21 @@ class TestSaveLoadDaily:
         tea.significant_digits = -1
         tea._to_netcdf(dataset, tmp_path / "uncompressed.nc")
         assert calls[-1] is None
+
+    def test_netcdf_computes_dask_data_before_serialization(self, tmp_path, monkeypatch):
+        tea = TEAIndicators(use_dask=True)
+        dataset = xr.Dataset({"value": xr.DataArray(
+            da.ones((4, 2), chunks=(2, 1)), dims=("time", "x"))})
+        observed = []
+
+        def capture_to_netcdf(self, filepath, encoding=None):
+            observed.append(any(getattr(data.data, "chunks", None) is not None
+                                for data in self.data_vars.values()))
+
+        monkeypatch.setattr(xr.Dataset, "to_netcdf", capture_to_netcdf)
+        tea._to_netcdf(dataset, tmp_path / "computed.nc")
+
+        assert observed == [False]
 
     def test_save_and_load_daily_roundtrip(self, tea_constant, tmp_path):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)

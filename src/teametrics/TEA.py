@@ -7,6 +7,7 @@ import warnings
 import os
 import gc
 import tempfile
+import time
 
 import xarray as xr
 import rioxarray  # noqa: F401 - imported to enable .rio accessor
@@ -832,11 +833,16 @@ class TEAIndicators:
 
         """
         digits = self.significant_digits
+        if any(getattr(data.data, 'chunks', None) is not None for data in dataset.data_vars.values()):
+            start = time.perf_counter()
+            dataset = dataset.compute()
+            logger.info(f"Computed Dask data for NetCDF serialization in {time.perf_counter() - start:.2f}s")
 
         # save to netCDF with compression and rounding to reduce file size
         output_path = temporary_path(filepath) if async_copy else filepath
         if async_copy:
             logger.info(f"Writing async result to temporary file {output_path}; destination is {filepath}")
+        start = time.perf_counter()
         if digits >= 0:
             encoding = {
                 v: {
@@ -853,6 +859,7 @@ class TEAIndicators:
             dataset.assign(rounded_data_vars).to_netcdf(output_path, encoding=encoding)
         else:
             dataset.to_netcdf(output_path)
+        logger.info(f"Serialized NetCDF output {output_path} in {time.perf_counter() - start:.2f}s")
         if async_copy:
             submit_copy(output_path, filepath)
 

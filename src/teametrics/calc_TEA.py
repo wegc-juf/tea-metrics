@@ -734,7 +734,7 @@ def _calc_agr_mean_and_spread(opts, tea):
         tea.ctp_results = tea.ctp_results.drop_vars(
             [var for var in tea.ctp_results.data_vars if 'AGR' not in var])
         tea.save_ctp_results(filepath=filepath_annual, save_tiff=opts.file_format == 'GeoTiff',
-                             async_copy=opts.async_save)
+                              async_copy=opts.async_save)
 
     # # amplification factors
     outpath_ampl = get_amplification_outpath(opts, opts.agr)
