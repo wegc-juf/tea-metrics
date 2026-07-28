@@ -89,6 +89,21 @@ class TestSaveLoadCTP:
                 assert np.issubdtype(
                     tea2.ctp_results[v].dtype, np.datetime64)
 
+    def test_load_split_ctp_results_without_dask(self, tea_constant, tmp_path):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        first = tmp_path / "ctp_first.nc"
+        second = tmp_path / "ctp_second.nc"
+        tea_constant.ctp_results.isel(time=slice(None, 5)).to_netcdf(first)
+        tea_constant.ctp_results.isel(time=slice(5, None)).to_netcdf(second)
+
+        loaded = TEAIndicators(unit="K")
+        loaded.load_ctp_results([first, second], use_dask=False)
+
+        for variable in tea_constant.ctp_results.data_vars:
+            assert variable in loaded.ctp_results
+        assert loaded.ctp_results.sizes["time"] == tea_constant.ctp_results.sizes["time"]
+
 
 class TestSaveLoadDecadal:
     def test_save_and_load_decadal_roundtrip(self, tea_constant, tmp_path):

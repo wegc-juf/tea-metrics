@@ -1901,7 +1901,22 @@ class TEAIndicators:
                                                  coords='minimal', compat='override', join='exact',
                                                  chunks='auto')
         else:
-            self.ctp_results = xr.open_dataset(filepath)
+            if isinstance(filepath, (str, os.PathLike)):
+                self.ctp_results = xr.open_dataset(filepath)
+            else:
+                files = list(filepath)
+                if len(files) == 1:
+                    self.ctp_results = xr.open_dataset(files[0])
+                else:
+                    datasets = [xr.open_dataset(file) for file in files]
+                    try:
+                        self.ctp_results = xr.combine_by_coords(
+                            datasets, data_vars='minimal', coords='minimal',
+                            compat='override', join='exact')
+                        self.ctp_results.load()
+                    finally:
+                        for dataset in datasets:
+                            dataset.close()
         
         # TODO: optimize code in TEA._calc_spread_estimators
         if not use_dask:
