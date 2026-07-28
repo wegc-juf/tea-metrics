@@ -90,7 +90,8 @@ def calc_tea_indicators(opts):
                          agr_frac_min=opts.agr_frac_min, min_duration=opts.min_duration,
                          land_frac_min=opts.land_frac_min)
         else:
-            tea = TEAIndicators(significant_digits=opts.significant_digits, ref_period=opts.ref_period)
+            tea = TEAIndicators(significant_digits=opts.significant_digits, ref_period=opts.ref_period,
+                                use_dask=opts.use_dask, compression_level=opts.compression_level)
 
         # calculate decadal-mean ctp indicator variables
         calc_decadal_indicators(opts=opts, tea=tea)

@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .common.var_attrs import get_attrs, equal_vars
 from .common.TEA_logger import logger
+from .common.dask_config import configure_dask
 
 DEBUG = False
 DEFAULT_MIN_DURATION = 2.5
@@ -1900,6 +1901,20 @@ class TEAIndicators:
             self.ctp_results = xr.open_mfdataset(filepath, data_vars='minimal', combine='by_coords',
                                                  coords='minimal', compat='override', join='exact',
                                                  chunks='auto')
+            configure_dask(self.ctp_results, use_dask=True)
+            chunk_info = {
+                var: self.ctp_results[var].chunks
+                for var in self.ctp_results.data_vars
+                if self.ctp_results[var].chunks is not None
+            }
+            task_count = sum(
+                len(self.ctp_results[var].data.__dask_graph__())
+                for var in chunk_info
+                if self.ctp_results[var].data.__dask_graph__() is not None
+            )
+            logger.debug(f"Loaded CTP Dask dataset: dims={dict(self.ctp_results.sizes)}, "
+                         f"chunk_sample={next(iter(chunk_info.values()), None)}, "
+                         f"chunked_variables={len(chunk_info)}, tasks={task_count}")
         else:
             if isinstance(filepath, (str, os.PathLike)):
                 self.ctp_results = xr.open_dataset(filepath)
@@ -1974,10 +1989,18 @@ class TEAIndicators:
         if self.ctp_results is None:
             raise ValueError("CTP results must be calculated before calculating decadal mean")
 
+        start = time.perf_counter()
+        logger.debug(f"Starting decadal calculation: {len(self.ctp_results.data_vars)} CTP variables, "
+                     f"{self.ctp_results.sizes.get('time', 0)} time steps, use_dask={self.use_dask}")
         self._calc_decadal_mean(decadal_window=decadal_window)
+        logger.debug(f"Calculated decadal rolling means in {time.perf_counter() - start:.2f}s")
+        start = time.perf_counter()
         self._calc_decadal_compound_vars()
+        logger.debug(f"Calculated decadal compound variables in {time.perf_counter() - start:.2f}s")
         if self._ref_mean is None:
+            start = time.perf_counter()
             self._calc_ref(calc_annual=calc_annual_ref)
+            logger.debug(f"Calculated decadal reference means in {time.perf_counter() - start:.2f}s")
         self._apply_min_duration(self.decadal_results, min_duration_avg, duration_data=self._ref_mean)
 
         # backup self.decadal_results.ED
@@ -1988,7 +2011,9 @@ class TEAIndicators:
         #     self._apply_min_duration(self.decadal_results, min_duration_avg)
 
         if calc_spread:
+            start = time.perf_counter()
             self._calc_spread_estimators()
+            logger.debug(f"Calculated spread estimators in {time.perf_counter() - start:.2f}s")
         self.CTP = self.ctp_results.attrs['CTP']
         self.decadal_results['time'].attrs = get_attrs(vname='decadal', period=self.CTP)
         self.decadal_results.attrs['CTP'] = self.CTP
@@ -2218,6 +2243,7 @@ class TEAIndicators:
         """
         calculate spread estimators (equation 25)
         """
+        start = time.perf_counter()
         annual_data = self.ctp_results
         dec_data = self.decadal_results
 
@@ -2226,31 +2252,34 @@ class TEAIndicators:
             var].dims])
         dec_data = dec_data.drop_vars([var for var in dec_data.data_vars if 'time' not in dec_data[var].dims])
 
-        supp, slow = xr.full_like(dec_data, np.nan), xr.full_like(dec_data, np.nan)
-        for icy, cy in enumerate(annual_data.time):
-            # skip first and last 5 years
-            if icy < 5 or icy >= len(annual_data.time) - 4:
+        supp = xr.Dataset()
+        slow = xr.Dataset()
+        for var in annual_data.data_vars:
+            if var not in dec_data:
                 continue
-            one_decade = annual_data.isel(time=slice(icy - 5, icy + 5))
-            center_val = dec_data.isel(time=icy)
-            # equation 25_1
-            cupp = xr.where(one_decade > center_val, 1, 0)
+            annual_var = annual_data[var]
+            dec_var = dec_data[var]
+            if not np.issubdtype(annual_var.dtype, np.number):
+                logger.debug(f"Skipping spread estimator for non-numeric variable {var}")
+                continue
 
-            cupp_sum = cupp.sum(dim='time')
-            cupp_sum = cupp_sum.where(cupp_sum > 2, 2)
-            supp_per = np.sqrt(
-                1 / cupp_sum * ((cupp * (one_decade - center_val) ** 2).sum(dim='time')))
+            annual_window = annual_var.rolling(time=10, center=True).construct('window')
+            valid_window = xr.ones_like(annual_var).rolling(
+                time=10, center=True).construct('window').notnull().all('window')
+            difference = annual_window - dec_var
+            upper = xr.where(difference > 0, 1, 0)
+            lower = 1 - upper
+            upper_count = upper.sum(dim='window')
+            lower_count = lower.sum(dim='window')
+            upper_count = upper_count.where(upper_count > 2, 2)
+            lower_count = lower_count.where(lower_count > 2, 2)
+            upper_variance = (upper * difference ** 2).sum(dim='window')
+            lower_variance = (lower * difference ** 2).sum(dim='window')
+            supp[var] = np.sqrt(upper_variance / upper_count).where(valid_window)
+            slow[var] = np.sqrt(lower_variance / lower_count).where(valid_window)
 
-            clow_sum = (1 - cupp).sum(dim='time')
-            clow_sum = clow_sum.where(clow_sum > 2, 2)
-            slow_per = np.sqrt(
-                1 / clow_sum * (((1 - cupp) * (one_decade - center_val) ** 2).sum(dim='time')))
-
-            logger.debug(f"assigning spread values for {cy.values} to decadal results")
-            # TODO: optimize this code for dask!
-
-            supp.loc[{'time': cy}] = supp_per
-            slow.loc[{'time': cy}] = slow_per
+        logger.debug(f"Vectorized spread windows for {len(supp.data_vars)} variables in "
+                     f"{time.perf_counter() - start:.2f}s")
 
         for vvar in supp.data_vars:
             supp[vvar].attrs = get_attrs(vname=vvar, spread='upper', data_unit=self.unit)

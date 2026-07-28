@@ -2,6 +2,7 @@ import re
 import os
 import glob
 import logging
+import time
 import warnings
 
 from pathlib import Path
@@ -53,10 +54,11 @@ def load_ctp_data(opts, tea):
     files = sorted(file_path.glob(file_mask))
     files = [filename for filename in files if is_in_period(filename=str(filename), start=opts.start, end=opts.end)
              if 'ref' not in str(filename)]
+    logger.debug(f"Selected {len(files)} CTP files for {opts.start}-{opts.end}: {files}")
 
-    # TODO: optimize tea._calc_spread_estimators
-
+    start = time.perf_counter()
     tea.load_ctp_results(files, use_dask=opts.use_dask)
+    logger.debug(f"Loaded CTP results in {time.perf_counter() - start:.2f}s")
 
 
 def rolling_decadal_mean(data):
@@ -103,15 +105,21 @@ def calc_decadal_indicators(opts, tea, outpath=None):
     if opts.recalc_decadal or not os.path.exists(outpath):
         load_ctp_data(opts=opts, tea=tea)
         logger.info("Calculating decadal indicators")
+        logger.debug(f"Decadal options: use_dask={opts.use_dask}, spreads={opts.spreads}, "
+                     f"window={opts.decadal_window}, annual_spreads={opts.annual_spreads}")
+        start = time.perf_counter()
         drop_annual_results = not opts.annual_spreads
         tea.calc_decadal_indicators(decadal_window=opts.decadal_window, calc_spread=opts.spreads,
                                     drop_annual_results=drop_annual_results, min_duration=opts.min_duration,
                                     calc_annual_ref=opts.annual_spreads)
+        logger.debug(f"Completed decadal indicator calculations in {time.perf_counter() - start:.2f}s")
         create_tea_history(cfg_params=opts, tea=tea, dataset='decadal_results')
         path = Path(f'{opts.outpath}/dec_indicator_variables/')
         path.mkdir(parents=True, exist_ok=True)
         logger.info(f'Saving decadal indicators to {outpath}')
+        start = time.perf_counter()
         tea.save_decadal_results(filepath=outpath, save_tiff=opts.file_format == 'GeoTiff')
+        logger.debug(f"Saved decadal indicators in {time.perf_counter() - start:.2f}s")
     else:
         logger.info(
             f'Loading decadal indicators from {outpath}. To recalculate use --recalc-decadal')
@@ -181,8 +189,10 @@ def calc_amplification_factors(opts, tea, outpath=None):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         logger.info('Calculating amplification factors.')
+        start = time.perf_counter()
         tea.calc_amplification_factors(ref_period=opts.ref_period, cc_period=opts.cc_period,
                                        min_duration=opts.min_duration, calc_annual_ref=opts.annual_spreads)
+        logger.debug(f"Calculated amplification factors in {time.perf_counter() - start:.2f}s")
 
     path = Path(f'{opts.outpath}/dec_indicator_variables/amplification/')
     path.mkdir(parents=True, exist_ok=True)
@@ -199,7 +209,9 @@ def calc_amplification_factors(opts, tea, outpath=None):
     # save amplification factors
     logger.info(f'Saving amplification factors to {outpath}')
     create_tea_history(cfg_params=opts, tea=tea, dataset='amplification_factors')
+    start = time.perf_counter()
     tea.save_amplification_factors(outpath)
+    logger.debug(f"Saved amplification factors in {time.perf_counter() - start:.2f}s")
 
 
 def get_amplification_outpath(opts, region):

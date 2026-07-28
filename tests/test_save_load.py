@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import xarray as xr
+import dask
 import dask.array as da
 from teametrics.TEA import TEAIndicators
 from conftest import EXPECTED_CRS
@@ -103,6 +104,20 @@ class TestSaveLoadCTP:
         for variable in tea_constant.ctp_results.data_vars:
             assert variable in loaded.ctp_results
         assert loaded.ctp_results.sizes["time"] == tea_constant.ctp_results.sizes["time"]
+
+    def test_load_split_ctp_results_configures_dask(self, tea_constant, tmp_path):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        first = tmp_path / "ctp_first.nc"
+        second = tmp_path / "ctp_second.nc"
+        tea_constant.ctp_results.isel(time=slice(None, 5)).to_netcdf(first)
+        tea_constant.ctp_results.isel(time=slice(5, None)).to_netcdf(second)
+
+        loaded = TEAIndicators(unit="K")
+        loaded.load_ctp_results([first, second], use_dask=True)
+
+        assert dask.config.get("scheduler") == "threads"
+        assert loaded.ctp_results.EM_avg.chunks is not None
 
 
 class TestSaveLoadDecadal:

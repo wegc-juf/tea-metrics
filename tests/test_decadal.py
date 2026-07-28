@@ -42,6 +42,20 @@ class TestCalcDecadalIndicators:
                        if v.endswith("_supp") or v.endswith("_slow")]
         assert len(spread_vars) > 0
 
+    def test_decadal_spread_estimators_dask(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        tea_constant.ctp_results = tea_constant.ctp_results.chunk({"time": 5})
+        tea_constant.use_dask = True
+        tea_constant.calc_decadal_indicators(
+            decadal_window=(10, 5, 4), calc_spread=True,
+            drop_annual_results=False, calc_annual_ref=False)
+
+        spread_vars = [v for v in tea_constant.decadal_results.data_vars
+                       if v.endswith("_supp") or v.endswith("_slow")]
+        assert spread_vars
+        assert tea_constant.decadal_results[spread_vars[0]].chunks is not None
+
 
 class TestCalcCompoundVars:
     def _make_tea_with_unit(self):
