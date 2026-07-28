@@ -70,5 +70,5 @@ calc_TEA:
   recalc_decadal: true
   spreads: true
   decadal_only: false
-  parallel_chunks: true
+  parallel_chunks: false
   use_dask: auto

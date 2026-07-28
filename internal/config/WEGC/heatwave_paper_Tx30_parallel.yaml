@@ -42,6 +42,7 @@ calc_TEA:
   recalc_decadal: true
   use_dask: auto
   compression_level: 1
+  parallel_chunks: false
 
 create_region_masks:
   <<: *GR

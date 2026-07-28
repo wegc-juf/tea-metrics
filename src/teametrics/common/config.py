@@ -179,7 +179,7 @@ def _get_default_opts(fname, opts):
         if 'decadal_only' not in opts:
             opts.decadal_only = False
         if 'parallel_chunks' not in opts:
-            opts.parallel_chunks = True
+            opts.parallel_chunks = False
         if 'recalc_decadal' not in opts:
             opts.recalc_decadal = True
         if 'hourly' not in opts:
