@@ -6,7 +6,7 @@ export PATH='/usr/local/bin:/usr/bin:/bin'
 
 SOURCE_ROOT='https://public.hub.geosphere.at/datahub/resources/spartacus-v2-1d-1km/filelisting'
 DEST_DIR='/data/reloclim/backup/ZAMG_SPARTACUS/data/current'
-LOCK_FILE='/tmp/update_spartacus_current.lock'
+LOCK_FILE="${DEST_DIR}/.update_spartacus_current.lock"
 JANUARY_OVERLAP_DAYS=7
 
 mkdir -p "$DEST_DIR"
