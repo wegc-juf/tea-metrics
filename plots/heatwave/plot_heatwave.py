@@ -196,9 +196,12 @@ def run_main(opts, detrend_ctp="JJA"):
         configured_output_path.parent / f"SPARTACUS_DETRENDED_{detrend_ctp}" / "daily_basis_variables"
     ) + "/"
     
-    heatwave_period = ["2026-06-17", "2026-07-01"]
+    heatwave_period = ["2026-06-17", "2026-07-19"]
     worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period, detrend_ctp=detrend_ctp)
     
+    heatwave_period = ["2026-07-25", "2026-08-06"]
+    worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period, detrend_ctp=detrend_ctp)
+
     # heatwave_period = ["2013-07-16", "2013-08-09"]
     # worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period, detrend_ctp=detrend_ctp)
     
