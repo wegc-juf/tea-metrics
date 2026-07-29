@@ -1592,7 +1592,8 @@ class TEAIndicators:
         self.ctp_results[output_var] = tex_gr_max
         self.ctp_results[interval_start_var] = interval_start
         self.ctp_results[interval_end_var] = interval_end
-
+    
+    # noinspection GrazieInspection
     def _calc_maximum_event_extremity(self):
         """
         calculate maximum event extremity per CTP:

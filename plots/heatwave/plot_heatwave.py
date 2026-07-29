@@ -14,7 +14,7 @@ import xarray as xr
 from teametrics.common.config import load_opts
 
 plot_data = True
-show_plots = True
+show_plots = False
 save_data = True
 
 
@@ -203,7 +203,7 @@ def run_main(opts, detrend_ctp="JJA"):
     configured_output_path = Path(opts.outpath)
     daily_data_path_real_world = str(configured_output_path / "daily_basis_variables") + "/"
     daily_data_path_detrended = str(
-        configured_output_path.parent / f"SPARTACUS_DETRENDED_{detrend_ctp}" / "daily_basis_variables"
+        configured_output_path / f"SPARTACUS_detrended_{detrend_ctp}" / "daily_basis_variables"
     ) + "/"
     
     heatwave_period = ["2026-06-17", "2026-07-19"]
