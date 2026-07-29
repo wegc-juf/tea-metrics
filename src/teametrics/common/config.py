@@ -178,10 +178,8 @@ def _get_default_opts(fname, opts):
             opts.decadal_window = '10,5,4'
         if 'decadal_only' not in opts:
             opts.decadal_only = False
-        if 'parallel_chunks' not in opts:
-            opts.parallel_chunks = False
         if 'parallel_workers' not in opts:
-            opts.parallel_workers = 4
+            opts.parallel_workers = 1
         if 'recalc_decadal' not in opts:
             opts.recalc_decadal = True
         if 'hourly' not in opts:
@@ -309,7 +307,6 @@ def check_type(key, value):
         'decadal': bool,
         'recalc_decadal': bool,
         'decadal_only': bool,
-        'parallel_chunks': bool,
         'parallel_workers': int,
         'spreads': bool,
         'annual_spreads': bool,

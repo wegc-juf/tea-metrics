@@ -68,9 +68,9 @@ def calc_tea_indicators(opts):
             ends = [opts.end]
 
         chunks = list(zip(starts, ends))
-        if (getattr(opts, 'parallel_chunks', True) and gridded and len(chunks) > 1
+        if (getattr(opts, 'parallel_workers', 1) > 1 and gridded and len(chunks) > 1
                 and 'agr' not in opts):
-            workers = _get_chunk_workers(len(chunks), getattr(opts, 'parallel_workers', 4))
+            workers = _get_chunk_workers(len(chunks), opts.parallel_workers)
             logger.info(f'Calculating {len(chunks)} daily/CTP chunks with {workers} worker processes.')
             with ProcessPoolExecutor(max_workers=workers) as executor:
                 futures = [executor.submit(_calculate_chunk_worker, opts, int(p_start), int(p_end))

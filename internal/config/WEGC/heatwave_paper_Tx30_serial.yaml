@@ -10,6 +10,7 @@ common_params:
     low_extreme: false
     # file_format: GeoTiff
     file_format: NetCDF4
+    significant_digits: 3
   time_params: &TIME
     start: 1961
     end: 2026
@@ -41,7 +42,7 @@ calc_TEA:
   recalc_decadal: true
   use_dask: false
   compression_level: 1
-  parallel_workers: 4
+  parallel_workers: 1
 
 create_region_masks:
   <<: *GR
