@@ -180,6 +180,8 @@ def _get_default_opts(fname, opts):
             opts.decadal_only = False
         if 'parallel_chunks' not in opts:
             opts.parallel_chunks = False
+        if 'parallel_workers' not in opts:
+            opts.parallel_workers = 4
         if 'recalc_decadal' not in opts:
             opts.recalc_decadal = True
         if 'hourly' not in opts:
@@ -308,6 +310,7 @@ def check_type(key, value):
         'recalc_decadal': bool,
         'decadal_only': bool,
         'parallel_chunks': bool,
+        'parallel_workers': int,
         'spreads': bool,
         'annual_spreads': bool,
         'compare_to_ref': bool,
@@ -361,6 +364,8 @@ def check_type(key, value):
         raise argparse.ArgumentTypeError("use_dask must be True, False, or 'auto'.")
     if key == 'compression_level' and not 0 <= value <= 9:
         raise argparse.ArgumentTypeError("compression_level must be between 0 and 9.")
+    if key == 'parallel_workers' and not 1 <= value <= 4:
+        raise argparse.ArgumentTypeError("parallel_workers must be between 1 and 4.")
     # check for correct unit
     if key == 'unit':
         unit = cfunits.Units(value)

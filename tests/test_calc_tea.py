@@ -49,6 +49,7 @@ class TestParallelChunks:
             lambda: type("Memory", (), {"available": 128 * 1024 ** 3})(),
         )
         assert _get_chunk_workers(20) == 4
+        assert _get_chunk_workers(20, max_workers=2) == 2
 
 
 class TestGetCTPFilepath:

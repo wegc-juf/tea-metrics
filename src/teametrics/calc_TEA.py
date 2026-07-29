@@ -70,7 +70,7 @@ def calc_tea_indicators(opts):
         chunks = list(zip(starts, ends))
         if (getattr(opts, 'parallel_chunks', True) and gridded and len(chunks) > 1
                 and 'agr' not in opts):
-            workers = _get_chunk_workers(len(chunks))
+            workers = _get_chunk_workers(len(chunks), getattr(opts, 'parallel_workers', 4))
             logger.info(f'Calculating {len(chunks)} daily/CTP chunks with {workers} worker processes.')
             with ProcessPoolExecutor(max_workers=workers) as executor:
                 futures = [executor.submit(_calculate_chunk_worker, opts, int(p_start), int(p_end))
@@ -127,12 +127,12 @@ def _calculate_chunk(opts, mask, threshold, gridded, start, end):
     gc.collect()
 
 
-def _get_chunk_workers(chunk_count):
+def _get_chunk_workers(chunk_count, max_workers=4):
     """Choose a conservative process count for independent time chunks."""
     cpu_count = max(1, os.cpu_count() or 1)
     available_memory = max(1, psutil.virtual_memory().available)
     workers_by_memory = max(1, available_memory // (32 * 1024 ** 3))
-    return min(chunk_count, max(1, cpu_count // 4), workers_by_memory, 8)
+    return min(chunk_count, max(1, cpu_count // 4), workers_by_memory, max_workers, 4)
 
 
 
