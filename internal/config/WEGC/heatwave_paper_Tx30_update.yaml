@@ -58,8 +58,8 @@ create_region_masks:
 regrid_SPARTACUS:
   <<: *PARAM
   <<: *DATA
-  parameter: Tx
-  raw_data_path: &raw_data_path /data/reloclim/backup/ZAMG_SPARTACUS/data/current/
+  parameter: TX
+  raw_data_path: &raw_data_path /data/reloclim/backup/ZAMG_SPARTACUS/data/current/forecast/
   input_data_path: *raw_data_path
   orography: false
   orog_file: /data/reloclim/backup/ZAMG_INCA/data/original/INCA_orog_corrected_y_dim.nc
