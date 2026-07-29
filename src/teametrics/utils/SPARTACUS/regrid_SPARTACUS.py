@@ -469,11 +469,13 @@ def run():
     else:
         input_path = Path(opts.input_data_path)
         if cmd_opts.year is not None:
-            input_files = sorted(input_path.glob(f'*{opts.parameter.upper()}*{cmd_opts.year}.nc'))
+            file_path = f'*{opts.parameter.upper()}*{cmd_opts.year}*.nc'
+            input_files = sorted(input_path.glob(file_path))
         else:
-            input_files = sorted(input_path.glob(f'*{opts.parameter.upper()}*.nc'))
+            file_path = f'*{opts.parameter.upper()}*.nc'
+            input_files = sorted(input_path.glob(file_path))
         if len(input_files) == 0:
-            raise FileNotFoundError(f'No input files found in {input_path}/*{opts.parameter}*.nc')
+            raise FileNotFoundError(f'No input files found in {file_path}.')
         for ifile in trange(len(input_files), desc='Regridding files'):
             filename = input_files[ifile].name
 
@@ -508,7 +510,7 @@ def run():
             filename_parts = filename.split(opts.parameter.upper())
             filename_out = f'{filename_parts[0]}{opts.parameter}{filename_parts[1]}'
             ds_new.to_netcdf(path / filename_out, encoding=encoding, engine='netcdf4')
-            print(f"Saved regridded file to {path / filename_out}")
+            print(f"\nSaved regridded file to {path / filename_out}")
 
 
 if __name__ == '__main__':
