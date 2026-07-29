@@ -1,0 +1,68 @@
+common_params:
+  GeoRegion: &GR
+    region: AUT
+  parameter: &PARAM
+    parameter: Tx
+    precip: false
+    threshold: 30
+    threshold_type: abs
+    unit: degC
+    low_extreme: false
+    # file_format: GeoTiff
+    file_format: NetCDF4
+    significant_digits: 3
+  time_params: &TIME
+    start: 2021
+    end: 2026
+    period: annual
+    ref_period: 1961-1990
+    cc_period: 2012-2026
+  dataset: &DATA
+    dataset: SPARTACUS
+  paths: &PATHS
+    data_path: &data_path /data/arsclisys/normal/SPARTACUS/reproj_StatAT/v2.1/
+    input_data_path: *data_path
+    statpath: &statpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/
+    maskpath: *statpath
+    mask_sub: masks/
+    population_grid_path: /data/users/alm/StatAT_data/OGDEXT_RASTER_1_STATISTIK_AUSTRIA_L001000_LAEA/Austria_population_1km_2019.nc
+
+calc_TEA:
+  <<: *GR
+  <<: *PARAM
+  <<: *TIME
+  <<: *DATA
+  <<: *PATHS
+  outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/
+  recalc_threshold: false
+  recalc_daily: true
+  decadal: false
+  spreads: true
+  decadal_only: false
+  recalc_decadal: false
+  use_dask: auto
+  compression_level: 1
+  parallel_workers: 4
+
+create_region_masks:
+  <<: *GR
+  <<: *PARAM
+  <<: *TIME
+  <<: *DATA
+  <<: *PATHS
+  gr_type: polygon
+  shpfile: /data/reloclim/backup/GEO/shapefiles/OEKS15/good/AUSTRIA.shp
+  target_sys: 3035
+  orofile: /data/arsclisys/normal/SPARTACUS/reproj_StatAT/v2.1/SPARTACUSreg_orography.nc
+
+regrid_SPARTACUS:
+  <<: *PARAM
+  <<: *DATA
+  parameter: Tx
+  raw_data_path: &raw_data_path /data/reloclim/backup/ZAMG_SPARTACUS/data/current/
+  input_data_path: *raw_data_path
+  orography: false
+  orog_file: /data/reloclim/backup/ZAMG_INCA/data/original/INCA_orog_corrected_y_dim.nc
+  statat_file: /data/users/alm/StatAT_data/OGDEXT_RASTER_1_STATISTIK_AUSTRIA_L001000_LAEA/Austria_population_1km_2019.nc
+  target_grid: statat
+  regridded_data_path: /data/arsclisys/normal/SPARTACUS/reproj_StatAT/v2.1/
