@@ -9,6 +9,8 @@ import numpy as np
 from pathlib import Path
 from scipy.interpolate import griddata
 
+from get_icon_data import ICON_PATH
+
 SPCS_GRID_FILE = "/data/reloclim/backup/ZAMG_SPARTACUS/data/v2024_v2.1/SPARTACUS2-DAILY_TX_2026.nc"
 
 
@@ -163,39 +165,39 @@ def icon_global_to_spartacus(
 
 def icon_eu_t2m_regrid():
     files = sorted(
-        Path("icon_eu_t2m").glob("*.grib2")
+        Path(ICON_PATH + "/icon_eu_t2m").glob("*.grib2")
     )
     dates = [f.stem.split("_")[-4] for f in files]
     unique_dates = sorted(set(dates))
     for date in unique_dates:
         date_files = [f for f in files if date in f.stem]
         ds = regrid(date_files)
-        if not Path("./icon_eu_t2m_regridded").exists():
-            Path("./icon_eu_t2m_regridded").mkdir(parents=True, exist_ok=True)
-        ds.to_netcdf(f"./icon_eu_t2m_regridded/icon_eu_t2m_spcs_{date}.nc")
-        print(f"icon_eu_t2m files for {date} regridded to SPCS grid and saved to "
+        if not Path(ICON_PATH + "./icon_eu_t2m_regridded").exists():
+            Path(ICON_PATH + "./icon_eu_t2m_regridded").mkdir(parents=True, exist_ok=True)
+        ds.to_netcdf(ICON_PATH + f"./icon_eu_t2m_regridded/icon_eu_t2m_spcs_{date}.nc")
+        print(f"icon_eu_t2m files for {date} regridded to SPCS grid and saved to " + ICON_PATH +
               f"icon_eu_t2m_regridded/icon_eu_t2m_spcs_{date}.nc")
 
 
 def icon_d2_t2m_regrid():
     files = sorted(
-        Path("icon_d2_t2m").glob("*.grib2")
+        Path(ICON_PATH + "icon_d2_t2m").glob("*.grib2")
     )
     dates = [f.stem.split("_")[-5] for f in files]
     unique_dates = sorted(set(dates))
     for date in unique_dates:
         date_files = [f for f in files if date in f.stem]
         ds = regrid(date_files)
-        if not Path("./icon_d2_t2m_regridded").exists():
-            Path("./icon_d2_t2m_regridded").mkdir(parents=True, exist_ok=True)
-        ds.to_netcdf(f"./icon_d2_t2m_regridded/icon_d2_t2m_spcs_{date}.nc")
-        print(f"icon_d2_t2m files for {date} regridded to SPCS grid and saved to "
-              f"icon_d2_t2m_regridded/icon_d2_t2m_spcs_{date}.nc")
+        if not Path(ICON_PATH + "./icon_d2_t2m_regridded").exists():
+            Path(ICON_PATH + "./icon_d2_t2m_regridded").mkdir(parents=True, exist_ok=True)
+        ds.to_netcdf(ICON_PATH + f"./icon_d2_t2m_regridded/icon_d2_t2m_spcs_{date}.nc")
+        print(f"icon_d2_t2m files for {date} regridded to SPCS grid and saved to " +
+              ICON_PATH + f"/icon_d2_t2m_regridded/icon_d2_t2m_spcs_{date}.nc")
 
 
 def icon_global_t2m_regrid():
     files = sorted(
-        Path("icon_global_t2m").glob("*.grib2")
+        Path(ICON_PATH + "icon_global_t2m").glob("*.grib2")
     )
     dates = [f.stem.split("_")[-5] for f in files]
     unique_dates = sorted(set(dates))
@@ -215,11 +217,11 @@ def icon_global_t2m_regrid():
             print(d)
         icon_data = xr.open_mfdataset(date_files, combine="nested", concat_dim="valid_time", engine="cfgrib", backend_kwargs={"indexpath": ""})
         ds_spcs = icon_global_to_spartacus(icon_data, spartacus)
-        if not Path("./icon_t2m_regridded").exists():
-            Path("./icon_t2m_regridded").mkdir(parents=True, exist_ok=True)
-        ds_spcs.to_netcdf(f"./icon_t2m_regridded/icon_global_t2m_spcs_{date}.nc")
-        print(f"icon_global_t2m files for {date} regridded to SPCS grid and saved to "
-              f"icon_t2m_regridded/icon_global_t2m_spcs_{date}.nc")
+        if not Path(ICON_PATH + "./icon_t2m_regridded").exists():
+            Path(ICON_PATH + "./icon_t2m_regridded").mkdir(parents=True, exist_ok=True)
+        ds_spcs.to_netcdf(ICON_PATH + f"./icon_t2m_regridded/icon_global_t2m_spcs_{date}.nc")
+        print(f"icon_global_t2m files for {date} regridded to SPCS grid and saved to " +
+              ICON_PATH + f"/icon_t2m_regridded/icon_global_t2m_spcs_{date}.nc")
         
         
 def run_main():

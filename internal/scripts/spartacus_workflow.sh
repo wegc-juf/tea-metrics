@@ -1,6 +1,10 @@
 #!/bin/bash
 
 cd ~/TEA-indicators/src
+# download and regrid ICON data
+./teametrics/utils/ICON/get_icon_data.py
+./teametrics/utils/ICON/regrid_icon_to_spcs.py
+
 # regrid SPCS data
 ./teametrics/utils/SPARTACUS/regrid_SPARTACUS.py --config-file /home/juf/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30.yaml --year 2026
 
