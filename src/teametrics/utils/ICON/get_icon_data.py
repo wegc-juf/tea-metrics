@@ -13,11 +13,12 @@ base = (
     f"{run}/t_2m/"
 )
 
+ICON_PATH = "/data/arsclisys/normal/ICON/"
 
 def download_icon_eu_t2m():
     date = datetime.date.today().strftime("%Y%m%d")
     
-    outdir = Path("icon_eu_t2m")
+    outdir = Path(f"{ICON_PATH}/icon_eu_t2m")
     outdir.mkdir(exist_ok=True)
 
     for fh in range(0, 121):
@@ -133,7 +134,7 @@ def download_icon_d2_t2m():
     )
     date = datetime.date.today().strftime("%Y%m%d")
     
-    outdir = Path("icon_d2_t2m")
+    outdir = Path(f"{ICON_PATH}/icon_d2_t2m")
     outdir.mkdir(exist_ok=True)
 
     for fh in range(0, 49):
@@ -177,7 +178,7 @@ def download_icon_d2_t2m():
 def run_main():
     download_icon_eu_t2m()
     download_icon_d2_t2m()
-    download_icon_t2m(date=datetime.date.today().strftime("%Y%m%d"), run="00", outdir="icon_global_t2m", max_hour=180)
+    # download_icon_t2m(date=datetime.date.today().strftime("%Y%m%d"), run="00", outdir="icon_global_t2m", max_hour=180)
     
     
 if __name__ == "__main__":
