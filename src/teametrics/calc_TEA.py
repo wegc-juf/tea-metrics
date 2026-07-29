@@ -252,6 +252,11 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
         if opts.hourly:
             _calc_hourly_indicators(tea=tea, opts=opts, start=start, end=end)
 
+        # Daily calculations no longer need the full input time series. Release
+        # it before serializing daily results, which creates rounded copies.
+        tea.input_data = None
+        gc.collect()
+
         # save results
         create_tea_history(cfg_params=opts, tea=tea, dataset='daily_results')
         tea.save_daily_results(filepath=dbv_filename, save_tiff=opts.file_format == 'GeoTiff')
