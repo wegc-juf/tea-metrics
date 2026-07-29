@@ -71,4 +71,5 @@ calc_TEA:
   spreads: true
   decadal_only: false
   parallel_chunks: false
+  parallel_workers: 4
   use_dask: auto

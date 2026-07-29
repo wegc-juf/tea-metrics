@@ -43,6 +43,7 @@ calc_TEA:
   use_dask: true
   compression_level: 1
   parallel_chunks: true
+  parallel_workers: 4
 
 create_region_masks:
   <<: *GR

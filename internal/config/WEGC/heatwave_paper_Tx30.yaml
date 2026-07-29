@@ -41,6 +41,7 @@ calc_TEA:
   recalc_decadal: true
   use_dask: false
   compression_level: 1
+  parallel_workers: 4
 
 create_region_masks:
   <<: *GR
@@ -59,7 +60,7 @@ regrid_SPARTACUS:
   parameter: Tx
   raw_data_path: &raw_data_path /data/reloclim/backup/ZAMG_SPARTACUS/data/current/
   input_data_path: *raw_data_path
-  orography: true
+  orography: false
   orog_file: /data/reloclim/backup/ZAMG_INCA/data/original/INCA_orog_corrected_y_dim.nc
   statat_file: /data/users/alm/StatAT_data/OGDEXT_RASTER_1_STATISTIK_AUSTRIA_L001000_LAEA/Austria_population_1km_2019.nc
   target_grid: statat
