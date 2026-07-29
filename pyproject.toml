@@ -32,6 +32,7 @@ dependencies = [
     "seaborn (>=0.13.2,<0.14.0)",
     "ipdb (>=0.13.13,<0.14.0)",
     "cython (>=3.2.9,<4.0.0)",
+    "cfgrib (>=0.9.15.1,<0.10.0.0)",
 ]
 
 dynamic = ["version", "classifiers"]
