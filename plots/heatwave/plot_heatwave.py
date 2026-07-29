@@ -49,7 +49,8 @@ def get_data(data_var="Tx30", data_path=None, time_interval=None):
 
 def plot_daily_heatwave(heatwave_data, heatwave_period, data_var="DTEMA_GR",
                         detrended_heatwave_data=None,
-                        detrend_ctp=None
+                        detrend_ctp=None,
+                        logarithmic=False,
                         ):
     
     plt.figure(figsize=(10, 6))
@@ -68,15 +69,21 @@ def plot_daily_heatwave(heatwave_data, heatwave_period, data_var="DTEMA_GR",
     myplot.axes.xaxis.set_major_locator(locator)
     myplot.axes.xaxis.set_major_formatter(formatter)
     
+    if logarithmic:
+        myplot.axes.set_yscale('log')
     # tight layout to prevent overlap
     plt.tight_layout()
     plt.ylabel('areal degC')
     plt.grid(True)
     
+    log_suffix = '_LOG' if logarithmic else ''
     if detrended_heatwave_data is not None:
-        plt.savefig(f'heatwave_daily_DETREND_{detrend_ctp}_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.png')
+        plt.savefig(
+            f'heatwave_daily{log_suffix}_DETREND_{detrend_ctp}_{data_var}_'
+            f'{heatwave_period[0]}_{heatwave_period[1]}.png')
     else:
-        plt.savefig(f'heatwave_daily_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.png')
+        plt.savefig(
+            f'heatwave_daily{log_suffix}_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.png')
     if show_plots:
         plt.show()
 
@@ -176,6 +183,9 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
     
     plot_daily_heatwave(heatwave_data, heatwave_period, data_var=data_var,
                         detrended_heatwave_data=detrended_heatwave_data, detrend_ctp=detrend_ctp)
+    plot_daily_heatwave(heatwave_data, heatwave_period, data_var=data_var,
+                        detrended_heatwave_data=detrended_heatwave_data, detrend_ctp=detrend_ctp,
+                        logarithmic=True)
 
 
 def _getopts():
