@@ -30,7 +30,9 @@ def configure_dask(data, use_dask='auto'):
     available_memory = max(1, psutil.virtual_memory().available)
     data_size = data.nbytes if data.nbytes is not None else 0
 
-    estimated_working_set = data_size * 6
+    # Eager NumPy calculations need substantially more memory than the input
+    # array alone because of intermediate arrays and serialization buffers.
+    estimated_working_set = data_size * 18
     if use_dask == 'auto' and (cpu_count == 1 or estimated_working_set <= available_memory * 0.5):
         logger.info("Dask auto mode: using eager NumPy execution; estimated working set "
                     f"is {estimated_working_set / _GIB:.1f} GiB and "
