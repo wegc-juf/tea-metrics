@@ -3,10 +3,15 @@
 """
 Plot heatwave data
 """
+import argparse
+from pathlib import Path
+
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
 import xarray as xr
+
+from teametrics.common.config import load_opts
 
 plot_data = True
 show_plots = True
@@ -173,11 +178,23 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
                         detrended_heatwave_data=detrended_heatwave_data, detrend_ctp=detrend_ctp)
 
 
-def run_main(detrend_ctp="JJA"):
+def _getopts():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config-file', '-cf',
+                        dest='config_file',
+                        type=str,
+                        default='../TEA_CFG.yaml',
+                        help='TEA configuration file (default: TEA_CFG.yaml)')
+    return parser.parse_args()
+
+
+def run_main(opts, detrend_ctp="JJA"):
     data_var = "Tx30"
-    daily_data_path_real_world = "/home/wegnet/results/TEA_indicators_test/daily_basis_variables/"
-    
-    daily_data_path_detrended = f"/home/wegnet/results/SPARTACUS_DETRENDED_{detrend_ctp}/daily_basis_variables/"
+    configured_output_path = Path(opts.outpath)
+    daily_data_path_real_world = str(configured_output_path / "daily_basis_variables") + "/"
+    daily_data_path_detrended = str(
+        configured_output_path.parent / f"SPARTACUS_DETRENDED_{detrend_ctp}" / "daily_basis_variables"
+    ) + "/"
     
     heatwave_period = ["2026-06-17", "2026-07-01"]
     worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period, detrend_ctp=detrend_ctp)
@@ -197,5 +214,7 @@ def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data
 
 
 if __name__ == "__main__":
-    run_main('JJA')
-    run_main('June')
+    cmd_opts = _getopts()
+    opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
+    run_main(opts, 'JJA')
+    run_main(opts, 'June')
