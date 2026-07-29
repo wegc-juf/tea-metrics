@@ -9,6 +9,10 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 
+from get_icon_data import ICON_PATH
+
+SPARTACUS_PATH = "/data/reloclim/backup/ZAMG_SPARTACUS/data/current/"
+
 
 def extend_spartacus_with_icon_single(
     spartacus_tmax,
@@ -21,7 +25,7 @@ def extend_spartacus_with_icon_single(
     ----------
     spartacus_tmax : xr.DataArray
         Daily Tmax from SPARTACUS.
-        Contains yesterday.
+        It contains yesterday.
 
     icon_yesterday : xr.Dataset
         Yesterday's ICON run (e.g. yesterday Z00).
@@ -142,6 +146,10 @@ def bias_correct_forecast(
     Apply additive Tmax bias correction.
     """
 
+    if np.isnan(bias_field.values).all():
+        print("Bias field all NaNs. Skipping bias correction.")
+        return icon_forecast
+    
     return icon_forecast + bias_field
 
 
@@ -220,10 +228,10 @@ def first_day_tmax_stack(runs, temp_var="t2m"):
 
 
 def run_main():
-    spartacus_data = "/data/reloclim/backup/ZAMG_SPARTACUS/data/current/SPARTACUS2-DAILY_TX_2026.nc"
+    spartacus_data = SPARTACUS_PATH + "SPARTACUS2-DAILY_TX_2026.nc"
     spartacus_tmax = xr.open_dataarray(spartacus_data)
     
-    for icon_dir in ["icon_eu_t2m_regridded"]:
+    for icon_dir in [ICON_PATH + "icon_eu_t2m_regridded"]:
         if not Path(icon_dir).exists():
             print(f"Directory {icon_dir} does not exist. Please run regrid_icon_to_spcs.py first.")
             continue
@@ -269,8 +277,11 @@ def run_main():
         # expand spartacus_tmax to include the new forecast days
         spartacus_tmax = xr.concat([spartacus_tmax, corrected_tmax], dim="time")
         spartacus_basename = Path(spartacus_data).stem
-        spartacus_tmax.to_netcdf(f"{spartacus_basename}_extended.nc")
+        outfile = SPARTACUS_PATH + f"forecast/{spartacus_basename}_extended.nc"
+        print(f"Saving extended SPARTACUS forecast to {outfile}")
+        spartacus_tmax.to_netcdf(SPARTACUS_PATH + f"forecast/{spartacus_basename}_extended.nc")
 
 
 if __name__ == "__main__":
     run_main()
+    
