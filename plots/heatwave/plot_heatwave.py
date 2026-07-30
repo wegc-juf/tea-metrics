@@ -260,7 +260,7 @@ def run_main(opts, detrend_ctp="JJA"):
     worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
            detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir)
     
-    heatwave_period = ["2026-07-25", "2026-08-06"]
+    heatwave_period = ["2026-07-25", "2026-08-08"]
     worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
            detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir)
 
