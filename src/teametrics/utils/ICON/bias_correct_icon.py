@@ -4,6 +4,7 @@
 Bias correction of ICON forecasts using SPARTACUS Tmax data.
 """
 
+import logging
 import xarray as xr
 from pathlib import Path
 import numpy as np
@@ -12,6 +13,7 @@ import matplotlib.pyplot as plt
 from get_icon_data import ICON_PATH
 
 SPARTACUS_PATH = "/data/reloclim/backup/ZAMG_SPARTACUS/data/current/"
+logger = logging.getLogger(__name__)
 
 
 def extend_spartacus_with_icon_single(
@@ -297,48 +299,75 @@ def first_day_tmax_stack(runs, temp_var="t2m"):
 
 
 def run_main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+    )
     spartacus_data = SPARTACUS_PATH + "SPARTACUS2-DAILY_TX_2026.nc"
+    logger.info("Loading SPARTACUS Tmax data from %s", spartacus_data)
     spartacus_tmax = xr.open_dataarray(spartacus_data)
+    logger.info("Loaded SPARTACUS data covering %s to %s", spartacus_tmax.time.min().values,
+                spartacus_tmax.time.max().values)
     
     for icon_dir in [ICON_PATH + "icon_eu_t2m_regridded"]:
+        logger.info("Starting ICON bias correction for %s", icon_dir)
         if not Path(icon_dir).exists():
-            print(f"Directory {icon_dir} does not exist. Please run regrid_icon_to_spcs.py first.")
+            logger.warning("Directory %s does not exist. Please run regrid_icon_to_spcs.py first.", icon_dir)
             continue
+        icon_runs = sorted(Path(icon_dir).glob("*.nc"))
+        logger.info("Extracting first-day Tmax from %d ICON runs", len(icon_runs))
         icon_hist_tmax = first_day_tmax_stack(
-            sorted(Path(icon_dir).glob("*.nc"))
+            icon_runs
         )
+        logger.info("Computing rolling seven-day ICON-SPARTACUS bias field")
         bias = compute_bias_field_rolling(spartacus_tmax,
             icon_hist_tmax,
             window=7,
         )
+        logger.info("Rolling bias field computed")
         
-        todays_run = sorted(Path(icon_dir).glob("*.nc"))[-1]
+        todays_run = icon_runs[-1]
+        logger.info("Loading latest ICON run from %s", todays_run)
         icon_today = xr.open_dataset(todays_run)
+        logger.info("Converting ICON temperatures from Kelvin to Celsius")
         icon_today = icon_today - 273.15  # convert K to °C
 
+        logger.info("Applying bias correction to the latest ICON forecast")
         corrected_hourly = bias_correct_forecast(
             icon_today["t2m"],
             bias,
         )
 
+        logger.info("Calculating daily Tmax from the corrected hourly forecast")
         corrected_tmax = forecast_daily_tmax(
             corrected_hourly[:-1],
             spartacus_tmax.name
         )
+        logger.info("Expanding corrected Tmax forecast with configured source days and offsets")
         
-        corrected_tmax = expand_forecast(corrected_tmax)
+        corrected_tmax = expand_forecast(
+            corrected_tmax, method="days",
+            source_days=['2026-08-03', '2026-08-01', '2026-08-03', '2026-08-03', '2026-08-01'],
+            offsets=[0, 0, -2, 0, 0],
+        )
+        logger.info("Corrected Tmax forecast now covers %s to %s", corrected_tmax.time.min().values,
+                    corrected_tmax.time.max().values)
         
         filename = f"{icon_dir}_bias_corr/bias_corrected_tmax_{todays_run.stem}.nc"
         if not Path(f"{icon_dir}_bias_corr").exists():
             Path(f"{icon_dir}_bias_corr").mkdir(parents=True, exist_ok=True)
+        logger.info("Saving bias-corrected Tmax to %s", filename)
         corrected_tmax.to_netcdf(filename)
+        logger.info("Bias-corrected Tmax saved")
         
         # expand spartacus_tmax to include the new forecast days
+        logger.info("Appending corrected forecast days to SPARTACUS data")
         spartacus_tmax = xr.concat([spartacus_tmax, corrected_tmax], dim="time")
         spartacus_basename = Path(spartacus_data).stem
         outfile = SPARTACUS_PATH + f"forecast/{spartacus_basename}_extended.nc"
-        print(f"Saving extended SPARTACUS forecast to {outfile}")
-        spartacus_tmax.to_netcdf(SPARTACUS_PATH + f"forecast/{spartacus_basename}_extended.nc")
+        logger.info("Saving extended SPARTACUS forecast to %s", outfile)
+        spartacus_tmax.to_netcdf(outfile)
+        logger.info("Extended SPARTACUS forecast saved")
 
 
 if __name__ == "__main__":
