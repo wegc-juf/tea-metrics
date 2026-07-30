@@ -165,6 +165,75 @@ def forecast_daily_tmax(
     )
 
 
+def expand_forecast(
+    corrected_tmax: xr.DataArray,
+    method="constant",
+    source_days=None,
+    offsets=None,
+):
+    """Append forecast days to a daily Tmax time series.
+
+    Parameters
+    ----------
+    corrected_tmax : xr.DataArray
+        Daily Tmax time series with a ``time`` coordinate.
+    method : str, optional
+        ``"constant"`` duplicates the final day and applies ``offsets``.
+        ``"days"`` duplicates the gridded fields selected by ``source_days``.
+    source_days : sequence, optional
+        Source dates used in order when ``method="days"``. Each date adds one
+        forecast day.
+    offsets : scalar or sequence, optional
+        Additive offsets for the appended days. In ``"days"`` mode, omitted
+        offsets leave the copied fields unchanged, a scalar is applied to
+        every copied field, and a sequence is applied in source-day order.
+        Constant mode uses ``(-5.0, -5.0)`` when omitted.
+    """
+    if method not in {"constant", "days"}:
+        raise ValueError("method must be either 'constant' or 'days'")
+
+    if method == "days":
+        if source_days is None or len(source_days) == 0:
+            raise ValueError("source_days must contain at least one date when method='days'")
+        number_of_days = len(source_days)
+        if offsets is None:
+            day_offsets = [0.0] * number_of_days
+        elif np.isscalar(offsets):
+            day_offsets = [offsets] * number_of_days
+        else:
+            day_offsets = list(offsets)
+            if len(day_offsets) != number_of_days:
+                raise ValueError("offsets must match the number of source_days when method='days'")
+        try:
+            expand_data = [
+                corrected_tmax.sel(time=day, drop=True) + offset
+                for day, offset in zip(source_days, day_offsets)
+            ]
+        except KeyError as error:
+            raise ValueError(f"Source day does not exist in corrected_tmax: {error}") from error
+    else:
+        if offsets is None:
+            offsets = (-5.0, -5.0)
+        elif np.isscalar(offsets):
+            offsets = (offsets, offsets)
+        else:
+            offsets = list(offsets)
+        if len(offsets) == 0:
+            raise ValueError("offsets must contain at least one value when method='constant'")
+        number_of_days = len(offsets)
+        last_day = corrected_tmax.time.max()
+        last_day_index = corrected_tmax.time.get_index("time").get_loc(last_day.values)
+        expand_data = [corrected_tmax.isel(time=last_day_index) + offset for offset in offsets]
+
+    last_day = corrected_tmax.time.max()
+    expanded_days = []
+    for index, day_data in enumerate(expand_data, start=1):
+        next_day = last_day + np.timedelta64(index, "D")
+        expanded_days.append(day_data.expand_dims(time=[next_day.values]))
+
+    return xr.concat([corrected_tmax, *expanded_days], dim="time")
+
+
 def first_day_tmax(ds, temp_var="t2m"):
     """
     Extract Tmax for the first forecast day of an ICON run.
@@ -257,17 +326,7 @@ def run_main():
             spartacus_tmax.name
         )
         
-        def expand_forecast(corrected_tmax):
-            # now add two additional days to the forecast
-            last_day = corrected_tmax.time.max()
-            last_day_index = corrected_tmax.time.get_index("time").get_loc(last_day.values)
-            offsets = [-5., -5.]
-            for i in range(1, 3):
-                next_day = last_day + np.timedelta64(i, "D")
-                next_day_tmax = corrected_tmax[last_day_index].expand_dims(time=[next_day.values]) + offsets[i-1]
-                corrected_tmax = xr.concat([corrected_tmax, next_day_tmax], dim="time")
-            return corrected_tmax
-        # corrected_tmax = expand_forecast(corrected_tmax)
+        corrected_tmax = expand_forecast(corrected_tmax)
         
         filename = f"{icon_dir}_bias_corr/bias_corrected_tmax_{todays_run.stem}.nc"
         if not Path(f"{icon_dir}_bias_corr").exists():
@@ -284,4 +343,3 @@ def run_main():
 
 if __name__ == "__main__":
     run_main()
-    
