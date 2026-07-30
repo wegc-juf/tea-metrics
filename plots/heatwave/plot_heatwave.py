@@ -4,6 +4,8 @@
 Plot heatwave data
 """
 import argparse
+import shutil
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -16,6 +18,26 @@ from teametrics.common.config import load_opts
 plot_data = True
 show_plots = False
 save_data = True
+
+
+def _prepare_output_path(output_path):
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if output_path.exists():
+        backup_dir = output_path.parent / "bak"
+        backup_dir.mkdir(exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        backup_path = backup_dir / f"{output_path.stem}_{timestamp}{output_path.suffix}"
+        counter = 1
+        while backup_path.exists():
+            backup_path = backup_dir / (
+                f"{output_path.stem}_{timestamp}_{counter}{output_path.suffix}"
+            )
+            counter += 1
+        shutil.copy2(output_path, backup_path)
+
+    return output_path
 
 
 def get_data(data_var="Tx30", data_path=None, time_interval=None):
@@ -50,6 +72,7 @@ def get_data(data_var="Tx30", data_path=None, time_interval=None):
 def plot_daily_heatwave(heatwave_data, heatwave_period, data_var="DTEMA_GR",
                         detrended_heatwave_data=None,
                         detrend_ctp=None,
+                        output_dir=None,
                         logarithmic=False,
                         ):
     
@@ -78,18 +101,22 @@ def plot_daily_heatwave(heatwave_data, heatwave_period, data_var="DTEMA_GR",
     
     log_suffix = '_LOG' if logarithmic else ''
     if detrended_heatwave_data is not None:
-        plt.savefig(
+        filename = (
             f'heatwave_daily{log_suffix}_DETREND_{detrend_ctp}_{data_var}_'
-            f'{heatwave_period[0]}_{heatwave_period[1]}.png')
+            f'{heatwave_period[0]}_{heatwave_period[1]}.png'
+        )
     else:
-        plt.savefig(
-            f'heatwave_daily{log_suffix}_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.png')
+        filename = (
+            f'heatwave_daily{log_suffix}_{data_var}_'
+            f'{heatwave_period[0]}_{heatwave_period[1]}.png'
+        )
+    plt.savefig(_prepare_output_path(output_dir / filename))
     if show_plots:
         plt.show()
 
 
 def plot_cumulative_heatwave(heatwave_cumulative, heatwave_period, data_var="DTEMA_GR",
-                             detrended_data=None, detrend_ctp=None):
+                             detrended_data=None, detrend_ctp=None, output_dir=None):
     set_ylim = True
     plt.figure(figsize=(10, 6))
     myplot = heatwave_cumulative.plot()[0]
@@ -119,10 +146,16 @@ def plot_cumulative_heatwave(heatwave_cumulative, heatwave_period, data_var="DTE
     plt.grid(True)
     
     if detrended_data is not None:
-        plt.savefig(
-            f'heatwave_cumulative_DETREND_{detrend_ctp}_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.png')
+        filename = (
+            f'heatwave_cumulative_DETREND_{detrend_ctp}_{data_var}_'
+            f'{heatwave_period[0]}_{heatwave_period[1]}.png'
+        )
     else:
-        plt.savefig(f'heatwave_cumulative_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.png')
+        filename = (
+            f'heatwave_cumulative_{data_var}_'
+            f'{heatwave_period[0]}_{heatwave_period[1]}.png'
+        )
+    plt.savefig(_prepare_output_path(output_dir / filename))
     if show_plots:
         plt.show()
 
@@ -143,6 +176,7 @@ def calc_heatwave_metrics(data, heatwave_period, data_var="DTEMA_GR", add_values
 # noinspection PyStringConversionWithoutDunderMethod
 def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended_data=None,
                            detrend_ctp=None,
+                           output_dir=None,
                            ):
     heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave = calc_heatwave_metrics(
         data, heatwave_period, data_var=data_var, add_values=None)
@@ -151,9 +185,12 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
           f"areal degC, event_max MA_GR = {heatwave_data.max().values:.0f} areal degC")
     if save_data:
         # save csv files for heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave
-        heatwave_data.to_dataframe().to_csv(f'heatwave_daily_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.csv')
-        heatwave_cumulative.to_dataframe().to_csv(
-            f'heatwave_cumulative_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.csv')
+        daily_output = output_dir / f'heatwave_daily_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
+        cumulative_output = output_dir / (
+            f'heatwave_cumulative_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
+        )
+        heatwave_data.to_dataframe().to_csv(_prepare_output_path(daily_output))
+        heatwave_cumulative.to_dataframe().to_csv(_prepare_output_path(cumulative_output))
     
     if detrended_data is not None:
         detrended_heatwave_data, detrended_heatwave_total, detrended_heatwave_cumulative, detrended_mean_heatwave = (
@@ -166,10 +203,18 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
         if save_data:
             # save csv files for detrended_heatwave_data, detrended_heatwave_total, detrended_heatwave_cumulative,
             #  detrended_mean_heatwave
-            detrended_heatwave_data.to_dataframe().to_csv(
-                f'heatwave_daily_DETREND_{detrend_ctp}_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.csv')
+            detrended_daily_output = output_dir / (
+                f'heatwave_daily_DETREND_{detrend_ctp}_{data_var}_'
+                f'{heatwave_period[0]}_{heatwave_period[1]}.csv'
+            )
+            detrended_cumulative_output = output_dir / (
+                f'heatwave_cumulative_DETREND_{detrend_ctp}_{data_var}_'
+                f'{heatwave_period[0]}_{heatwave_period[1]}.csv'
+            )
+            detrended_heatwave_data.to_dataframe().to_csv(_prepare_output_path(detrended_daily_output))
             detrended_heatwave_cumulative.to_dataframe().to_csv(
-                f'heatwave_cumulative_DETREND_{detrend_ctp}_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.csv')
+                _prepare_output_path(detrended_cumulative_output)
+            )
     else:
         detrended_heatwave_data = None
         detrended_heatwave_cumulative = None
@@ -179,12 +224,15 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
     
     # Plotting
     plot_cumulative_heatwave(heatwave_cumulative, heatwave_period, data_var=data_var,
-                             detrended_data=detrended_heatwave_cumulative, detrend_ctp=detrend_ctp)
+                             detrended_data=detrended_heatwave_cumulative, detrend_ctp=detrend_ctp,
+                             output_dir=output_dir)
     
     plot_daily_heatwave(heatwave_data, heatwave_period, data_var=data_var,
-                        detrended_heatwave_data=detrended_heatwave_data, detrend_ctp=detrend_ctp)
+                        detrended_heatwave_data=detrended_heatwave_data, detrend_ctp=detrend_ctp,
+                        output_dir=output_dir)
     plot_daily_heatwave(heatwave_data, heatwave_period, data_var=data_var,
                         detrended_heatwave_data=detrended_heatwave_data, detrend_ctp=detrend_ctp,
+                        output_dir=output_dir,
                         logarithmic=True)
 
 
@@ -201,16 +249,20 @@ def _getopts():
 def run_main(opts, detrend_ctp="JJA"):
     data_var = "Tx30"
     configured_output_path = Path(opts.outpath)
+    heatwave_output_dir = configured_output_path / "heatwave_data"
+    heatwave_output_dir.mkdir(parents=True, exist_ok=True)
     daily_data_path_real_world = str(configured_output_path / "daily_basis_variables") + "/"
     daily_data_path_detrended = str(
         configured_output_path / f"SPARTACUS_detrended_{detrend_ctp}" / "daily_basis_variables"
     ) + "/"
     
     heatwave_period = ["2026-06-17", "2026-07-01"]
-    worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period, detrend_ctp=detrend_ctp)
+    worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
+           detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir)
     
     heatwave_period = ["2026-07-25", "2026-08-06"]
-    worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period, detrend_ctp=detrend_ctp)
+    worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
+           detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir)
 
     # heatwave_period = ["2013-07-16", "2013-08-09"]
     # worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period, detrend_ctp=detrend_ctp)
@@ -220,10 +272,11 @@ def run_main(opts, detrend_ctp="JJA"):
 
 
 def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data_var: str, heatwave_period: list[str],
-           detrend_ctp="JJA"):
+           detrend_ctp="JJA", output_dir=None):
     data = get_data(data_var, daily_data_path_real_world, heatwave_period)
     detrended_data = get_data(data_var, daily_data_path_detrended, heatwave_period)
-    calc_and_plot_heatwave(data, heatwave_period, detrended_data=detrended_data, detrend_ctp=detrend_ctp)
+    calc_and_plot_heatwave(data, heatwave_period, detrended_data=detrended_data, detrend_ctp=detrend_ctp,
+                           output_dir=output_dir)
 
 
 if __name__ == "__main__":
