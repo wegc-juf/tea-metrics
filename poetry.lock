@@ -1436,6 +1436,40 @@ files = [
 ]
 
 [[package]]
+name = "numpy-typing-compat"
+version = "20260602.2.3"
+description = "Static typing compatibility layer for older versions of NumPy"
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+files = [
+    {file = "numpy_typing_compat-20260602.2.3-py3-none-any.whl", hash = "sha256:2fa13965f068e2ecc7dec9a1883e1381ea506f1d19d435399dde88fc68f0da01"},
+    {file = "numpy_typing_compat-20260602.2.3.tar.gz", hash = "sha256:f06c8aaca9fa6a9047a7aba5474a7e33870b954544ff276de000dad68c640fbf"},
+]
+
+[package.dependencies]
+numpy = ">=2.3,<2.4"
+
+[[package]]
+name = "optype"
+version = "0.18.0"
+description = "Building Blocks for Precise & Flexible Type Hints"
+optional = false
+python-versions = ">=3.12"
+groups = ["main"]
+files = [
+    {file = "optype-0.18.0-py3-none-any.whl", hash = "sha256:91822ed8516e7a4f225ba53d30f291776c35f31553fb952d7cda98286679c5a6"},
+    {file = "optype-0.18.0.tar.gz", hash = "sha256:ea10dee61b15ca299ed0d97025d362585c4dfc5481159bb999a1d0d414bbcb04"},
+]
+
+[package.dependencies]
+numpy = {version = ">=2.0,<2.8", optional = true, markers = "extra == \"numpy\""}
+numpy-typing-compat = {version = ">=20260602.2.0,<20260603", optional = true, markers = "extra == \"numpy\""}
+
+[package.extras]
+numpy = ["numpy (>=2.0,<2.8)", "numpy-typing-compat (>=20260602.2.0,<20260603)"]
+
+[[package]]
 name = "packaging"
 version = "26.0"
 description = "Core utilities for Python packages"
@@ -2374,6 +2408,24 @@ doc = ["intersphinx_registry", "jupyterlite-pyodide-kernel", "jupyterlite-sphinx
 test = ["Cython", "array-api-strict (>=2.3.1)", "asv", "gmpy2", "hypothesis (>=6.30)", "meson", "mpmath", "ninja ; sys_platform != \"emscripten\"", "pooch", "pytest (>=8.0.0)", "pytest-cov", "pytest-timeout", "pytest-xdist", "scikit-umfpack", "threadpoolctl"]
 
 [[package]]
+name = "scipy-stubs"
+version = "1.18.0.1"
+description = "The official type stubs for SciPy"
+optional = false
+python-versions = ">=3.12"
+groups = ["main"]
+files = [
+    {file = "scipy_stubs-1.18.0.1-py3-none-any.whl", hash = "sha256:704408c5f03a33924c9fed6dc9e25926dc331ed508d52f1beece0188525cebad"},
+    {file = "scipy_stubs-1.18.0.1.tar.gz", hash = "sha256:761cb35106200c90a37034d3c8120d3899d673de1e5879d3a2ac1d6816c62327"},
+]
+
+[package.dependencies]
+optype = {version = ">=0.15.0,<0.20", extras = ["numpy"]}
+
+[package.extras]
+scipy = ["scipy (>=1.18.0,<1.19)"]
+
+[[package]]
 name = "seaborn"
 version = "0.13.2"
 description = "Statistical data visualization"
@@ -2635,4 +2687,4 @@ viz = ["cartopy (>=0.23)", "matplotlib (>=3.8)", "nc-time-axis", "seaborn"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13, <3.15"
-content-hash = "ad1028bd5569e469dca3bfc090e066620aba86a8df9098151b0fb672eefae745"
+content-hash = "5a459b06f42c80769893c5b76d507d28179903c8cc1f9fefdef2aac8d2ad8240"
