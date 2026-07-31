@@ -253,7 +253,7 @@ def run_main(opts, detrend_ctp="JJA"):
     heatwave_output_dir.mkdir(parents=True, exist_ok=True)
     daily_data_path_real_world = str(configured_output_path / "daily_basis_variables") + "/"
     daily_data_path_detrended = str(
-        configured_output_path / f"SPARTACUS_detrended_{detrend_ctp}" / "daily_basis_variables"
+        configured_output_path / f"SPARTACUS_detrended/{detrend_ctp}" / "daily_basis_variables"
     ) + "/"
     
     heatwave_period = ["2026-06-17", "2026-07-01"]
