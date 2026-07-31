@@ -347,8 +347,8 @@ def run_main():
         
         corrected_tmax = expand_forecast(
             corrected_tmax, method="days",
-            source_days=['2026-08-03', '2026-08-01', '2026-08-03', '2026-08-03', '2026-08-01'],
-            offsets=[0, 0, -2, 0, 0],
+            source_days=['2026-08-01', '2026-08-03', '2026-08-03', '2026-08-01'],
+            offsets=[0, -2, 0, 0],
         )
         logger.info("Corrected Tmax forecast now covers %s to %s", corrected_tmax.time.min().values,
                     corrected_tmax.time.max().values)
