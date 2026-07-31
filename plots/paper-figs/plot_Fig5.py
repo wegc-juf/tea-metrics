@@ -229,6 +229,13 @@ def run(run_name):
     elif run_name == 'CW3':
         input_data_path = Path('/home/wegnet/results/SPARTACUS_DETRENDED_JJA')
         ctp = 'june'
+    elif run_name == 'current_detrended':
+        input_data_path = Path('/data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/SPARTACUS_detrended/JJA/')
+        ctp = 'annual'
+    elif run_name == 'current':
+        input_data_path = Path('/data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/')
+        ctp = 'annual'
+
     dec, ann, af = get_data(varname='Tx30.0degC', ctp=ctp, input_data_path=input_data_path)
 
     fig, axs = plt.subplots(4, 2, figsize=(14, 16))
@@ -248,17 +255,18 @@ def run(run_name):
     sl_mean = dec['TEX_GR_slow'].sel(time=slice(f'1961-01-01', f'1985-12-31')).mean().values
     print(f"TEX_GR: mean supp = {su_mean:.3f}, mean slow = {sl_mean:.3f}")
 
-    map_vars = ['EF', 'ED_avg', 'EM_avg']
-    for irow, map_var in enumerate(map_vars):
-        mdata = gmean(dec[map_var].sel(time=slice(f'{END_YEAR-9}-01-01', f'{END_YEAR-4}-12-31')), axis=0)
-        mdata = xr.DataArray(data=mdata, coords={'y': (['y'], dec.y.values),
-                                                 'x': (['x'], dec.x.values)}, name=map_var)
-        plot_map(fig=fig, ax=axs[irow, 1], data=mdata)
+    if 'current' not in run_name:
+        map_vars = ['EF', 'ED_avg', 'EM_avg']
+        for irow, map_var in enumerate(map_vars):
+            mdata = gmean(dec[map_var].sel(time=slice(f'{END_YEAR-9}-01-01', f'{END_YEAR-4}-12-31')), axis=0)
+            mdata = xr.DataArray(data=mdata, coords={'y': (['y'], dec.y.values),
+                                                     'x': (['x'], dec.x.values)}, name=map_var)
+            plot_map(fig=fig, ax=axs[irow, 1], data=mdata)
 
-    axs[2, 1].text(0, 0, 'Alpine data at z > 1500m excluded.',
-                   horizontalalignment='left', verticalalignment='center',
-                   transform=axs[2, 1].transAxes, backgroundcolor='mistyrose',
-                   fontsize=8)
+        axs[2, 1].text(0, 0, 'Alpine data at z > 1500m excluded.',
+                       horizontalalignment='left', verticalalignment='center',
+                       transform=axs[2, 1].transAxes, backgroundcolor='mistyrose',
+                       fontsize=8)
 
     # iterate over each subplot and add a text label
     labels = ['a)', 'e)', 'b)', 'f)', 'c)', 'g)', 'd)', 'h)']
@@ -273,9 +281,11 @@ def run(run_name):
 
 
 if __name__ == '__main__':
-    # run()
-    run('RW1')
-    run('RW2')
-    run('CW1')
-    run('CW2')
-    run('CW3')
+    # run('paper')
+    # run('RW1')
+    # run('RW2')
+    # run('CW1')
+    # run('CW2')
+    # run('CW3')
+    run('current_detrended')
+    run('current')
