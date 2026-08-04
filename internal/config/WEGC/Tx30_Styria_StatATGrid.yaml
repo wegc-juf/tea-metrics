@@ -51,6 +51,7 @@ create_region_masks:
   <<: *DATA
   <<: *PATHS
   gr_type: polygon
+  subreg: true
   shpfile: /data/reloclim/backup/GEO/shapefiles/OEKS15/good/LAND_AT_.shp
   target_sys: 3035
   orofile: /data/arsclisys/normal/SPARTACUS/reproj_StatAT/v2.1/SPARTACUSreg_orography.nc
