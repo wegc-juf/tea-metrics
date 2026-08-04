@@ -343,15 +343,20 @@ def run_main():
             corrected_hourly[:-1],
             spartacus_tmax.name
         )
-        logger.info("Expanding corrected Tmax forecast with configured source days and offsets")
-        
-        corrected_tmax = expand_forecast(
-            corrected_tmax, method="days",
-            source_days=['2026-08-01', '2026-08-03', '2026-08-03', '2026-08-01'],
-            offsets=[0, -2, 0, 0],
-        )
-        logger.info("Corrected Tmax forecast now covers %s to %s", corrected_tmax.time.min().values,
-                    corrected_tmax.time.max().values)
+
+
+        source_days=[]
+        offsets=[]
+        if source_days:
+            logger.info("Expanding corrected Tmax forecast with configured source days and offsets")
+            corrected_tmax = expand_forecast(
+                corrected_tmax, method="days",
+                source_days=source_days,
+                offsets=offsets
+            )
+            logger.info("Corrected Tmax forecast now covers %s to %s",
+                        corrected_tmax.time.min().values,
+                        corrected_tmax.time.max().values)
         
         filename = f"{icon_dir}_bias_corr/bias_corrected_tmax_{todays_run.stem}.nc"
         if not Path(f"{icon_dir}_bias_corr").exists():
