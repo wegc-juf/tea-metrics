@@ -25,8 +25,10 @@ def test_create_mask_file_includes_last_row_and_column(monkeypatch):
     opts = _opts()
     template = xr.Dataset(coords={'lon': [0.0, 1.0, 2.0], 'lat': [0.0, 1.0, 2.0]})
     captured = {}
+    messages = []
     shape = gpd.GeoDataFrame(geometry=[box(1.5, 1.5, 2.5, 2.5)], crs='EPSG:4326')
 
+    monkeypatch.setattr(masks.logger, 'info', messages.append)
     monkeypatch.setattr(masks, 'get_gridded_data', lambda *args, **kwargs: template)
     monkeypatch.setattr(masks, '_load_shp', lambda opts: shape)
     monkeypatch.setattr(masks, '_save_output', lambda ds, opts, out_region=None: captured.update(ds=ds))
@@ -37,6 +39,8 @@ def test_create_mask_file_includes_last_row_and_column(monkeypatch):
     assert result.shape == (3, 3)
     assert result[2, 2] == 1
     assert np.isnan(result[0, 0])
+    assert any('Restricted intersection calculation to 2 x 2' in message for message in messages)
+    assert any('Calculated cell intersections' in message for message in messages)
 
 
 def test_create_mask_file_unions_multiple_features(monkeypatch):

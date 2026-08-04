@@ -8,6 +8,7 @@ import geopandas as gpd
 import numpy as np
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+import time
 from shapely import area as shapely_area
 from shapely import box as shapely_box
 from shapely import intersection as shapely_intersection
@@ -15,6 +16,7 @@ import xarray as xr
 
 from ..common.general_functions import create_history_from_cfg, get_gridded_data
 from ..common.config import load_opts
+from ..common.TEA_logger import logger
 from ..calc_TEA import _getopts
 
 
@@ -29,7 +31,8 @@ def _load_shp(opts):
 
     """
 
-    # Load shp file
+    start = time.perf_counter()
+    logger.info(f'Loading shape file {opts.shpfile}')
     shp = gpd.read_file(opts.shpfile)
 
     if opts.subreg:
@@ -44,21 +47,30 @@ def _load_shp(opts):
 
     # Transfer it to the wanted coordinate system
     shp = shp.to_crs(epsg=opts.target_sys)
+    logger.info(f'Loaded and reprojected {len(shp)} shape features in '
+                f'{time.perf_counter() - start:.2f}s')
 
     return shp
 
 
 def _intersect_cells(cells, poly, workers):
     """Return intersection areas, optionally evaluating geometry chunks in parallel."""
+    start = time.perf_counter()
+    parallel = workers > 1 and len(cells) >= 10_000
+    logger.info(f'Calculating intersections for {len(cells):,} candidate cells '
+                f'using {workers if parallel else 1} worker thread(s)')
     if workers <= 1 or len(cells) < 10_000:
-        return shapely_area(shapely_intersection(cells, poly))
+        result = shapely_area(shapely_intersection(cells, poly))
+    else:
+        chunks = np.array_split(cells, workers)
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            areas = executor.map(
+                lambda chunk: shapely_area(shapely_intersection(chunk, poly)), chunks
+            )
+            result = np.concatenate(tuple(areas))
 
-    chunks = np.array_split(cells, workers)
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        areas = executor.map(
-            lambda chunk: shapely_area(shapely_intersection(chunk, poly)), chunks
-        )
-        return np.concatenate(tuple(areas))
+    logger.info(f'Calculated cell intersections in {time.perf_counter() - start:.2f}s')
+    return result
 
 
 def _create_cell_polygons(opts, xvals, yvals, offset, x_indices=None, y_indices=None):
@@ -103,12 +115,16 @@ def create_sea_mask(opts):
 
     """
 
+    start = time.perf_counter()
+    logger.info(f'Creating SEA mask from AUT and SAR masks for {opts.dataset}')
     try:
         suffix = f'_{opts.altitude_threshold}'
         aut = xr.open_dataset(Path(opts.maskpath) / opts.mask_sub / f'AUT_mask_{opts.dataset}{suffix}.nc')
         sar = xr.open_dataset(Path(opts.maskpath) / opts.mask_sub / f'SAR_mask_{opts.dataset}{suffix}.nc')
     except FileNotFoundError:
         raise FileNotFoundError('For SEA mask, run create_region_masks.py for AUT and SAR first.')
+
+    logger.info(f'Loaded AUT and SAR masks in {time.perf_counter() - start:.2f}s')
 
     mask = aut['mask'].where(sar['mask'].notnull())
     mask = mask.rename('mask')
@@ -129,8 +145,11 @@ def _prep_lsm(opts):
     Returns:
         lsm: land sea mask
     """
+    start = time.perf_counter()
+    logger.info(f'Loading land-sea mask {opts.lsmfile}')
     lsm_raw = xr.open_dataset(opts.lsmfile)
 
+    logger.info(f'Loading orography grid {opts.orofile} for coordinate alignment')
     data = xr.open_dataset(opts.orofile)
     data = data.altitude
 
@@ -160,6 +179,9 @@ def _prep_lsm(opts):
 
     lsm = lsm.sel(lat=data.lat.values, lon=data.lon.values)
 
+    logger.info(f'Prepared land-sea mask with dimensions {dict(lsm.sizes)} in '
+                f'{time.perf_counter() - start:.2f}s')
+
     return lsm
 
 
@@ -175,6 +197,7 @@ def create_agr_mask(opts):
     if 'ERA5' not in opts.dataset:
         raise AttributeError('AGR mask can only be created for ERA5(Land) data.')
 
+    logger.info(f'Creating AGR mask for {opts.region} / {opts.dataset}')
     mask = _prep_lsm(opts=opts)
     mask = mask.where(mask > opts.land_frac_min)
     mask = mask.rename('mask')
@@ -201,6 +224,8 @@ def _apply_altitude_threshold(mask, opts):
         mask: mask DataArray with altitude threshold applied
 
     """
+    start = time.perf_counter()
+    logger.info(f'Applying altitude threshold of {opts.altitude_threshold} to mask')
     # load orography
     orog = xr.open_dataset(opts.orofile)
     if 'altitude' in orog.data_vars:
@@ -211,6 +236,7 @@ def _apply_altitude_threshold(mask, opts):
         orog = orog.orog
 
     mask = mask.where(orog < opts.altitude_threshold)
+    logger.info(f'Applied altitude threshold in {time.perf_counter() - start:.2f}s')
     return mask
 
 
@@ -248,23 +274,29 @@ def _save_output(ds, opts, out_region=None):
     if out_region is None:
         out_region = opts.region
     outpath = Path(opts.maskpath) / opts.mask_sub / f'{out_region}_mask_{opts.dataset}_{opts.altitude_threshold}.nc'
-    print(f'Saving mask file to {outpath}')
+    start = time.perf_counter()
+    logger.info(f'Saving mask file to {outpath}')
     ds.to_netcdf(outpath)
+    logger.info(f'Saved mask file in {time.perf_counter() - start:.2f}s')
 
 
 def create_rectangular_gr(opts):
     """
     create rectangular grid mask using either corners or center coordinates + extent
     Args:
-        opts: options as defined in config file
+        opts: options as defined in the config file
 
     Returns:
 
     """
+    start = time.perf_counter()
+    logger.info(f'Creating rectangular mask for {opts.dataset}')
     # load template file
     template_file = get_gridded_data(opts.start, opts.start + 1, opts)
     xy = opts.xy_name.split(',')
     x, y = xy[0], xy[1]
+    logger.info(f'Template grid loaded with {x}={len(template_file[x])}, '
+                f'{y}={len(template_file[y])}')
     dx = template_file[x][1] - template_file[x][0]
     dy = abs(template_file[y][1] - template_file[y][0])
 
@@ -355,6 +387,7 @@ def create_rectangular_gr(opts):
     create_history_from_cfg(cfg_params=opts, ds=ds_mask)
 
     out_region = f'SW_{xn:.1f}_{yn:.1f}-NE_{xx:.1f}_{yx:.1f}'
+    logger.info(f'Created rectangular mask in {time.perf_counter() - start:.2f}s')
     _save_output(ds_mask, opts, out_region)
 
 
@@ -367,13 +400,18 @@ def create_mask_file(opts):
     Returns:
 
     """
+    start = time.perf_counter()
+    logger.info(f'Creating polygon mask for {opts.region} / {opts.dataset}')
     # Load template file
     template_file = get_gridded_data(opts.start, opts.start + 1, opts)
     xy = opts.xy_name.split(',')
     x, y = xy[0], xy[1]
+    logger.info(f'Template grid loaded with {x}={len(template_file[x])}, '
+                f'{y}={len(template_file[y])}')
 
     # Load shp file and transform it to desired coordinate system
     shp = _load_shp(opts=opts)
+    logger.info(f'Preparing geometry from {len(shp)} shape feature(s)')
     # Define the cell grid
     xvals, yvals = template_file[x], template_file[y]
 
@@ -397,6 +435,7 @@ def create_mask_file(opts):
     if len(shp) == 0:
         raise ValueError(f'No geometry found for region {opts.region!r}.')
     poly = shp.geometry.iloc[0] if len(shp) == 1 else shp.geometry.union_all()
+    logger.info(f'Prepared region geometry with bounds {poly.bounds}')
 
     if poly.is_empty:
         raise ValueError(f'No geometry found for region {opts.region!r}.')
@@ -406,6 +445,9 @@ def create_mask_file(opts):
     y_indices = np.flatnonzero((yvals >= min_y - offset) & (yvals <= max_y + offset))
     if not len(x_indices) or not len(y_indices):
         raise ValueError(f'Region {opts.region!r} does not overlap the target grid.')
+
+    logger.info(f'Restricted intersection calculation to {len(x_indices)} x '
+                f'{len(y_indices)} = {len(x_indices) * len(y_indices):,} candidate cells')
 
     cells = _create_cell_polygons(
         opts=opts,
@@ -419,6 +461,7 @@ def create_mask_file(opts):
         cells['geometry'], poly, max(1, getattr(opts, 'parallel_workers', 1))
     )
     mask[cells['ix'], cells['iy']] = np.clip(areas / (4 * offset * offset), 0, 1)
+    logger.info(f'Calculated coverage for {np.count_nonzero(areas > 0):,} cells')
 
     # Set cells outside of region to nan
     mask[np.where(mask == 0)] = np.nan
@@ -439,6 +482,7 @@ def create_mask_file(opts):
     create_history_from_cfg(cfg_params=opts, ds=ds_mask)
     out_region = opts.region
     _save_output(ds_mask, opts, out_region)
+    logger.info(f'Created polygon mask in {time.perf_counter() - start:.2f}s')
 
 
 def run():
@@ -446,6 +490,8 @@ def run():
     
     # load CFG parameter
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
+    logger.info(f'Starting create_region_masks for region {opts.region}, '
+                f'dataset {opts.dataset}, gr_type {opts.gr_type}')
     
     if opts.gr_type != 'polygon':
         create_rectangular_gr(opts=opts)
@@ -455,6 +501,8 @@ def run():
         create_agr_mask(opts=opts)
     else:
         create_mask_file(opts)
+
+    logger.info('create_region_masks completed successfully')
 
 
 if __name__ == '__main__':
