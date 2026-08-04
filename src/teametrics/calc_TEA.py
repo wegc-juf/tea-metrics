@@ -369,7 +369,8 @@ def _load_mask_file(opts):
         sw_coords = '_'.join([f'{float(coord):.1f}' for coord in sw_coords])
         ne_coords = opts.ne_corner.split(',')
         ne_coords = '_'.join([f'{float(coord):.1f}' for coord in ne_coords])
-        maskpath = Path(opts.maskpath) / opts.mask_sub / f'SW_{sw_coords}-NE_{ne_coords}_mask_{opts.dataset}.nc'
+        maskpath = (Path(opts.maskpath) / opts.mask_sub /
+                    f'SW_{sw_coords}-NE_{ne_coords}_mask_{opts.dataset}_{opts.altitude_threshold}.nc')
     else:
         center_coords = opts.center.split(',')
         center_coords = [float(ii) for ii in center_coords]
@@ -379,7 +380,8 @@ def _load_mask_file(opts):
         ne_coords = [center_coords[0] + float(opts.we_len) / 2,
                      center_coords[1] + float(opts.ns_len) / 2]
         ne_coords = '_'.join([f'{float(coord):.1f}' for coord in ne_coords])
-        maskpath = Path(opts.maskpath) / opts.mask_sub / f'SW_{sw_coords}-NE_{ne_coords}_mask_{opts.dataset}.nc'
+        maskpath = (Path(opts.maskpath) / opts.mask_sub /
+                    f'SW_{sw_coords}-NE_{ne_coords}_mask_{opts.dataset}_{opts.altitude_threshold}.nc')
     logger.info(f'Loading mask from {maskpath}')
     if not maskpath.is_file():
         raise FileNotFoundError(maskpath)

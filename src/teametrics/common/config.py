@@ -202,6 +202,8 @@ def _get_default_opts(fname, opts):
 
     # create_region_masks.py options
     if fname == 'create_region_masks':
+        if 'parallel_workers' not in opts:
+            opts.parallel_workers = 1
         if 'gr_type' not in opts:
             opts.gr_type = 'polygon'
         if 'subreg' not in opts or opts.subreg == opts.region:

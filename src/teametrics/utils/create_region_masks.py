@@ -7,8 +7,10 @@ author: hst
 import geopandas as gpd
 import numpy as np
 from pathlib import Path
-from shapely.geometry import Polygon, MultiPolygon
-from tqdm import trange
+from concurrent.futures import ThreadPoolExecutor
+from shapely import area as shapely_area
+from shapely import box as shapely_box
+from shapely import intersection as shapely_intersection
 import xarray as xr
 
 from ..common.general_functions import create_history_from_cfg, get_gridded_data
@@ -46,7 +48,20 @@ def _load_shp(opts):
     return shp
 
 
-def _create_cell_polygons(opts, xvals, yvals, offset):
+def _intersect_cells(cells, poly, workers):
+    """Return intersection areas, optionally evaluating geometry chunks in parallel."""
+    if workers <= 1 or len(cells) < 10_000:
+        return shapely_area(shapely_intersection(cells, poly))
+
+    chunks = np.array_split(cells, workers)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        areas = executor.map(
+            lambda chunk: shapely_area(shapely_intersection(chunk, poly)), chunks
+        )
+        return np.concatenate(tuple(areas))
+
+
+def _create_cell_polygons(opts, xvals, yvals, offset, x_indices=None, y_indices=None):
     """
     create list of polygons for each cell
     Args:
@@ -60,41 +75,22 @@ def _create_cell_polygons(opts, xvals, yvals, offset):
 
     """
 
-    out_region = opts.region
-
-    path = Path(opts.maskpath) / opts.mask_sub / 'polygons' / f'{out_region}_EPSG{opts.target_sys}_{opts.dataset}/'
-    path.mkdir(parents=True, exist_ok=True)
-    fname = path / f'{out_region}_cells_EPSG{opts.target_sys}_{opts.dataset}.shp'
-
-    try:
-        gdf = gpd.read_file(fname)
-        cells = []
-        for idx, row in gdf.iterrows():
-            cell = {'ix': row['ix'], 'iy': row['iy'], 'geometry': row['geometry']}
-            cells.append(cell)
-    except:
-        cells_list = []
-        for ix in trange(len(yvals) - 1, desc='Creating polygons for individual cells'):
-            for iy in range(len(xvals) - 1):
-                cell = Polygon(
-                    [(xvals[iy] - offset, yvals[ix] - offset),
-                     (xvals[iy] + offset, yvals[ix] - offset),
-                     (xvals[iy] + offset, yvals[ix] + offset),
-                     (xvals[iy] - offset, yvals[ix] + offset),
-                     (xvals[iy] - offset, yvals[ix] - offset)])
-                cells_list.append((ix, iy, cell))
-
-        gdf = gpd.GeoDataFrame(cells_list, columns=['ix', 'iy', 'geometry'])
-        gdf.to_file(fname, driver='ESRI Shapefile')
-
-        # Load gdf from file otherwise index error later
-        gdf = gpd.read_file(fname)
-        cells = []
-        for idx, row in gdf.iterrows():
-            cell = {'ix': row['ix'], 'iy': row['iy'], 'geometry': row['geometry']}
-            cells.append(cell)
-
-    return cells
+    xvals = np.asarray(xvals)
+    yvals = np.asarray(yvals)
+    if x_indices is None:
+        x_indices = np.arange(len(xvals))
+    if y_indices is None:
+        y_indices = np.arange(len(yvals))
+    x_grid, y_grid = np.meshgrid(xvals, yvals)
+    ix_grid, iy_grid = np.meshgrid(y_indices, x_indices, indexing='ij')
+    return {
+        'ix': ix_grid.ravel(),
+        'iy': iy_grid.ravel(),
+        'geometry': shapely_box(
+            (x_grid - offset).ravel(), (y_grid - offset).ravel(),
+            (x_grid + offset).ravel(), (y_grid + offset).ravel(),
+        ),
+    }
 
 
 def create_sea_mask(opts):
@@ -108,8 +104,9 @@ def create_sea_mask(opts):
     """
 
     try:
-        aut = xr.open_dataset(Path(opts.maskpath) / opts.mask_sub / f'AUT_mask_{opts.dataset}.nc')
-        sar = xr.open_dataset(Path(opts.maskpath) / opts.mask_sub / f'SAR_mask_{opts.dataset}.nc')
+        suffix = f'_{opts.altitude_threshold}'
+        aut = xr.open_dataset(Path(opts.maskpath) / opts.mask_sub / f'AUT_mask_{opts.dataset}{suffix}.nc')
+        sar = xr.open_dataset(Path(opts.maskpath) / opts.mask_sub / f'SAR_mask_{opts.dataset}{suffix}.nc')
     except FileNotFoundError:
         raise FileNotFoundError('For SEA mask, run create_region_masks.py for AUT and SAR first.')
 
@@ -357,7 +354,7 @@ def create_rectangular_gr(opts):
 
     create_history_from_cfg(cfg_params=opts, ds=ds_mask)
 
-    out_region = f'SW_{xn}_{yn}-NE_{xx}_{yx}'
+    out_region = f'SW_{xn:.1f}_{yn:.1f}-NE_{xx:.1f}_{yx:.1f}'
     _save_output(ds_mask, opts, out_region)
 
 
@@ -397,27 +394,31 @@ def create_mask_file(opts):
     # Initialize mask array
     mask = np.zeros(shape=(len(yvals), len(xvals)), dtype='float32')
 
-    if len(shp) == 1:
-        pass
-    elif 'CNTR_ID' in shp.columns:
-        shp = shp[shp.CNTR_ID == opts.region]
-    elif 'LAND_NAME' in shp.columns:
-        shp = shp[shp.LAND_NAME == opts.region]
-    elif 'GEM_NAME' in shp.columns:
-        shp = shp[shp.GEM_NAME == opts.region]
+    if len(shp) == 0:
+        raise ValueError(f'No geometry found for region {opts.region!r}.')
+    poly = shp.geometry.iloc[0] if len(shp) == 1 else shp.geometry.union_all()
 
-    poly = shp.geometry.iloc[0]
+    if poly.is_empty:
+        raise ValueError(f'No geometry found for region {opts.region!r}.')
 
-    cells = _create_cell_polygons(opts=opts, xvals=xvals, yvals=yvals, offset=offset)
+    min_x, min_y, max_x, max_y = poly.bounds
+    x_indices = np.flatnonzero((xvals >= min_x - offset) & (xvals <= max_x + offset))
+    y_indices = np.flatnonzero((yvals >= min_y - offset) & (yvals <= max_y + offset))
+    if not len(x_indices) or not len(y_indices):
+        raise ValueError(f'Region {opts.region!r} does not overlap the target grid.')
 
-    # Check intersections and calculate mask values
-    total_cells = len(cells)
-    for i in trange(total_cells, desc='Calculating fractions for cells'):
-        icell = cells[i]
-        ix, iy, cell = icell['ix'], icell['iy'], icell['geometry']
-        intersection = poly.intersection(cell)
-        if not intersection.is_empty:
-            mask[ix, iy] += intersection.area / cell.area
+    cells = _create_cell_polygons(
+        opts=opts,
+        xvals=xvals[x_indices],
+        yvals=yvals[y_indices],
+        offset=offset,
+        x_indices=x_indices,
+        y_indices=y_indices,
+    )
+    areas = _intersect_cells(
+        cells['geometry'], poly, max(1, getattr(opts, 'parallel_workers', 1))
+    )
+    mask[cells['ix'], cells['iy']] = np.clip(areas / (4 * offset * offset), 0, 1)
 
     # Set cells outside of region to nan
     mask[np.where(mask == 0)] = np.nan
