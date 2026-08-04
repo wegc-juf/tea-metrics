@@ -35,14 +35,19 @@ run_step ./teametrics/utils/SPARTACUS/regrid_SPARTACUS.py --config-file /home/ju
 # recalc daily and ctp data
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_update.yaml --loglevel INFO
 
+run_step python -m teametrics.calc_TEA --config-file
+/home/juf/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml --loglevel INFO
+
 # detrend data
 run_step ~/wegenerNet/misc_analyses/climate_trends/detrend.py --folder-spartacus /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS/reproj_StatAT/v2.1  --end 2025 --data-var Tx --output-folder /data/arsclisys/normal/SPARTACUS/reproj_StatAT/detrended/ --year 2026 --cache
 
 # recalc daily and ctp data for detrend
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/CW2_daily.yaml --loglevel INFO
+run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/CW2_daily_Styria.yaml --loglevel INFO
 
 # plot heatwave data
 run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_update.yaml"
+run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml"
 run_step rsync -av  /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves /mnt/unicloud/juergen.fuchsberger/TEA-indicators/heatwaves/202607
 
 # calculate decadal data
