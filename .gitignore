@@ -35,3 +35,4 @@ __pycache__
 /src/teametrics/utils/ICON/icon_global_t2m/*.grib2
 
 /TEXHWx_GR.csv
+/src/*.png
