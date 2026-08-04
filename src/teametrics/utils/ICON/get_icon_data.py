@@ -33,6 +33,11 @@ def download_icon_eu_t2m():
         grib_name = bz2_name[:-4]  # remove .bz2
 
         url = base + bz2_name
+        grib_path = outdir / grib_name
+
+        if grib_path.exists():
+            print(f"skipping existing {fhr}")
+            continue
 
         r = requests.get(url, timeout=60)
 
@@ -41,7 +46,6 @@ def download_icon_eu_t2m():
             continue
 
         bz2_path = outdir / bz2_name
-        grib_path = outdir / grib_name
 
         # Save compressed file
         with open(bz2_path, "wb") as f:
@@ -105,6 +109,11 @@ def download_icon_t2m(
         )
 
         url = base + fname_bz2
+        outfile = outdir / fname_bz2[:-4]
+
+        if outfile.exists():
+            print(f"skipping existing {fhr}")
+            continue
 
         try:
 
@@ -114,8 +123,6 @@ def download_icon_t2m(
             if r.status_code != 200:
                 print(f"missing: {fhr}")
                 continue
-
-            outfile = outdir / fname_bz2[:-4]
 
             with open(outfile, "wb") as f:
                 f.write(bz2.decompress(r.content))
@@ -149,6 +156,11 @@ def download_icon_d2_t2m():
         grib_name = bz2_name[:-4]  # remove .bz2
 
         url = base + bz2_name
+        grib_path = outdir / grib_name
+
+        if grib_path.exists():
+            print(f"skipping existing {fhr}")
+            continue
 
         print(f"Downloading {url} ...")
         r = requests.get(url, timeout=60)
@@ -158,7 +170,6 @@ def download_icon_d2_t2m():
             continue
 
         bz2_path = outdir / bz2_name
-        grib_path = outdir / grib_name
 
         # Save compressed file
         with open(bz2_path, "wb") as f:
