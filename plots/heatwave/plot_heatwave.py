@@ -73,6 +73,7 @@ def plot_daily_heatwave(heatwave_data, heatwave_period, data_var="DTEMA_GR",
                         detrended_heatwave_data=None,
                         detrend_ctp=None,
                         output_dir=None,
+                        region="AUT",
                         logarithmic=False,
                         ):
     
@@ -103,12 +104,12 @@ def plot_daily_heatwave(heatwave_data, heatwave_period, data_var="DTEMA_GR",
     if detrended_heatwave_data is not None:
         filename = (
             f'heatwave_daily{log_suffix}_DETREND_{detrend_ctp}_{data_var}_'
-            f'{heatwave_period[0]}_{heatwave_period[1]}.png'
+            f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.png'
         )
     else:
         filename = (
             f'heatwave_daily{log_suffix}_{data_var}_'
-            f'{heatwave_period[0]}_{heatwave_period[1]}.png'
+            f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.png'
         )
     plt.savefig(_prepare_output_path(output_dir / filename))
     if show_plots:
@@ -116,7 +117,7 @@ def plot_daily_heatwave(heatwave_data, heatwave_period, data_var="DTEMA_GR",
 
 
 def plot_cumulative_heatwave(heatwave_cumulative, heatwave_period, data_var="DTEMA_GR",
-                             detrended_data=None, detrend_ctp=None, output_dir=None):
+                             detrended_data=None, detrend_ctp=None, output_dir=None, region="AUT"):
     set_ylim = True
     plt.figure(figsize=(10, 6))
     myplot = heatwave_cumulative.plot()[0]
@@ -148,12 +149,12 @@ def plot_cumulative_heatwave(heatwave_cumulative, heatwave_period, data_var="DTE
     if detrended_data is not None:
         filename = (
             f'heatwave_cumulative_DETREND_{detrend_ctp}_{data_var}_'
-            f'{heatwave_period[0]}_{heatwave_period[1]}.png'
+            f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.png'
         )
     else:
         filename = (
             f'heatwave_cumulative_{data_var}_'
-            f'{heatwave_period[0]}_{heatwave_period[1]}.png'
+            f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.png'
         )
     plt.savefig(_prepare_output_path(output_dir / filename))
     if show_plots:
@@ -177,6 +178,7 @@ def calc_heatwave_metrics(data, heatwave_period, data_var="DTEMA_GR", add_values
 def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended_data=None,
                            detrend_ctp=None,
                            output_dir=None,
+                           region="AUT",
                            ):
     heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave = calc_heatwave_metrics(
         data, heatwave_period, data_var=data_var, add_values=None)
@@ -185,9 +187,11 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
           f"areal degC, event_max MA_GR = {heatwave_data.max().values:.0f} areal degC")
     if save_data:
         # save csv files for heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave
-        daily_output = output_dir / f'heatwave_daily_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
+        daily_output = output_dir / (
+            f'heatwave_daily_{data_var}_{region}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
+        )
         cumulative_output = output_dir / (
-            f'heatwave_cumulative_{data_var}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
+            f'heatwave_cumulative_{data_var}_{region}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
         )
         heatwave_data.to_dataframe().to_csv(_prepare_output_path(daily_output))
         heatwave_cumulative.to_dataframe().to_csv(_prepare_output_path(cumulative_output))
@@ -205,11 +209,11 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
             #  detrended_mean_heatwave
             detrended_daily_output = output_dir / (
                 f'heatwave_daily_DETREND_{detrend_ctp}_{data_var}_'
-                f'{heatwave_period[0]}_{heatwave_period[1]}.csv'
+                f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
             )
             detrended_cumulative_output = output_dir / (
                 f'heatwave_cumulative_DETREND_{detrend_ctp}_{data_var}_'
-                f'{heatwave_period[0]}_{heatwave_period[1]}.csv'
+                f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
             )
             detrended_heatwave_data.to_dataframe().to_csv(_prepare_output_path(detrended_daily_output))
             detrended_heatwave_cumulative.to_dataframe().to_csv(
@@ -225,14 +229,15 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
     # Plotting
     plot_cumulative_heatwave(heatwave_cumulative, heatwave_period, data_var=data_var,
                              detrended_data=detrended_heatwave_cumulative, detrend_ctp=detrend_ctp,
-                             output_dir=output_dir)
+                             output_dir=output_dir, region=region)
     
     plot_daily_heatwave(heatwave_data, heatwave_period, data_var=data_var,
                         detrended_heatwave_data=detrended_heatwave_data, detrend_ctp=detrend_ctp,
-                        output_dir=output_dir)
+                        output_dir=output_dir, region=region)
     plot_daily_heatwave(heatwave_data, heatwave_period, data_var=data_var,
                         detrended_heatwave_data=detrended_heatwave_data, detrend_ctp=detrend_ctp,
                         output_dir=output_dir,
+                        region=region,
                         logarithmic=True)
 
 
@@ -280,7 +285,7 @@ def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data
     data = get_data(data_var, daily_data_path_real_world, heatwave_period, region=region)
     detrended_data = get_data(data_var, daily_data_path_detrended, heatwave_period, region=region)
     calc_and_plot_heatwave(data, heatwave_period, detrended_data=detrended_data, detrend_ctp=detrend_ctp,
-                           output_dir=output_dir)
+                           output_dir=output_dir, region=region)
 
 
 if __name__ == "__main__":
