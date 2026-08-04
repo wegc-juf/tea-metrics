@@ -1,11 +1,13 @@
 from types import SimpleNamespace
 
+import argparse
 import geopandas as gpd
 import numpy as np
 import xarray as xr
 from shapely.geometry import box
 
 from teametrics.utils import create_region_masks as masks
+from teametrics.common.config import check_type
 
 
 def _opts():
@@ -16,9 +18,21 @@ def _opts():
         target_sys=4326,
         altitude_threshold=0,
         parallel_workers=1,
+        mask_parallel_workers=1,
         start=2000,
         script='create_region_masks.py',
     )
+
+
+def test_mask_parallel_workers_allows_ceiling_32():
+    check_type('mask_parallel_workers', 32)
+
+    try:
+        check_type('mask_parallel_workers', 33)
+    except argparse.ArgumentTypeError:
+        pass
+    else:
+        raise AssertionError('mask_parallel_workers should be capped at 32')
 
 
 def test_create_mask_file_includes_last_row_and_column(monkeypatch):

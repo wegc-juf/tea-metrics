@@ -1,6 +1,6 @@
 common_params:
   GeoRegion: &GR
-    region: Styria
+    region: Steiermark
   parameter: &PARAM
     parameter: Tx
     precip: false
@@ -51,9 +51,10 @@ create_region_masks:
   <<: *DATA
   <<: *PATHS
   gr_type: polygon
-  shpfile: /data/reloclim/backup/GEO/shapefiles/OEKS15/good/AUSTRIA.shp
+  shpfile: /data/reloclim/backup/GEO/shapefiles/OEKS15/good/LAND_AT_.shp
   target_sys: 3035
   orofile: /data/arsclisys/normal/SPARTACUS/reproj_StatAT/v2.1/SPARTACUSreg_orography.nc
+  mask_parallel_workers: 32
 
 regrid_SPARTACUS:
   <<: *PARAM

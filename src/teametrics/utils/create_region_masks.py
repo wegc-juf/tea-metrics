@@ -458,7 +458,7 @@ def create_mask_file(opts):
         y_indices=y_indices,
     )
     areas = _intersect_cells(
-        cells['geometry'], poly, max(1, getattr(opts, 'parallel_workers', 1))
+        cells['geometry'], poly, max(1, getattr(opts, 'mask_parallel_workers', 1))
     )
     mask[cells['ix'], cells['iy']] = np.clip(areas / (4 * offset * offset), 0, 1)
     logger.info(f'Calculated coverage for {np.count_nonzero(areas > 0):,} cells')

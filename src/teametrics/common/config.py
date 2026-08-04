@@ -204,6 +204,8 @@ def _get_default_opts(fname, opts):
     if fname == 'create_region_masks':
         if 'parallel_workers' not in opts:
             opts.parallel_workers = 1
+        if 'mask_parallel_workers' not in opts:
+            opts.mask_parallel_workers = opts.parallel_workers
         if 'gr_type' not in opts:
             opts.gr_type = 'polygon'
         if 'subreg' not in opts or opts.subreg == opts.region:
@@ -310,6 +312,7 @@ def check_type(key, value):
         'recalc_decadal': bool,
         'decadal_only': bool,
         'parallel_workers': int,
+        'mask_parallel_workers': int,
         'spreads': bool,
         'annual_spreads': bool,
         'compare_to_ref': bool,
@@ -365,6 +368,8 @@ def check_type(key, value):
         raise argparse.ArgumentTypeError("compression_level must be between 0 and 9.")
     if key == 'parallel_workers' and not 1 <= value <= 4:
         raise argparse.ArgumentTypeError("parallel_workers must be between 1 and 4.")
+    if key == 'mask_parallel_workers' and not 1 <= value <= 32:
+        raise argparse.ArgumentTypeError("mask_parallel_workers must be between 1 and 32.")
     # check for correct unit
     if key == 'unit':
         unit = cfunits.Units(value)
