@@ -40,22 +40,22 @@ def _prepare_output_path(output_path):
     return output_path
 
 
-def get_data(data_var="Tx30", data_path=None, time_interval=None):
+def get_data(data_var="Tx30", data_path=None, time_interval=None, region="AUT"):
     year = int(time_interval[0][0:4])
     if 1961 <= year <= 1970:
-        daily_file_names = f"DBV_{data_var}.0degC_AUT_annual_SPARTACUS_1961to1970.nc"
+        daily_file_names = f"DBV_{data_var}.0degC_{region}_annual_SPARTACUS_1961to1970.nc"
     elif 1971 <= year <= 1980:
-        daily_file_names = f"DBV_{data_var}.0degC_AUT_annual_SPARTACUS_1971to1980.nc"
+        daily_file_names = f"DBV_{data_var}.0degC_{region}_annual_SPARTACUS_1971to1980.nc"
     elif 1981 <= year <= 1990:
-        daily_file_names = f"DBV_{data_var}.0degC_AUT_annual_SPARTACUS_1981to1990.nc"
+        daily_file_names = f"DBV_{data_var}.0degC_{region}_annual_SPARTACUS_1981to1990.nc"
     elif 1991 <= year <= 2000:
-        daily_file_names = f"DBV_{data_var}.0degC_AUT_annual_SPARTACUS_1991to2000.nc"
+        daily_file_names = f"DBV_{data_var}.0degC_{region}_annual_SPARTACUS_1991to2000.nc"
     elif 2001 <= year <= 2010:
-        daily_file_names = f"DBV_{data_var}.0degC_AUT_annual_SPARTACUS_2001to2010.nc"
+        daily_file_names = f"DBV_{data_var}.0degC_{region}_annual_SPARTACUS_2001to2010.nc"
     elif 2011 <= year <= 2020:
-        daily_file_names = f"DBV_{data_var}.0degC_AUT_annual_SPARTACUS_2011to2020.nc"
+        daily_file_names = f"DBV_{data_var}.0degC_{region}_annual_SPARTACUS_2011to2020.nc"
     elif 2021 <= year <= 2026:
-        daily_file_names = f"DBV_{data_var}.0degC_AUT_annual_SPARTACUS_2021to2026.nc"
+        daily_file_names = f"DBV_{data_var}.0degC_{region}_annual_SPARTACUS_2021to2026.nc"
     else:
         print(f"No data available for the specified time interval: {time_interval}")
         return None
@@ -243,6 +243,10 @@ def _getopts():
                         type=str,
                         default='../TEA_CFG.yaml',
                         help='TEA configuration file (default: TEA_CFG.yaml)')
+    parser.add_argument('--region',
+                        type=str,
+                        default=None,
+                        help='GeoRegion to plot (default: region from the configuration file)')
     return parser.parse_args()
 
 
@@ -256,13 +260,13 @@ def run_main(opts, detrend_ctp="JJA"):
         configured_output_path / f"SPARTACUS_detrended/{detrend_ctp}" / "daily_basis_variables"
     ) + "/"
     
-    heatwave_period = ["2026-06-17", "2026-07-01"]
-    worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
-           detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir)
-    
+    # heatwave_period = ["2026-06-17", "2026-07-01"]
+    # worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
+    #        detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir)
+    #
     heatwave_period = ["2026-07-25", "2026-08-08"]
     worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
-           detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir)
+           region=opts.region, detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir)
 
     # heatwave_period = ["2013-07-16", "2013-08-09"]
     # worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period, detrend_ctp=detrend_ctp)
@@ -272,9 +276,9 @@ def run_main(opts, detrend_ctp="JJA"):
 
 
 def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data_var: str, heatwave_period: list[str],
-           detrend_ctp="JJA", output_dir=None):
-    data = get_data(data_var, daily_data_path_real_world, heatwave_period)
-    detrended_data = get_data(data_var, daily_data_path_detrended, heatwave_period)
+           region: str = "AUT", detrend_ctp="JJA", output_dir=None):
+    data = get_data(data_var, daily_data_path_real_world, heatwave_period, region=region)
+    detrended_data = get_data(data_var, daily_data_path_detrended, heatwave_period, region=region)
     calc_and_plot_heatwave(data, heatwave_period, detrended_data=detrended_data, detrend_ctp=detrend_ctp,
                            output_dir=output_dir)
 
@@ -282,5 +286,7 @@ def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data
 if __name__ == "__main__":
     cmd_opts = _getopts()
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
+    if cmd_opts.region is not None:
+        opts.region = cmd_opts.region
     run_main(opts, 'JJA')
-    run_main(opts, 'June')
+    # run_main(opts, 'June')
