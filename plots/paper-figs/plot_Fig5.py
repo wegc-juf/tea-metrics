@@ -118,6 +118,15 @@ def gr_plot_params(vname):
 
 def plot_gr_data(ax, adata, ddata, afdata, su, sl):
     props = gr_plot_params(vname=ddata.name)
+    ymax = props['yx']
+    if ddata.name == 'EF_GR':
+        plotted_max = np.nanmax(np.concatenate((
+            np.atleast_1d(np.asarray(adata)),
+            np.atleast_1d(np.asarray(ddata + su)),
+        )))
+        ymax = max(ymax, props['dy'] * np.ceil(plotted_max / props['dy']))
+        LOGGER.info('EF_GR y-axis upper limit set to %.1f for plotted maximum %.1f',
+                    ymax, plotted_max)
 
     xticks = np.arange(1961, END_YEAR + 1)
 
@@ -132,8 +141,8 @@ def plot_gr_data(ax, adata, ddata, afdata, su, sl):
     ax.plot(xticks[49:], np.ones(len(xticks[49:])) * cc,
             alpha=0.6, color=props['col'], linewidth=2)
 
-    ypos_ref = (ref / props['yx']) + 0.05
-    ypos_cc = (cc / props['yx']) + 0.05
+    ypos_ref = (ref / ymax) + 0.05
+    ypos_cc = (cc / ymax) + 0.05
     ax.text(0.02, ypos_ref, props['ref'],
             horizontalalignment='left',
             verticalalignment='center', transform=ax.transAxes,
@@ -154,8 +163,8 @@ def plot_gr_data(ax, adata, ddata, afdata, su, sl):
     ax.set_xlim(1960, END_YEAR + 1)
     ax.xaxis.set_minor_locator(FixedLocator(np.arange(1960, END_YEAR + 1)))
     ax.set_title(props['title'], fontsize=14)
-    ax.set_ylim(0, props['yx'])
-    ax.yaxis.set_major_locator(FixedLocator(np.arange(0, props['yx'] + props['dy'], props['dy'])))
+    ax.set_ylim(0, ymax)
+    ax.yaxis.set_major_locator(FixedLocator(np.arange(0, ymax + props['dy'], props['dy'])))
 
     if ddata.name == 'EA_avg_GR':
         ax.text(0.02, 0.89, f'TMax-p99ANN-{props["nv_name"]}' + r'$_\mathrm{Ref | CC}$ = '
