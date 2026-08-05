@@ -3,7 +3,8 @@
 """
 Plot Figure 5
 """
-import glob
+import argparse
+import logging
 from pathlib import Path
 import matplotlib.pyplot as plt
 import matplotlib.patches as pat
@@ -13,8 +14,6 @@ import numpy as np
 from scipy.stats import gmean
 import xarray as xr
 
-from plot_fig4 import find_range
-
 from teametrics.common.general_functions import ref_cc_params
 
 INPUT_DATA_PATH = Path('/home/wegnet/results/TEA_indicators_test/')
@@ -23,22 +22,56 @@ MASK_PATH = Path('/data/arsclisys/normal/clim-hydro/TEA-Indicators/masks/')
 PARAMS = ref_cc_params()
 
 END_YEAR = 2026
+LOGGER = logging.getLogger(__name__)
 
 
-def get_data(varname='Tx30.0degC', ctp='june', input_data_path=INPUT_DATA_PATH):
-    dec = xr.open_dataset(input_data_path / 'dec_indicator_variables' /
-                          f'DEC_{varname}_AUT_{ctp}_SPARTACUS_1961to{END_YEAR}.nc')
-
-    ctp_data = xr.open_mfdataset(
-        sorted((input_data_path / 'ctp_indicator_variables').glob(f'CTP_{varname}_AUT_{ctp}_SPARTACUS_*.nc')),
-        data_vars='minimal')
-    
+def get_data(varname='Tx30.0degC', ctp='june', region='AUT',
+             input_data_path=INPUT_DATA_PATH):
+    """Load CTP, decadal and amplification data for one TEA region."""
+    dec_path = (input_data_path / 'dec_indicator_variables' /
+                f'DEC_{varname}_{region}_{ctp}_SPARTACUS_1961to{END_YEAR}.nc')
+    ctp_paths = sorted((input_data_path / 'ctp_indicator_variables').glob(
+        f'CTP_{varname}_{region}_{ctp}_SPARTACUS_*.nc'))
     af_path = (input_data_path / 'dec_indicator_variables' /
-                         f'amplification/AF_{varname}_AUT_{ctp}_SPARTACUS_1961to{END_YEAR}.nc')
-    print(f"Loading amplification factors from {af_path}")
+               f'amplification/AF_{varname}_{region}_{ctp}_SPARTACUS_1961to{END_YEAR}.nc')
+
+    for label, path in [('decadal indicators', dec_path),
+                        ('amplification factors', af_path)]:
+        if not path.exists():
+            raise FileNotFoundError(f'{label.capitalize()} file not found: {path}')
+
+    LOGGER.info('Loading decadal indicators from %s', dec_path)
+    dec = xr.open_dataset(dec_path)
+    LOGGER.info('Loading %d CTP files from %s', len(ctp_paths),
+                input_data_path / 'ctp_indicator_variables')
+    if not ctp_paths:
+        raise FileNotFoundError(f'No CTP files found for region {region}: '
+                                f'{input_data_path / "ctp_indicator_variables"}')
+    LOGGER.debug('CTP files: %s', ', '.join(str(path) for path in ctp_paths))
+    ctp_data = xr.open_mfdataset(ctp_paths, data_vars='minimal', compat='no_conflicts')
+    LOGGER.info('Loading amplification factors from %s', af_path)
     af = xr.open_dataset(af_path)
+    LOGGER.info('Loaded datasets: dec=%s, ctp=%s, af=%s',
+                dict(dec.sizes), dict(ctp_data.sizes), dict(af.sizes))
 
     return dec, ctp_data, af
+
+
+def find_mask(region, input_data_path):
+    """Find a mask matching the region and data generation run."""
+    candidates = [
+        input_data_path / 'masks' / f'{region}_mask_SPARTACUS_1500.nc',
+        input_data_path / 'masks' / f'{region}_masks_SPARTACUS.nc',
+        MASK_PATH / f'{region}_mask_SPARTACUS_1500.nc',
+        MASK_PATH / f'{region}_masks_SPARTACUS.nc',
+    ]
+    for path in candidates:
+        if path.exists():
+            LOGGER.info('Using region mask %s', path)
+            return path
+    LOGGER.warning('No SPARTACUS mask found for region %s. Checked: %s',
+                   region, ', '.join(str(path) for path in candidates))
+    return None
 
 
 def gr_plot_params(vname):
@@ -172,12 +205,16 @@ def map_plot_params(vname):
     return params[vname]
 
 
-def plot_map(fig, ax, data):
+def plot_map(fig, ax, data, region, mask_path=None):
     props = map_plot_params(vname=data.name)
 
-    aut = xr.open_dataset(MASK_PATH / 'AUT_masks_SPARTACUS.nc')
-    aut = aut.sel(x=data.x, y=data.y)
-    ax.contourf(aut.nw_mask, colors='mistyrose')
+    if mask_path is not None:
+        LOGGER.info('Loading map mask from %s', mask_path)
+        mask = xr.open_dataset(mask_path)
+        mask = mask.sel(x=data.x, y=data.y)
+        mask_var = 'nw_mask' if 'nw_mask' in mask else 'mask'
+        LOGGER.info('Plotting map background from mask variable %s', mask_var)
+        ax.contourf(mask[mask_var], colors='mistyrose')
 
     data = data.where(data > 0)
 
@@ -188,7 +225,7 @@ def plot_map(fig, ax, data):
     else:
         ext = 'min'
 
-    range_vals = find_range(data=data)
+    range_vals = [data.min().values, data.max().values]
 
     map = ax.contourf(data, cmap=props['cmap'], levels=props['lvls'], extend=ext)
     ax.add_patch(pat.Rectangle(xy=(473, 53), height=20, width=25, edgecolor='black',
@@ -205,15 +242,14 @@ def plot_map(fig, ax, data):
 
     a_sym = props['lbl'].split(' ')[0]
     ax.text(0.02, 0.82, a_sym + '\n'
-            + f'AUT: [{range_vals["AUT"][0]:.2f}, {range_vals["AUT"][1]:.2f}]\n'
-              f'SEA: [{range_vals["SEA"][0]:.2f}, {range_vals["SEA"][1]:.2f}]\n'
-              f'FBR: [{range_vals["FBR"][0]:.2f}, {range_vals["FBR"][1]:.2f}]',
+            + f'{region}: [{range_vals[0]:.2f}, {range_vals[1]:.2f}]',
             horizontalalignment='left',
             verticalalignment='center', transform=ax.transAxes, backgroundcolor='whitesmoke',
             fontsize=9)
 
 
-def run(run_name):
+def run(run_name, region='AUT', output_dir=Path('.'), show=True):
+    LOGGER.info('Starting Figure 5: run=%s, region=%s', run_name, region)
     if run_name == 'RW1':
         input_data_path = INPUT_DATA_PATH
         ctp = 'june'
@@ -230,43 +266,55 @@ def run(run_name):
         input_data_path = Path('/home/wegnet/results/SPARTACUS_DETRENDED_JJA')
         ctp = 'june'
     elif run_name == 'current_detrended':
-        input_data_path = Path('/data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/SPARTACUS_detrended/JJA/')
+        input_data_path = Path(
+            '/data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/SPARTACUS_detrended/JJA/')
         ctp = 'annual'
     elif run_name == 'current':
         input_data_path = Path('/data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/')
         ctp = 'annual'
+    else:
+        raise ValueError(f'Unknown run name: {run_name}')
 
-    dec, ann, af = get_data(varname='Tx30.0degC', ctp=ctp, input_data_path=input_data_path)
+    LOGGER.info('Input data directory: %s; CTP: %s', input_data_path, ctp)
+    dec, ann, af = get_data(varname='Tx30.0degC', ctp=ctp, region=region,
+                            input_data_path=input_data_path)
 
+    LOGGER.info('Creating Figure 5 canvas')
     fig, axs = plt.subplots(4, 2, figsize=(14, 16))
 
     gr_vars = ['EF_GR', 'ED_avg_GR', 'EM_avg_GR', 'EA_avg_GR']
     for irow, gr_var in enumerate(gr_vars):
+        LOGGER.info('Plotting regional time series: %s', gr_var)
         plot_gr_data(ax=axs[irow, 0], adata=ann[gr_var], ddata=dec[gr_var],
                      afdata=af[f'{gr_var}_AF_CC'],
                      su=dec[f'{gr_var}_supp'], sl=dec[f'{gr_var}_slow'])
         su_mean = dec[f'{gr_var}_supp'].sel(time=slice(f'1961-01-01', f'1985-12-31')).mean().values
         sl_mean = dec[f'{gr_var}_slow'].sel(time=slice(f'1961-01-01', f'1985-12-31')).mean().values
-        print(f"{gr_var}: mean supp = {su_mean:.3f}, mean slow = {sl_mean:.3f}")
+        LOGGER.info('%s: mean supp = %.3f, mean slow = %.3f',
+                    gr_var, su_mean, sl_mean)
 
+    LOGGER.info('Plotting regional time series: TEX_GR')
     plot_gr_data(ax=axs[3, 1], adata=ann['TEX_GR'], ddata=dec['TEX_GR'], afdata=af['TEX_GR_AF_CC'],
                  su=dec['TEX_GR_supp'], sl=dec['TEX_GR_slow'])
     su_mean = dec['TEX_GR_supp'].sel(time=slice(f'1961-01-01', f'1985-12-31')).mean().values
     sl_mean = dec['TEX_GR_slow'].sel(time=slice(f'1961-01-01', f'1985-12-31')).mean().values
-    print(f"TEX_GR: mean supp = {su_mean:.3f}, mean slow = {sl_mean:.3f}")
+    LOGGER.info('TEX_GR: mean supp = %.3f, mean slow = %.3f', su_mean, sl_mean)
 
-    if 'current' not in run_name:
-        map_vars = ['EF', 'ED_avg', 'EM_avg']
-        for irow, map_var in enumerate(map_vars):
-            mdata = gmean(dec[map_var].sel(time=slice(f'{END_YEAR-9}-01-01', f'{END_YEAR-4}-12-31')), axis=0)
-            mdata = xr.DataArray(data=mdata, coords={'y': (['y'], dec.y.values),
-                                                     'x': (['x'], dec.x.values)}, name=map_var)
-            plot_map(fig=fig, ax=axs[irow, 1], data=mdata)
+    mask_path = find_mask(region, input_data_path)
+    map_vars = ['EF', 'ED_avg', 'EM_avg']
+    LOGGER.info('Preparing %d map panels', len(map_vars))
+    for irow, map_var in enumerate(map_vars):
+        mdata = gmean(dec[map_var].sel(
+            time=slice(f'{END_YEAR-9}-01-01', f'{END_YEAR-4}-12-31')), axis=0)
+        mdata = xr.DataArray(data=mdata, coords={'y': (['y'], dec.y.values),
+                                                 'x': (['x'], dec.x.values)}, name=map_var)
+        plot_map(fig=fig, ax=axs[irow, 1], data=mdata, region=region,
+                 mask_path=mask_path)
 
-        axs[2, 1].text(0, 0, 'Alpine data at z > 1500m excluded.',
-                       horizontalalignment='left', verticalalignment='center',
-                       transform=axs[2, 1].transAxes, backgroundcolor='mistyrose',
-                       fontsize=8)
+    axs[2, 1].text(0, 0, 'Alpine data at z > 1500m excluded.',
+                   horizontalalignment='left', verticalalignment='center',
+                   transform=axs[2, 1].transAxes, backgroundcolor='mistyrose',
+                   fontsize=8)
 
     # iterate over each subplot and add a text label
     labels = ['a)', 'e)', 'b)', 'f)', 'c)', 'g)', 'd)', 'h)']
@@ -275,17 +323,41 @@ def run(run_name):
                 va='top', ha='left')
 
     fig.subplots_adjust(wspace=0.2, hspace=0.33)
-    print(f"Saving Figure 5 to ./Figure5_{run_name}.png")
-    plt.savefig(f'./Figure5_{run_name}.png', dpi=300, bbox_inches='tight')
-    plt.show()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f'Figure5_{run_name}_{region}.png'
+    LOGGER.info('Saving Figure 5 to %s', output_path)
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    if show:
+        LOGGER.info('Showing Figure 5')
+        plt.show()
+    else:
+        plt.close(fig)
+    LOGGER.info('Completed Figure 5: %s', output_path)
+    return output_path
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--run-name', default='current',
+                        choices=['RW1', 'RW2', 'CW1', 'CW2', 'CW3',
+                                 'current_detrended', 'current'],
+                        help='Configured data run to plot (default: current).')
+    parser.add_argument('--region', default='AUT',
+                        help='calc_TEA region name, e.g. AUT, SEA, FBR, EUR or an Austrian state.')
+    parser.add_argument('--output-dir', type=Path, default=Path('.'),
+                        help='Directory for generated figures (default: current directory).')
+    parser.add_argument('--no-show', action='store_true',
+                        help='Save the figure without opening an interactive window.')
+    parser.add_argument('--log-level', default='INFO',
+                        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+                        help='Logging verbosity (default: INFO).')
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
-    # run('paper')
-    # run('RW1')
-    # run('RW2')
-    # run('CW1')
-    # run('CW2')
-    # run('CW3')
-    run('current_detrended')
-    run('current')
+    args = parse_args()
+    logging.basicConfig(level=getattr(logging, args.log_level),
+                        format='%(asctime)s %(levelname)s %(message)s')
+    logging.getLogger('matplotlib').setLevel(logging.WARNING)
+    run(args.run_name, region=args.region, output_dir=args.output_dir,
+        show=not args.no_show)
