@@ -344,9 +344,8 @@ def run_main():
             spartacus_tmax.name
         )
 
-
-        source_days=[]
-        offsets=[]
+        source_days = []
+        offsets = []
         if source_days:
             logger.info("Expanding corrected Tmax forecast with configured source days and offsets")
             corrected_tmax = expand_forecast(
