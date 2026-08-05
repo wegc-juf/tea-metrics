@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+PLOT_SYNC_DIR="/nas/share/ccr/wegnet/projects/TEA/heatwaves/202607"
+PLOT_SYNC_DIR_UNICLOUD="/mnt/unicloud/juergen.fuchsberger/TEA-indicators/heatwaves/202607"
+
 source /home/juf/TEA-indicators/.venv/bin/activate
 
 
@@ -46,8 +49,7 @@ run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/in
 
 # plot heatwave data
 run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_update.yaml"
-run_step rsync -av  /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/ /mnt/unicloud/juergen
-.fuchsberger/TEA-indicators/heatwaves/202607
+run_step rsync -av  /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/ $PLOT_SYNC_DIR
 
 # calculate decadal data
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_decadal.yaml --loglevel INFO
@@ -60,4 +62,5 @@ run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml --loglevel INFO
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/CW2_daily_Styria.yaml --loglevel INFO
 run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml"
-run_step rsync -av  /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/ /mnt/unicloud/juergen.fuchsberger/TEA-indicators/heatwaves/202607
+run_step rsync -av  /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/ $PLOT_SYNC_DIR
+run_step rsync -av  /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/ $PLOT_SYNC_DIR_UNICLOUD
