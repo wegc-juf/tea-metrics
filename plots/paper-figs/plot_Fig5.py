@@ -7,7 +7,6 @@ import argparse
 import logging
 from pathlib import Path
 import matplotlib.pyplot as plt
-import matplotlib.patches as pat
 from matplotlib.ticker import FormatStrFormatter, FixedLocator
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
@@ -214,7 +213,7 @@ def plot_map(fig, ax, data, region, mask_path=None):
         mask = mask.sel(x=data.x, y=data.y)
         mask_var = 'nw_mask' if 'nw_mask' in mask else 'mask'
         LOGGER.info('Plotting map background from mask variable %s', mask_var)
-        ax.contourf(mask[mask_var], colors='mistyrose')
+        ax.contourf(mask.x, mask.y, mask[mask_var], colors='mistyrose')
 
     data = data.where(data > 0)
 
@@ -227,11 +226,8 @@ def plot_map(fig, ax, data, region, mask_path=None):
 
     range_vals = [data.min().values, data.max().values]
 
-    map = ax.contourf(data, cmap=props['cmap'], levels=props['lvls'], extend=ext)
-    ax.add_patch(pat.Rectangle(xy=(473, 53), height=20, width=25, edgecolor='black',
-                               fill=False, linewidth=1))
-    ax.add_patch(pat.Rectangle(xy=(410, 25), height=92, width=125, edgecolor='black',
-                               fill=False, linewidth=1))
+    map = ax.contourf(data.x, data.y, data, cmap=props['cmap'],
+                      levels=props['lvls'], extend=ext)
     ax.axis('off')
     divider = make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.05)
