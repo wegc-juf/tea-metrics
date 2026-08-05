@@ -53,10 +53,8 @@ run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/in
 # plot data
 run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py
 
-STYRIA=1
-if($STYRIA); then
-  # now run for Styria
-  run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml --loglevel INFO
-  run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/CW2_daily_Styria.yaml --loglevel INFO
-  run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml"
-fi
+# now run for Styria
+run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml --loglevel INFO
+run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/CW2_daily_Styria.yaml --loglevel INFO
+run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml"
+run_step rsync -av  /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves /mnt/unicloud/juergen.fuchsberger/TEA-indicators/heatwaves/202607
