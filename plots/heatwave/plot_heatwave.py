@@ -75,6 +75,19 @@ def get_data(data_var="Tx30", data_path=None, time_interval=None, region="AUT"):
     return data
 
 
+def _get_gr_area_size(data):
+    if data is None or 'area_grid' not in data:
+        return None
+    return float(data['area_grid'].sum(skipna=True).values)
+
+
+def _save_heatwave_csv(data, output_path, gr_area_size=None):
+    dataframe = data.to_dataframe()
+    if gr_area_size is not None:
+        dataframe['GR_area_size'] = gr_area_size
+    dataframe.to_csv(_prepare_output_path(output_path))
+
+
 def plot_daily_heatwave(heatwave_data, heatwave_period, data_var="DTEMA_GR",
                         detrended_heatwave_data=None,
                         detrend_ctp=None,
@@ -191,6 +204,7 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
                            region="AUT",
                            parameter=None,
                            ):
+    gr_area_size = _get_gr_area_size(data)
     heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave = calc_heatwave_metrics(
         data, heatwave_period, data_var=data_var, add_values=None)
     print(f"Heatwave TEX_GR = S_GR for period {heatwave_period[0]} to {heatwave_period[1]}:"
@@ -205,8 +219,8 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
         cumulative_output = output_dir / (
             f'heatwave_cumulative_{parameter_suffix}{data_var}_{region}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
         )
-        heatwave_data.to_dataframe().to_csv(_prepare_output_path(daily_output))
-        heatwave_cumulative.to_dataframe().to_csv(_prepare_output_path(cumulative_output))
+        _save_heatwave_csv(heatwave_data, daily_output, gr_area_size)
+        _save_heatwave_csv(heatwave_cumulative, cumulative_output, gr_area_size)
     
     if detrended_data is not None:
         detrended_heatwave_data, detrended_heatwave_total, detrended_heatwave_cumulative, detrended_mean_heatwave = (
@@ -227,10 +241,8 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
                 f'heatwave_cumulative_{parameter_suffix}DETREND_{detrend_ctp}_{data_var}_'
                 f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
             )
-            detrended_heatwave_data.to_dataframe().to_csv(_prepare_output_path(detrended_daily_output))
-            detrended_heatwave_cumulative.to_dataframe().to_csv(
-                _prepare_output_path(detrended_cumulative_output)
-            )
+            _save_heatwave_csv(detrended_heatwave_data, detrended_daily_output, gr_area_size)
+            _save_heatwave_csv(detrended_heatwave_cumulative, detrended_cumulative_output, gr_area_size)
     else:
         detrended_heatwave_data = None
         detrended_heatwave_cumulative = None
@@ -299,8 +311,18 @@ def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data
            region: str = "AUT", detrend_ctp="JJA", output_dir=None, parameter=None):
     data = get_data(data_var, daily_data_path_real_world, heatwave_period, region=region)
     detrended_data = get_data(data_var, daily_data_path_detrended, heatwave_period, region=region)
-    calc_and_plot_heatwave(data, heatwave_period, detrended_data=detrended_data, detrend_ctp=detrend_ctp,
-                           output_dir=output_dir, region=region, parameter=parameter)
+    for output_var in ('DTEA_GR', 'DTEM_GR', 'DTEMA_GR'):
+        if output_var not in data:
+            print(f"Variable {output_var} not found in real-world data; skipping")
+            continue
+        if detrended_data is not None and output_var not in detrended_data:
+            print(f"Variable {output_var} not found in detrended data; plotting real-world data only")
+            detrended_output = None
+        else:
+            detrended_output = detrended_data
+        calc_and_plot_heatwave(data, heatwave_period, data_var=output_var,
+                               detrended_data=detrended_output, detrend_ctp=detrend_ctp,
+                               output_dir=output_dir, region=region, parameter=parameter)
 
 
 if __name__ == "__main__":
