@@ -40,6 +40,12 @@ def _prepare_output_path(output_path):
     return output_path
 
 
+def _get_parameter_name(opts):
+    threshold = f"{opts.threshold:g}"
+    suffix = "p" if opts.threshold_type == "perc" else ""
+    return f"{opts.parameter}{threshold}{suffix}"
+
+
 def get_data(data_var="Tx30", data_path=None, time_interval=None, region="AUT"):
     year = int(time_interval[0][0:4])
     if 1961 <= year <= 1970:
@@ -74,6 +80,7 @@ def plot_daily_heatwave(heatwave_data, heatwave_period, data_var="DTEMA_GR",
                         detrend_ctp=None,
                         output_dir=None,
                         region="AUT",
+                        parameter=None,
                         logarithmic=False,
                         ):
     
@@ -101,14 +108,15 @@ def plot_daily_heatwave(heatwave_data, heatwave_period, data_var="DTEMA_GR",
     plt.grid(True)
     
     log_suffix = '_LOG' if logarithmic else ''
+    parameter_suffix = f'{parameter}_' if parameter else ''
     if detrended_heatwave_data is not None:
         filename = (
-            f'heatwave_daily{log_suffix}_DETREND_{detrend_ctp}_{data_var}_'
+            f'heatwave_daily{log_suffix}_{parameter_suffix}DETREND_{detrend_ctp}_{data_var}_'
             f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.png'
         )
     else:
         filename = (
-            f'heatwave_daily{log_suffix}_{data_var}_'
+            f'heatwave_daily{log_suffix}_{parameter_suffix}{data_var}_'
             f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.png'
         )
     plt.savefig(_prepare_output_path(output_dir / filename))
@@ -117,7 +125,8 @@ def plot_daily_heatwave(heatwave_data, heatwave_period, data_var="DTEMA_GR",
 
 
 def plot_cumulative_heatwave(heatwave_cumulative, heatwave_period, data_var="DTEMA_GR",
-                             detrended_data=None, detrend_ctp=None, output_dir=None, region="AUT"):
+                             detrended_data=None, detrend_ctp=None, output_dir=None, region="AUT",
+                             parameter=None):
     set_ylim = True
     plt.figure(figsize=(10, 6))
     myplot = heatwave_cumulative.plot()[0]
@@ -146,14 +155,15 @@ def plot_cumulative_heatwave(heatwave_cumulative, heatwave_period, data_var="DTE
     plt.ylabel('areal degC days')
     plt.grid(True)
     
+    parameter_suffix = f'{parameter}_' if parameter else ''
     if detrended_data is not None:
         filename = (
-            f'heatwave_cumulative_DETREND_{detrend_ctp}_{data_var}_'
+            f'heatwave_cumulative_{parameter_suffix}DETREND_{detrend_ctp}_{data_var}_'
             f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.png'
         )
     else:
         filename = (
-            f'heatwave_cumulative_{data_var}_'
+            f'heatwave_cumulative_{parameter_suffix}{data_var}_'
             f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.png'
         )
     plt.savefig(_prepare_output_path(output_dir / filename))
@@ -179,6 +189,7 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
                            detrend_ctp=None,
                            output_dir=None,
                            region="AUT",
+                           parameter=None,
                            ):
     heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave = calc_heatwave_metrics(
         data, heatwave_period, data_var=data_var, add_values=None)
@@ -187,11 +198,12 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
           f"areal degC, event_max MA_GR = {heatwave_data.max().values:.0f} areal degC")
     if save_data:
         # save csv files for heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave
+        parameter_suffix = f'{parameter}_' if parameter else ''
         daily_output = output_dir / (
-            f'heatwave_daily_{data_var}_{region}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
+            f'heatwave_daily_{parameter_suffix}{data_var}_{region}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
         )
         cumulative_output = output_dir / (
-            f'heatwave_cumulative_{data_var}_{region}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
+            f'heatwave_cumulative_{parameter_suffix}{data_var}_{region}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
         )
         heatwave_data.to_dataframe().to_csv(_prepare_output_path(daily_output))
         heatwave_cumulative.to_dataframe().to_csv(_prepare_output_path(cumulative_output))
@@ -208,11 +220,11 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
             # save csv files for detrended_heatwave_data, detrended_heatwave_total, detrended_heatwave_cumulative,
             #  detrended_mean_heatwave
             detrended_daily_output = output_dir / (
-                f'heatwave_daily_DETREND_{detrend_ctp}_{data_var}_'
+                f'heatwave_daily_{parameter_suffix}DETREND_{detrend_ctp}_{data_var}_'
                 f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
             )
             detrended_cumulative_output = output_dir / (
-                f'heatwave_cumulative_DETREND_{detrend_ctp}_{data_var}_'
+                f'heatwave_cumulative_{parameter_suffix}DETREND_{detrend_ctp}_{data_var}_'
                 f'{region}_{heatwave_period[0]}_{heatwave_period[1]}.csv'
             )
             detrended_heatwave_data.to_dataframe().to_csv(_prepare_output_path(detrended_daily_output))
@@ -229,15 +241,16 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
     # Plotting
     plot_cumulative_heatwave(heatwave_cumulative, heatwave_period, data_var=data_var,
                              detrended_data=detrended_heatwave_cumulative, detrend_ctp=detrend_ctp,
-                             output_dir=output_dir, region=region)
+                             output_dir=output_dir, region=region, parameter=parameter)
     
     plot_daily_heatwave(heatwave_data, heatwave_period, data_var=data_var,
                         detrended_heatwave_data=detrended_heatwave_data, detrend_ctp=detrend_ctp,
-                        output_dir=output_dir, region=region)
+                        output_dir=output_dir, region=region, parameter=parameter)
     plot_daily_heatwave(heatwave_data, heatwave_period, data_var=data_var,
                         detrended_heatwave_data=detrended_heatwave_data, detrend_ctp=detrend_ctp,
                         output_dir=output_dir,
                         region=region,
+                        parameter=parameter,
                         logarithmic=True)
 
 
@@ -256,7 +269,8 @@ def _getopts():
 
 
 def run_main(opts, detrend_ctp="JJA"):
-    data_var = "Tx30"
+    parameter = _get_parameter_name(opts)
+    data_var = parameter
     configured_output_path = Path(opts.outpath)
     heatwave_output_dir = configured_output_path / "heatwave_data"
     heatwave_output_dir.mkdir(parents=True, exist_ok=True)
@@ -271,7 +285,8 @@ def run_main(opts, detrend_ctp="JJA"):
     #
     heatwave_period = ["2026-07-25", "2026-08-12"]
     worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
-           region=opts.region, detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir)
+           region=opts.region, detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir,
+           parameter=parameter)
 
     # heatwave_period = ["2013-07-16", "2013-08-09"]
     # worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period, detrend_ctp=detrend_ctp)
@@ -281,11 +296,11 @@ def run_main(opts, detrend_ctp="JJA"):
 
 
 def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data_var: str, heatwave_period: list[str],
-           region: str = "AUT", detrend_ctp="JJA", output_dir=None):
+           region: str = "AUT", detrend_ctp="JJA", output_dir=None, parameter=None):
     data = get_data(data_var, daily_data_path_real_world, heatwave_period, region=region)
     detrended_data = get_data(data_var, daily_data_path_detrended, heatwave_period, region=region)
     calc_and_plot_heatwave(data, heatwave_period, detrended_data=detrended_data, detrend_ctp=detrend_ctp,
-                           output_dir=output_dir, region=region)
+                           output_dir=output_dir, region=region, parameter=parameter)
 
 
 if __name__ == "__main__":
