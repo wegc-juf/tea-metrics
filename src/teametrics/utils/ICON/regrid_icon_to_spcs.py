@@ -27,12 +27,19 @@ def crop_icon_to_spcs(files):
         ds = xr.open_dataset(
             f,
             engine="cfgrib",
-            backend_kwargs={"indexpath": ""}
+            backend_kwargs={"indexpath": ""},
+            decode_timedelta=True,
         )
 
         datasets.append(ds)
 
-    ds = xr.concat(datasets, dim="step")
+    ds = xr.concat(
+        datasets,
+        dim="step",
+        data_vars="all",
+        coords="different",
+        compat="no_conflicts",
+    )
     austria = ds.sel(
         latitude=slice(46.1, 49.1),
         longitude=slice(9.3, 17.4)
@@ -67,7 +74,7 @@ def interpolate_icon_to_spcs(ds):
     Returns:
         ds: xarray dataset with interpolated data
     """
-    spcs_grid = xr.open_dataset(SPCS_GRID_FILE)
+    spcs_grid = xr.open_dataset(SPCS_GRID_FILE, decode_timedelta=True)
     ds_interp = ds.interp(
         latitude=spcs_grid.lat,
         longitude=spcs_grid.lon,
@@ -201,10 +208,15 @@ def icon_global_t2m_regrid():
     )
     dates = [f.stem.split("_")[-5] for f in files]
     unique_dates = sorted(set(dates))
-    spartacus = xr.open_dataset(SPCS_GRID_FILE)
+    spartacus = xr.open_dataset(SPCS_GRID_FILE, decode_timedelta=True)
     for date in unique_dates:
         date_files = [f for f in files if date in f.stem]
-        one_file = xr.open_dataset(date_files[0], engine="cfgrib", backend_kwargs={"indexpath": ""})
+        one_file = xr.open_dataset(
+            date_files[0],
+            engine="cfgrib",
+            backend_kwargs={"indexpath": ""},
+            decode_timedelta=True,
+        )
         print(one_file)
         import cfgrib
         
@@ -215,7 +227,15 @@ def icon_global_t2m_regrid():
         
         for d in ds:
             print(d)
-        icon_data = xr.open_mfdataset(date_files, combine="nested", concat_dim="valid_time", engine="cfgrib", backend_kwargs={"indexpath": ""})
+        icon_data = xr.open_mfdataset(
+            date_files,
+            combine="nested",
+            concat_dim="valid_time",
+            engine="cfgrib",
+            backend_kwargs={"indexpath": ""},
+            decode_timedelta=True,
+            join="outer",
+        )
         ds_spcs = icon_global_to_spartacus(icon_data, spartacus)
         if not Path(ICON_PATH + "./icon_t2m_regridded").exists():
             Path(ICON_PATH + "./icon_t2m_regridded").mkdir(parents=True, exist_ok=True)
