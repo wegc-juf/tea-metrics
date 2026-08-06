@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+HEATWAVE_PLOT_DIR=/data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/
 PLOT_SYNC_DIR="/nas/share/ccr/wegnet/projects/TEA/heatwaves/202607"
 PLOT_SYNC_DIR_UNICLOUD="/mnt/unicloud/juergen.fuchsberger/TEA-indicators/heatwaves/202607"
 
@@ -49,14 +50,14 @@ run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/in
 
 # plot heatwave data
 run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_update.yaml"
-run_step rsync -av  /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/ $PLOT_SYNC_DIR
+run_step rsync -av  $HEATWAVE_PLOT_DIR $PLOT_SYNC_DIR
 
 # calculate decadal data
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_decadal.yaml --loglevel INFO
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_decadal_detrend.yaml --loglevel INFO
 
 # plot data
-run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --csv
+run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR" --csv
 
 # now run for Styria
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml --loglevel INFO
@@ -70,8 +71,8 @@ run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/in
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/CW2_decadal_Styria.yaml --loglevel INFO
 
 # plot data
-run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --region Steiermark --csv
+run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR" --region Steiermark --csv
 
 # sync
-run_step rsync -av  /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/ $PLOT_SYNC_DIR
-run_step rsync -av  /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/ $PLOT_SYNC_DIR_UNICLOUD
+run_step rsync -av  $HEATWAVE_PLOT_DIR $PLOT_SYNC_DIR
+run_step rsync -av  $HEATWAVE_PLOT_DIR $PLOT_SYNC_DIR_UNICLOUD
