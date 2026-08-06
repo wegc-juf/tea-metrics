@@ -4,6 +4,7 @@
 Plot Figure 5
 """
 import argparse
+import csv
 import logging
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -84,6 +85,43 @@ def find_mask(region, input_data_path):
     LOGGER.warning('No SPARTACUS mask found for region %s. Checked: %s',
                    region, ', '.join(str(path) for path in candidates))
     return None
+
+
+def write_timeseries_csv(dec, ann, region, run_name, output_path):
+    """Write all regional time series used by Figure 5 to a wide CSV."""
+    variables = ['EF_GR', 'ED_avg_GR', 'EM_avg_GR', 'EA_avg_GR',
+                 'TEX_GR', 'TEX_HW_max_GR']
+    series = {}
+
+    def add_series(name, data):
+        values = np.asarray(data.values).reshape(-1)
+        years = [int(str(value)[:4]) for value in data.time.values]
+        series[name] = dict(zip(years, values))
+
+    for variable in variables:
+        add_series(f'{variable}_annual', ann[variable])
+        add_series(f'{variable}_decadal', dec[variable])
+        add_series(f'{variable}_supp', dec[f'{variable}_supp'])
+        add_series(f'{variable}_slow', dec[f'{variable}_slow'])
+
+    years = sorted({year for values in series.values() for year in values})
+    fieldnames = ['year', 'run_name', 'region', *series]
+    LOGGER.info('Writing %d time-series rows and %d columns to %s',
+                len(years), len(fieldnames), output_path)
+    with output_path.open('w', newline='') as csv_file:
+        writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+        writer.writeheader()
+        for year in years:
+            row = {
+                'year': year,
+                'run_name': run_name,
+                'region': region,
+            }
+            for name, values in series.items():
+                value = values.get(year)
+                row[name] = '' if value is None or not np.isfinite(value) else value
+            writer.writerow(row)
+    LOGGER.info('Completed CSV export: %s', output_path)
 
 
 def gr_plot_params(vname):
@@ -295,7 +333,7 @@ def plot_map(fig, ax, data, region, mask_path=None):
 
 
 def run(run_name, region='AUT', tex_variable='TEX_HW_max_GR',
-        output_dir=Path('.'), show=True):
+        output_dir=Path('.'), show=True, csv=False):
     LOGGER.info('Starting Figure 5: run=%s, region=%s, extremity=%s',
                 run_name, region, tex_variable)
     if run_name == 'RW1':
@@ -352,6 +390,12 @@ def run(run_name, region='AUT', tex_variable='TEX_HW_max_GR',
     LOGGER.info('%s: mean supp = %.3f, mean slow = %.3f',
                 tex_variable, su_mean, sl_mean)
 
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_stem = output_dir / f'Figure5_{run_name}_{region}_{tex_variable}'
+    if csv:
+        write_timeseries_csv(dec=dec, ann=ann, region=region, run_name=run_name,
+                             output_path=output_dir / f'Figure5_data_{run_name}_{region}.csv')
+
     mask_path = find_mask(region, input_data_path)
     map_vars = ['EF', 'ED_avg', 'EM_avg']
     LOGGER.info('Preparing %d map panels', len(map_vars))
@@ -375,8 +419,7 @@ def run(run_name, region='AUT', tex_variable='TEX_HW_max_GR',
                 va='top', ha='left')
 
     fig.subplots_adjust(wspace=0.2, hspace=0.33)
-    output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f'Figure5_{run_name}_{region}_{tex_variable}.png'
+    output_path = output_stem.with_suffix('.png')
     LOGGER.info('Saving Figure 5 to %s', output_path)
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     if show:
@@ -403,6 +446,8 @@ def parse_args():
                         help='Directory for generated figures (default: current directory).')
     parser.add_argument('--no-show', action='store_true',
                         help='Save the figure without opening an interactive window.')
+    parser.add_argument('--csv', action='store_true',
+                        help='Write the plotted time-series values beside the PNG.')
     parser.add_argument('--log-level', default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                         help='Logging verbosity (default: INFO).')
@@ -415,5 +460,5 @@ if __name__ == '__main__':
                         format='%(asctime)s %(levelname)s %(message)s')
     logging.getLogger('matplotlib').setLevel(logging.WARNING)
     run(args.run_name, region=args.region, tex_variable=args.tex_variable,
-        output_dir=args.output_dir,
+        output_dir=args.output_dir, csv=args.csv,
         show=not args.no_show)
