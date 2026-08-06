@@ -50,6 +50,9 @@ run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/in
 
 # plot heatwave data
 run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_update.yaml"
+run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx35_update.yaml"
+run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx40_update.yaml"
+
 run_step rsync -av  $HEATWAVE_PLOT_DIR $PLOT_SYNC_DIR
 
 # calculate decadal data
