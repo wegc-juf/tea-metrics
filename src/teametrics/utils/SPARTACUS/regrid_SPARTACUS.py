@@ -8,6 +8,15 @@
 import numpy as np
 import os
 from pathlib import Path
+import warnings
+
+# ecCodes emits this advisory while xarray discovers its optional backends.
+warnings.filterwarnings(
+    'ignore',
+    message=r'ecCodes 2\.42\.0 or higher is recommended\..*',
+    category=UserWarning,
+)
+
 import geopandas as gpd
 import pyproj
 from tqdm import trange
