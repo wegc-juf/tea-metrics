@@ -60,7 +60,7 @@ run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/in
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_decadal_detrend.yaml --loglevel INFO
 
 # plot data
-run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR" --csv
+run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR" --csv --no-show
 
 # now run for Styria
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml --loglevel INFO
@@ -74,7 +74,7 @@ run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/in
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/CW2_decadal_Styria.yaml --loglevel INFO
 
 # plot data
-run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR" --region Steiermark --csv
+run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR" --region Steiermark --csv --no-show
 
 # sync
 run_step rsync -av  $HEATWAVE_PLOT_DIR $PLOT_SYNC_DIR
