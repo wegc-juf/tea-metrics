@@ -1,6 +1,7 @@
 import pytest
 import numpy as np
 import xarray as xr
+from types import SimpleNamespace
 
 _import_error = None
 try:
@@ -126,6 +127,23 @@ class TestGetThreshold:
 
 
 class TestLoadMaskFile:
+    def test_load_mask_file_ignores_area_variables(self, tmp_path):
+        mask = xr.DataArray(np.ones((2, 2)), dims=('y', 'x'), name='mask')
+        ds = mask.to_dataset()
+        ds['area_grid_full'] = xr.ones_like(mask)
+        ds['area_full'] = xr.DataArray(4.0)
+        ds['area_grid'] = xr.ones_like(mask)
+        ds['area'] = xr.DataArray(4.0)
+        mask_dir = tmp_path / 'masks'
+        mask_dir.mkdir()
+        ds.to_netcdf(mask_dir / 'AUT_mask_ERA5_1500.nc')
+        opts = SimpleNamespace(gr_type='polygon', maskpath=str(tmp_path), mask_sub='masks',
+                               region='AUT', dataset='ERA5', altitude_threshold=1500)
+
+        result = _load_mask_file(opts)
+
+        xr.testing.assert_equal(result, mask)
+
     def test_load_mask_file_missing(self, tmp_path):
         from types import SimpleNamespace
         opts = SimpleNamespace(gr_type="polygon", maskpath=str(tmp_path), mask_sub="masks",

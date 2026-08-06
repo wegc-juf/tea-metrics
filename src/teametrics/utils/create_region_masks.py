@@ -18,6 +18,7 @@ from ..common.general_functions import create_history_from_cfg, get_gridded_data
 from ..common.config import load_opts
 from ..common.TEA_logger import logger
 from ..calc_TEA import _getopts
+from ..TEA import TEAIndicators
 
 
 def _load_shp(opts):
@@ -130,6 +131,8 @@ def create_sea_mask(opts):
     mask = mask.rename('mask')
     mask.attrs = {'long_name': 'weighted mask', 'coordinate_sys': f'EPSG:{opts.target_sys}'}
     ds = mask.to_dataset()
+    if getattr(opts, 'calculate_area', False):
+        ds = _add_area_variables(ds, mask, mask, opts)
 
     create_history_from_cfg(cfg_params=opts, ds=ds)
 
@@ -202,11 +205,14 @@ def create_agr_mask(opts):
     mask = mask.where(mask > opts.land_frac_min)
     mask = mask.rename('mask')
     mask.attrs = {'long_name': 'weighted mask', 'coordinate_sys': f'EPSG:{opts.target_sys}'}
+    full_mask = mask.copy()
 
     # apply altitude threshold if set
     if opts.altitude_threshold != 0:
         mask = _apply_altitude_threshold(mask, opts)
     ds = mask.to_dataset()
+    if getattr(opts, 'calculate_area', False):
+        ds = _add_area_variables(ds, full_mask, mask, opts)
     
     create_history_from_cfg(cfg_params=opts, ds=ds)
 
@@ -238,6 +244,34 @@ def _apply_altitude_threshold(mask, opts):
     mask = mask.where(orog < opts.altitude_threshold)
     logger.info(f'Applied altitude threshold in {time.perf_counter() - start:.2f}s')
     return mask
+
+
+def _create_area_grid(mask):
+    """Create a mask-weighted area grid using the TEA implementation."""
+    return TEAIndicators(mask=mask).area_grid
+
+
+def _add_area_variables(ds, full_mask, mask, opts):
+    """Add full and altitude-filtered area grids and their summed sizes."""
+    area_grid_full = _create_area_grid(full_mask)
+    area_grid = _create_area_grid(mask)
+    area_attrs = {
+        'long_name': 'mask-weighted grid-cell area',
+        'units': 'areal (100 m2)',
+        'coordinate_sys': f'EPSG:{opts.target_sys}',
+    }
+    area_size_attrs = {
+        'long_name': 'summed mask area',
+        'units': 'areal (100 m2)',
+    }
+    area_grid_full.attrs = area_attrs
+    area_grid.attrs = area_attrs
+    ds['area_grid_full'] = area_grid_full
+    ds['area_full'] = (area_grid_full.sum(skipna=True).rename('area_full')
+                       .assign_attrs(area_size_attrs))
+    ds['area_grid'] = area_grid
+    ds['area'] = area_grid.sum(skipna=True).rename('area').assign_attrs(area_size_attrs)
+    return ds
 
 
 def _find_closest(coords, corner_val, direction):
@@ -381,8 +415,13 @@ def create_rectangular_gr(opts):
         da_mask.loc[closest_ne_y, :] = da_mask.loc[closest_ne_y, :] * n_frac
 
     if opts.altitude_threshold != 0:
+        full_mask = da_mask.copy()
         da_mask = _apply_altitude_threshold(da_mask, opts)
+    else:
+        full_mask = da_mask.copy()
     ds_mask = da_mask.to_dataset()
+    if getattr(opts, 'calculate_area', False):
+        ds_mask = _add_area_variables(ds_mask, full_mask, da_mask, opts)
 
     create_history_from_cfg(cfg_params=opts, ds=ds_mask)
 
@@ -475,10 +514,13 @@ def create_mask_file(opts):
                            attrs={'long_name': 'weighted mask',
                                   'coordinate_sys': f'EPSG:{opts.target_sys}'},
                            name='mask')
+    full_mask = da_mask.copy()
     if opts.altitude_threshold != 0:
         da_mask = _apply_altitude_threshold(da_mask, opts)
         
     ds_mask = da_mask.to_dataset()
+    if getattr(opts, 'calculate_area', False):
+        ds_mask = _add_area_variables(ds_mask, full_mask, da_mask, opts)
     create_history_from_cfg(cfg_params=opts, ds=ds_mask)
     out_region = opts.region
     _save_output(ds_mask, opts, out_region)

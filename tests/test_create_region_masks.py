@@ -16,7 +16,9 @@ def _opts():
         dataset='ERA5',
         xy_name='lon,lat',
         target_sys=4326,
+        orofile='orography.nc',
         altitude_threshold=0,
+        calculate_area=False,
         parallel_workers=1,
         mask_parallel_workers=1,
         start=2000,
@@ -76,3 +78,27 @@ def test_create_mask_file_unions_multiple_features(monkeypatch):
     assert result[0, 0] == 1
     assert result[2, 2] == 1
     assert np.isnan(result[1, 1])
+
+
+def test_create_mask_file_writes_full_and_filtered_areas(monkeypatch):
+    opts = _opts()
+    opts.calculate_area = True
+    opts.altitude_threshold = 100
+    template = xr.Dataset(coords={'lon': [0.0, 1.0], 'lat': [0.0, 1.0]})
+    orography = xr.Dataset({'altitude': (('lat', 'lon'), [[0, 200], [0, 0]])},
+                           coords=template.coords)
+    captured = {}
+    shape = gpd.GeoDataFrame(geometry=[box(-0.5, -0.5, 1.5, 1.5)], crs='EPSG:4326')
+
+    monkeypatch.setattr(masks, 'get_gridded_data', lambda *args, **kwargs: template)
+    monkeypatch.setattr(masks, '_load_shp', lambda opts: shape)
+    monkeypatch.setattr(masks.xr, 'open_dataset', lambda *args, **kwargs: orography)
+    monkeypatch.setattr(masks, '_save_output', lambda ds, opts, out_region=None: captured.update(ds=ds))
+
+    masks.create_mask_file(opts)
+
+    result = captured['ds']
+    assert {'mask', 'area_grid_full', 'area_full', 'area_grid', 'area'} <= set(result.data_vars)
+    assert result.area_full.item() > result.area.item()
+    assert np.isnan(result.area_grid.values[0, 1])
+    assert np.isfinite(result.area_grid_full.values[0, 1])

@@ -232,6 +232,8 @@ def _get_default_opts(fname, opts):
                 raise ValueError(f'Unknown dataset {opts.dataset}. Please set xy_name manually in options.')
         if 'altitude_threshold' not in opts:
             opts.altitude_threshold = 1500
+        if 'calculate_area' not in opts:
+            opts.calculate_area = False
 
     # regrid_SPARTACUS.py options
     if fname == 'regrid_SPARTACUS_to_WEGNext':
@@ -330,6 +332,7 @@ def check_type(key, value):
         'shpfile': 'path',
         'orofile': 'path',
         'altitude_threshold': int,
+        'calculate_area': bool,
         'lsmfile': 'path',
 
         # regrid_SPARTACUS.py
