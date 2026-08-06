@@ -6,7 +6,7 @@ PLOT_SYNC_DIR_UNICLOUD="/mnt/unicloud/juergen.fuchsberger/TEA-indicators/heatwav
 source /home/juf/TEA-indicators/.venv/bin/activate
 
 
-export PYTHONPATH=$PYTHONPATH:$HOME/wegenerNet/WPS/QCS:$HOME/wegenerNet/WPS/DPG:$HOME/wegenerNet/WPS:$HOME/wegenerNet:$HOME/wegenerNet/misc_analyses:~/cdr_DPS/scripts
+export PYTHONPATH=$HOME/wegenerNet/WPS/QCS:$HOME/wegenerNet/WPS/DPG:$HOME/wegenerNet/WPS:$HOME/wegenerNet:$HOME/wegenerNet/misc_analyses:~/cdr_DPS/scripts
 
 set -Eeuo pipefail
 
@@ -56,11 +56,22 @@ run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/in
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_decadal_detrend.yaml --loglevel INFO
 
 # plot data
-run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py
+run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --csv
 
 # now run for Styria
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml --loglevel INFO
 run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/CW2_daily_Styria.yaml --loglevel INFO
+
+# plot heatwave data
 run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml"
+
+# calculate decadal data
+run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/Tx30_Styria_decadal.yaml --loglevel INFO
+run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/CW2_decadal_Styria.yaml --loglevel INFO
+
+# plot data
+run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --region Steiermark --csv
+
+# sync
 run_step rsync -av  /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/ $PLOT_SYNC_DIR
 run_step rsync -av  /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/ $PLOT_SYNC_DIR_UNICLOUD

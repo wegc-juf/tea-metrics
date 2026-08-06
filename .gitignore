@@ -38,3 +38,4 @@ __pycache__
 /src/*.png
 /*.png
 /*.csv
+/src/*.csv
