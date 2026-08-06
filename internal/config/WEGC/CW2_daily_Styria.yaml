@@ -1,6 +1,6 @@
 common_params:
   GeoRegion: &GR
-    region: Styria
+    region: Steiermark
   parameter: &PARAM
     parameter: Tx
     precip: false

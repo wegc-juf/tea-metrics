@@ -347,6 +347,8 @@ def plot_map(fig, ax, data, region, mask_path=None):
 
 def run(run_name, region='AUT', tex_variable='TEX_HW_max_GR',
         output_dir=Path('.'), show=True, csv=False):
+    global TEXT_BOX_CLEARANCE
+    
     run_name = run_name.replace('-', '_')
     LOGGER.info('Starting Figure 5: run=%s, region=%s, extremity=%s',
                 run_name, region, tex_variable)
@@ -366,6 +368,7 @@ def run(run_name, region='AUT', tex_variable='TEX_HW_max_GR',
         input_data_path = Path('/home/wegnet/results/SPARTACUS_DETRENDED_JJA')
         ctp = 'june'
     elif run_name == 'current_detrended':
+        TEXT_BOX_CLEARANCE = 0.70
         input_data_path = Path(
             '/data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/SPARTACUS_detrended/JJA/')
         ctp = 'annual'
