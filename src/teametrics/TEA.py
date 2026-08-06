@@ -426,8 +426,8 @@ class TEAIndicators:
             self._calc_DTEEC_parallel()
         else:
             self._calc_DTEEC_legacy()
-        logger.info(f"Calculated DTEEC in {time.perf_counter() - start:.2f}s "
-                    f"({'Dask' if self.use_dask and self.gridded else 'NumPy'} path)")
+        logger.debug(f"Calculated DTEEC in {time.perf_counter() - start:.2f}s "
+                     f"({'Dask' if self.use_dask and self.gridded else 'NumPy'} path)")
 
     def _calc_DTEEC_legacy(self):
         """
