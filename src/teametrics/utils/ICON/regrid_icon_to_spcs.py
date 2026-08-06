@@ -6,12 +6,24 @@ Regrid ICON data to SPCS grid
 
 import xarray as xr
 import numpy as np
+import warnings
 from pathlib import Path
 from scipy.interpolate import griddata
 
 from get_icon_data import ICON_PATH
 
 SPCS_GRID_FILE = "/data/reloclim/backup/ZAMG_SPARTACUS/data/v2024_v2.1/SPARTACUS2-DAILY_TX_2026.nc"
+
+
+def _open_cfgrib_dataset(path, **kwargs):
+    """Open a GRIB dataset without the ecCodes compatibility advisory."""
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=r"ecCodes 2\.42\.0 or higher is recommended\..*",
+            category=UserWarning,
+        )
+        return xr.open_dataset(path, **kwargs)
 
 
 def crop_icon_to_spcs(files):
@@ -24,7 +36,7 @@ def crop_icon_to_spcs(files):
 
     for f in files:
 
-        ds = xr.open_dataset(
+        ds = _open_cfgrib_dataset(
             f,
             engine="cfgrib",
             backend_kwargs={"indexpath": ""},
@@ -211,31 +223,43 @@ def icon_global_t2m_regrid():
     spartacus = xr.open_dataset(SPCS_GRID_FILE, decode_timedelta=True)
     for date in unique_dates:
         date_files = [f for f in files if date in f.stem]
-        one_file = xr.open_dataset(
+        one_file = _open_cfgrib_dataset(
             date_files[0],
             engine="cfgrib",
             backend_kwargs={"indexpath": ""},
             decode_timedelta=True,
         )
         print(one_file)
-        import cfgrib
-        
-        ds = cfgrib.open_datasets(
-            date_files[0],
-            backend_kwargs={"indexpath": ""}
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"ecCodes 2\.42\.0 or higher is recommended\..*",
+                category=UserWarning,
+            )
+            import cfgrib
+
+            ds = cfgrib.open_datasets(
+                date_files[0],
+                backend_kwargs={"indexpath": ""}
+            )
         
         for d in ds:
             print(d)
-        icon_data = xr.open_mfdataset(
-            date_files,
-            combine="nested",
-            concat_dim="valid_time",
-            engine="cfgrib",
-            backend_kwargs={"indexpath": ""},
-            decode_timedelta=True,
-            join="outer",
-        )
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"ecCodes 2\.42\.0 or higher is recommended\..*",
+                category=UserWarning,
+            )
+            icon_data = xr.open_mfdataset(
+                date_files,
+                combine="nested",
+                concat_dim="valid_time",
+                engine="cfgrib",
+                backend_kwargs={"indexpath": ""},
+                decode_timedelta=True,
+                join="outer",
+            )
         ds_spcs = icon_global_to_spartacus(icon_data, spartacus)
         if not Path(ICON_PATH + "./icon_t2m_regridded").exists():
             Path(ICON_PATH + "./icon_t2m_regridded").mkdir(parents=True, exist_ok=True)
