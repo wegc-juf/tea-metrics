@@ -22,6 +22,19 @@ PARAMS = ref_cc_params()
 
 END_YEAR = 2026
 LOGGER = logging.getLogger(__name__)
+TEXT_BOX_CLEARANCE = 0.80
+
+
+def nice_tick_step(max_value):
+    """Return a conventional tick interval with at least four intervals."""
+    target = max_value / 4
+    exponent = int(np.floor(np.log10(target)))
+    candidates = []
+    for current_exponent in range(exponent - 1, exponent + 2):
+        scale = 10 ** current_exponent
+        candidates.extend(factor * scale for factor in (1, 2, 2.5, 5, 10))
+    valid = [candidate for candidate in candidates if candidate <= target]
+    return max(valid) if valid else min(candidates)
 
 
 def get_data(varname='Tx30.0degC', ctp='june', region='AUT',
@@ -132,17 +145,29 @@ def gr_plot_params(vname):
 
 def plot_gr_data(ax, adata, ddata, afdata, su, sl):
     props = gr_plot_params(vname=ddata.name)
-    ymax = props['yx']
-    if ddata.name in ['EF_GR', 'TEX_GR', 'TEX_max_GR', 'TEX_HW_max_GR']:
-        plotted_max = np.nanmax(np.concatenate((
-            np.atleast_1d(np.asarray(adata)),
-            np.atleast_1d(np.asarray(ddata + su)),
-        )))
-        ymax = max(ymax, props['dy'] * np.ceil(plotted_max / props['dy']))
-        if ddata.name in ['TEX_GR', 'TEX_max_GR', 'TEX_HW_max_GR']:
-            ymax += props['dy']
-        LOGGER.info('%s y-axis upper limit set to %.1f for plotted maximum %.1f',
-                    ddata.name, ymax, plotted_max)
+    plotted_values = np.concatenate((
+        np.atleast_1d(np.asarray(adata)),
+        np.atleast_1d(np.asarray(ddata + su)),
+    ))
+    finite_values = plotted_values[np.isfinite(plotted_values)]
+    if finite_values.size:
+        plotted_max = finite_values.max()
+        dy = props['dy']
+        if plotted_max > 0 and ddata.name in ['EA_avg_GR', 'TEX_GR', 'TEX_max_GR', 'TEX_HW_max_GR']:
+            dy = nice_tick_step(plotted_max)
+        else:
+            while plotted_max > 0 and plotted_max / dy < 4:
+                dy /= 2
+        # Reserve the upper part of the axes for the multi-line annotation box.
+        ymax = dy * np.ceil((plotted_max / TEXT_BOX_CLEARANCE) / dy)
+        ymax = max(dy, ymax)
+        LOGGER.info('%s y-axis: upper limit %.1f, major tick interval %.g, plotted maximum %.1f',
+                    ddata.name, ymax, dy, plotted_max)
+    else:
+        dy = props['dy']
+        ymax = props['yx']
+        LOGGER.warning('%s contains no finite plotted values; using fallback y-axis upper limit %.1f',
+                       ddata.name, ymax)
 
     xticks = np.arange(1961, END_YEAR + 1)
 
@@ -180,7 +205,7 @@ def plot_gr_data(ax, adata, ddata, afdata, su, sl):
     ax.xaxis.set_minor_locator(FixedLocator(np.arange(1960, END_YEAR + 1)))
     ax.set_title(props['title'], fontsize=14)
     ax.set_ylim(0, ymax)
-    ax.yaxis.set_major_locator(FixedLocator(np.arange(0, ymax + props['dy'], props['dy'])))
+    ax.yaxis.set_major_locator(FixedLocator(np.arange(0, ymax + dy, dy)))
 
     if ddata.name == 'EA_avg_GR':
         ax.text(0.02, 0.89, f'TMax-p99ANN-{props["nv_name"]}' + r'$_\mathrm{Ref | CC}$ = '
