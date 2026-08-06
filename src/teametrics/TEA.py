@@ -833,10 +833,10 @@ class TEAIndicators:
         """
         digits = self.significant_digits
         if any(getattr(data.data, 'chunks', None) is not None for data in dataset.data_vars.values()):
-            logger.info("Dataset contains dask arrays; computing data before saving to netCDF")
+            logger.debug("Dataset contains dask arrays; computing data before saving to netCDF")
             start = time.perf_counter()
             dataset = dataset.compute()
-            logger.info(f"Computed Dask data for NetCDF serialization in {time.perf_counter() - start:.2f}s")
+            logger.debug(f"Computed Dask data for NetCDF serialization in {time.perf_counter() - start:.2f}s")
 
         # save to netCDF with compression and rounding to reduce file size
         output_path = filepath
@@ -861,7 +861,7 @@ class TEAIndicators:
         else:
             logger.debug(f"Saving dataset to {output_path} without rounding")
             dataset.to_netcdf(output_path)
-        logger.info(f"Serialized NetCDF output {output_path} in {time.perf_counter() - start:.2f}s")
+        logger.debug(f"Serialized NetCDF output {output_path} in {time.perf_counter() - start:.2f}s")
 
     def _is_raster_variable(self, var_data):
         """
