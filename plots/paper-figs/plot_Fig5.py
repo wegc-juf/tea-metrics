@@ -70,16 +70,29 @@ def get_data(varname='Tx30.0degC', ctp='june', region='AUT',
     return dec, ctp_data, af
 
 
-def find_mask(region, input_data_path):
+def find_mask(region, input_data_path, data=None):
     """Find a mask matching the region and data generation run."""
     candidates = [
         input_data_path / 'masks' / f'{region}_mask_SPARTACUS_1500.nc',
         input_data_path / 'masks' / f'{region}_masks_SPARTACUS.nc',
+        input_data_path.parent / 'masks' / f'{region}_mask_SPARTACUS_1500.nc',
+        input_data_path.parent / 'masks' / f'{region}_masks_SPARTACUS.nc',
+        input_data_path.parent.parent / 'masks' / f'{region}_mask_SPARTACUS_1500.nc',
+        input_data_path.parent.parent / 'masks' / f'{region}_masks_SPARTACUS.nc',
         MASK_PATH / f'{region}_mask_SPARTACUS_1500.nc',
         MASK_PATH / f'{region}_masks_SPARTACUS.nc',
     ]
     for path in candidates:
         if path.exists():
+            if data is not None:
+                mask = xr.open_dataset(path)
+                has_matching_grid = (
+                    np.isin(data.x.values, mask.x.values).all()
+                    and np.isin(data.y.values, mask.y.values).all()
+                )
+                if not has_matching_grid:
+                    LOGGER.warning('Skipping mask with incompatible grid: %s', path)
+                    continue
             LOGGER.info('Using region mask %s', path)
             return path
     LOGGER.warning('No SPARTACUS mask found for region %s. Checked: %s',
@@ -334,6 +347,7 @@ def plot_map(fig, ax, data, region, mask_path=None):
 
 def run(run_name, region='AUT', tex_variable='TEX_HW_max_GR',
         output_dir=Path('.'), show=True, csv=False):
+    run_name = run_name.replace('-', '_')
     LOGGER.info('Starting Figure 5: run=%s, region=%s, extremity=%s',
                 run_name, region, tex_variable)
     if run_name == 'RW1':
@@ -396,7 +410,7 @@ def run(run_name, region='AUT', tex_variable='TEX_HW_max_GR',
         write_timeseries_csv(dec=dec, ann=ann, region=region, run_name=run_name,
                              output_path=output_dir / f'Figure5_data_{run_name}_{region}.csv')
 
-    mask_path = find_mask(region, input_data_path)
+    mask_path = find_mask(region, input_data_path, data=dec)
     map_vars = ['EF', 'ED_avg', 'EM_avg']
     LOGGER.info('Preparing %d map panels', len(map_vars))
     for irow, map_var in enumerate(map_vars):
@@ -435,7 +449,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run-name', default='current',
                         choices=['RW1', 'RW2', 'CW1', 'CW2', 'CW3',
-                                 'current_detrended', 'current'],
+                                 'current_detrended', 'current-detrended', 'current'],
                         help='Configured data run to plot (default: current).')
     parser.add_argument('--region', default='AUT',
                         help='calc_TEA region name, e.g. AUT, SEA, FBR, EUR or an Austrian state (default: AUT).')
