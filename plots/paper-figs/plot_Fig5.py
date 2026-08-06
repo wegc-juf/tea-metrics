@@ -108,9 +108,23 @@ def gr_plot_params(vname):
               'TEX_GR': {'col': 'tab:red',
                          'ylbl': r'TEX $(\mathcal{T}_s|\mathcal{T}_p)$ (areal °C days/yr)',
                          'title': 'Total Events Extremity (Annual)',
-                         'acc': r'$\mathcal{A}_\mathrm{CC}^\mathrm{T}$', 'nv_name': 'EA',
+                         'acc': r'$\mathcal{A}_\mathrm{CC}^\mathrm{T}$', 'nv_name': 'TEX',
                          'yx': 45000, 'dy': 5000, 'unit': 'areal °C days/yr',
-                         'ref': r'$\mathcal{T}_\mathrm{Ref}$', 'cc': r'$\mathcal{T}_\mathrm{CC}$'}
+                         'ref': r'$\mathcal{T}_\mathrm{Ref}$', 'cc': r'$\mathcal{T}_\mathrm{CC}$'},
+              'TEX_max_GR': {'col': 'tab:red',
+                             'ylbl': r'Max. Event Extremity $(\mathcal{T}_\mathrm{max})$ (areal °C days/yr)',
+                             'title': 'Maximum Event Extremity (Annual)',
+                             'acc': r'$\mathcal{A}_\mathrm{CC}^\mathrm{Tmax}$', 'nv_name': 'TEX_max',
+                             'yx': 25000, 'dy': 5000, 'unit': 'areal °C days/yr',
+                             'ref': r'$\mathcal{T}_\mathrm{max,Ref}$', 'cc': r'$\mathcal{T}_\mathrm{max,CC}$'},
+              'TEX_HW_max_GR': {'col': 'tab:red',
+                                'ylbl': r'Max. Heatwave Extremity $(\mathcal{T}_\mathrm{HW,max})$ (areal °C days/yr)',
+                                'title': 'Maximum Heatwave Extremity (Annual)',
+                                'acc': r'$\mathcal{A}_\mathrm{CC}^\mathrm{THW,max}$',
+                                'nv_name': 'TEX_HW_max',
+                                'yx': 25000, 'dy': 5000, 'unit': 'areal °C days/yr',
+                                'ref': r'$\mathcal{T}_\mathrm{HW,max,Ref}$',
+                                'cc': r'$\mathcal{T}_\mathrm{HW,max,CC}$'}
               }
 
     return params[vname]
@@ -119,14 +133,16 @@ def gr_plot_params(vname):
 def plot_gr_data(ax, adata, ddata, afdata, su, sl):
     props = gr_plot_params(vname=ddata.name)
     ymax = props['yx']
-    if ddata.name == 'EF_GR':
+    if ddata.name in ['EF_GR', 'TEX_GR', 'TEX_max_GR', 'TEX_HW_max_GR']:
         plotted_max = np.nanmax(np.concatenate((
             np.atleast_1d(np.asarray(adata)),
             np.atleast_1d(np.asarray(ddata + su)),
         )))
         ymax = max(ymax, props['dy'] * np.ceil(plotted_max / props['dy']))
-        LOGGER.info('EF_GR y-axis upper limit set to %.1f for plotted maximum %.1f',
-                    ymax, plotted_max)
+        if ddata.name in ['TEX_GR', 'TEX_max_GR', 'TEX_HW_max_GR']:
+            ymax += props['dy']
+        LOGGER.info('%s y-axis upper limit set to %.1f for plotted maximum %.1f',
+                    ddata.name, ymax, plotted_max)
 
     xticks = np.arange(1961, END_YEAR + 1)
 
@@ -156,7 +172,7 @@ def plot_gr_data(ax, adata, ddata, afdata, su, sl):
     ax.set_ylabel(props['ylbl'], fontsize=12)
     ax.minorticks_on()
     ax.grid(color='gray', which='major', linestyle=':')
-    if ddata.name in ['EA_avg_GR', 'TEX_GR']:
+    if ddata.name in ['EA_avg_GR', 'TEX_GR', 'TEX_max_GR', 'TEX_HW_max_GR']:
         ax.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
     else:
         ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
@@ -175,11 +191,11 @@ def plot_gr_data(ax, adata, ddata, afdata, su, sl):
                 horizontalalignment='left',
                 verticalalignment='center', transform=ax.transAxes, backgroundcolor='whitesmoke',
                 fontsize=9)
-    elif ddata.name == 'TEX_GR':
+    elif ddata.name in ['TEX_GR', 'TEX_max_GR', 'TEX_HW_max_GR']:
         ax.text(0.02, 0.89, f'TMax-p99ANN-{props["nv_name"]}' + r'$_\mathrm{Ref | CC}$ = '
                 + f'{ref:.0f}' + r'$\,$|$\,$'
                 + f'{cc:.0f} {props["unit"]} \n'
-                + r'$\mathcal{A}_\mathrm{CC}^\mathrm{T}$ = '
+                 + props['acc'] + ' = '
                 + f'{afdata:.2f}',
                 horizontalalignment='left',
                 verticalalignment='center', transform=ax.transAxes, backgroundcolor='whitesmoke',
@@ -253,8 +269,10 @@ def plot_map(fig, ax, data, region, mask_path=None):
             fontsize=9)
 
 
-def run(run_name, region='AUT', output_dir=Path('.'), show=True):
-    LOGGER.info('Starting Figure 5: run=%s, region=%s', run_name, region)
+def run(run_name, region='AUT', tex_variable='TEX_HW_max_GR',
+        output_dir=Path('.'), show=True):
+    LOGGER.info('Starting Figure 5: run=%s, region=%s, extremity=%s',
+                run_name, region, tex_variable)
     if run_name == 'RW1':
         input_data_path = INPUT_DATA_PATH
         ctp = 'june'
@@ -298,12 +316,16 @@ def run(run_name, region='AUT', output_dir=Path('.'), show=True):
         LOGGER.info('%s: mean supp = %.3f, mean slow = %.3f',
                     gr_var, su_mean, sl_mean)
 
-    LOGGER.info('Plotting regional time series: TEX_GR')
-    plot_gr_data(ax=axs[3, 1], adata=ann['TEX_GR'], ddata=dec['TEX_GR'], afdata=af['TEX_GR_AF_CC'],
-                 su=dec['TEX_GR_supp'], sl=dec['TEX_GR_slow'])
-    su_mean = dec['TEX_GR_supp'].sel(time=slice(f'1961-01-01', f'1985-12-31')).mean().values
-    sl_mean = dec['TEX_GR_slow'].sel(time=slice(f'1961-01-01', f'1985-12-31')).mean().values
-    LOGGER.info('TEX_GR: mean supp = %.3f, mean slow = %.3f', su_mean, sl_mean)
+    LOGGER.info('Plotting extremity time series: %s', tex_variable)
+    plot_gr_data(ax=axs[3, 1], adata=ann[tex_variable], ddata=dec[tex_variable],
+                 afdata=af[f'{tex_variable}_AF_CC'],
+                 su=dec[f'{tex_variable}_supp'], sl=dec[f'{tex_variable}_slow'])
+    su_mean = dec[f'{tex_variable}_supp'].sel(
+        time=slice(f'1961-01-01', f'1985-12-31')).mean().values
+    sl_mean = dec[f'{tex_variable}_slow'].sel(
+        time=slice(f'1961-01-01', f'1985-12-31')).mean().values
+    LOGGER.info('%s: mean supp = %.3f, mean slow = %.3f',
+                tex_variable, su_mean, sl_mean)
 
     mask_path = find_mask(region, input_data_path)
     map_vars = ['EF', 'ED_avg', 'EM_avg']
@@ -329,7 +351,7 @@ def run(run_name, region='AUT', output_dir=Path('.'), show=True):
 
     fig.subplots_adjust(wspace=0.2, hspace=0.33)
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_dir / f'Figure5_{run_name}_{region}.png'
+    output_path = output_dir / f'Figure5_{run_name}_{region}_{tex_variable}.png'
     LOGGER.info('Saving Figure 5 to %s', output_path)
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     if show:
@@ -348,7 +370,10 @@ def parse_args():
                                  'current_detrended', 'current'],
                         help='Configured data run to plot (default: current).')
     parser.add_argument('--region', default='AUT',
-                        help='calc_TEA region name, e.g. AUT, SEA, FBR, EUR or an Austrian state.')
+                        help='calc_TEA region name, e.g. AUT, SEA, FBR, EUR or an Austrian state (default: AUT).')
+    parser.add_argument('--tex-variable', default='TEX_GR',
+                        choices=['TEX_GR', 'TEX_max_GR', 'TEX_HW_max_GR'],
+                        help='Extremity series for the final panel (default: TEX_GR).')
     parser.add_argument('--output-dir', type=Path, default=Path('.'),
                         help='Directory for generated figures (default: current directory).')
     parser.add_argument('--no-show', action='store_true',
@@ -364,5 +389,6 @@ if __name__ == '__main__':
     logging.basicConfig(level=getattr(logging, args.log_level),
                         format='%(asctime)s %(levelname)s %(message)s')
     logging.getLogger('matplotlib').setLevel(logging.WARNING)
-    run(args.run_name, region=args.region, output_dir=args.output_dir,
+    run(args.run_name, region=args.region, tex_variable=args.tex_variable,
+        output_dir=args.output_dir,
         show=not args.no_show)
