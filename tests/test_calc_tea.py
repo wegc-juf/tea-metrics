@@ -140,9 +140,10 @@ class TestLoadMaskFile:
         opts = SimpleNamespace(gr_type='polygon', maskpath=str(tmp_path), mask_sub='masks',
                                region='AUT', dataset='ERA5', altitude_threshold=1500)
 
-        result = _load_mask_file(opts)
+        result, area_grid = _load_mask_file(opts, include_area=True)
 
         xr.testing.assert_equal(result, mask)
+        xr.testing.assert_equal(area_grid, ds.area_grid)
 
     def test_load_mask_file_missing(self, tmp_path):
         from types import SimpleNamespace

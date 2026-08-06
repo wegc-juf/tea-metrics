@@ -233,7 +233,7 @@ def _get_default_opts(fname, opts):
         if 'altitude_threshold' not in opts:
             opts.altitude_threshold = 1500
         if 'calculate_area' not in opts:
-            opts.calculate_area = False
+            opts.calculate_area = True
 
     # regrid_SPARTACUS.py options
     if fname == 'regrid_SPARTACUS_to_WEGNext':

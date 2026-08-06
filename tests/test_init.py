@@ -98,6 +98,13 @@ class TestReadCrs:
 
 
 class TestAreaGrid:
+    def test_supplied_area_grid_is_preferred(self, tea):
+        supplied = xr.full_like(tea.area_grid, 42.0).rename('area_grid')
+        result = TEAIndicators(input_data=tea.input_data, threshold=tea.threshold_grid,
+                               area_grid=supplied)
+
+        xr.testing.assert_equal(result.area_grid, supplied)
+
     def test_area_grid_created(self, tea):
         assert tea.area_grid is not None
         assert tea.area_grid.shape == (2, 2)

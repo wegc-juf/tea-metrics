@@ -46,9 +46,10 @@ def calc_tea_indicators(opts):
 
     # load mask if needed
     if 'maskpath' in opts and 'station' not in opts:
-        mask = _load_mask_file(opts)
+        mask, area_grid = _load_mask_file(opts, include_area=True)
     else:
         mask = None
+        area_grid = None
 
     # calculate daily and annual climatic time period indicators
     if not opts.decadal_only:
@@ -80,7 +81,7 @@ def calc_tea_indicators(opts):
         else:
             logger.info('Only one decade requested. Calculating daily/CTP indicators in one process.')
             for p_start, p_end in chunks:
-                _calculate_chunk(opts, mask, threshold_grid, gridded, int(p_start), int(p_end))
+                _calculate_chunk(opts, mask, threshold_grid, gridded, int(p_start), int(p_end), area_grid)
 
     # calculate decadal indicators and amplification factors
     if opts.decadal or opts.decadal_only or opts.recalc_decadal:
@@ -112,15 +113,15 @@ def _calculate_chunk_worker(opts, start, end):
     worker_opts.recalc_threshold = False
     # Chunk-level processes provide the parallelism; avoid nested Dask pools.
     worker_opts.use_dask = False
-    mask = _load_mask_file(worker_opts)
+    mask, area_grid = _load_mask_file(worker_opts, include_area=True)
     threshold = _get_threshold(worker_opts)
-    _calculate_chunk(worker_opts, mask, threshold, True, start, end)
+    _calculate_chunk(worker_opts, mask, threshold, True, start, end, area_grid)
 
 
-def _calculate_chunk(opts, mask, threshold, gridded, start, end):
+def _calculate_chunk(opts, mask, threshold, gridded, start, end, area_grid=None):
     """Calculate and save daily and CTP results for one time chunk."""
     tea = calc_dbv_indicators(mask=mask, opts=opts, start=start, end=end,
-                              gridded=gridded, threshold=threshold)
+                               gridded=gridded, threshold=threshold, area_grid=area_grid)
     if 'agr' in opts:
         _load_or_generate_gr_grid_static(opts, tea)
     calc_annual_ctp_indicators(tea=tea, opts=opts, start=start, end=end)
@@ -136,7 +137,7 @@ def _get_chunk_workers(chunk_count, max_workers=4):
 
 
 
-def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
+def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, area_grid=None):
     """
     calculate daily basis variables for a given time period
     Args:
@@ -236,7 +237,8 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 population_grid=population_grid,
                                 min_area=min_area, low_extreme=opts.low_extreme,
-                                unit=opts.unit, land_sea_mask=lsm, significant_digits=opts.significant_digits,
+                                 unit=opts.unit, area_grid=area_grid, land_sea_mask=lsm,
+                                 significant_digits=opts.significant_digits,
                                 use_dask=opts.use_dask, compression_level=opts.compression_level)
 
         # computation of daily basis variables (Methods chapter 3)
@@ -269,7 +271,8 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True):
                 data, mask, threshold = reduced
             else:
                 data, mask, threshold, population_grid = reduced
-            tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
+            tea = TEA_class_obj(threshold=threshold, mask=mask,
+                                low_extreme=opts.low_extreme,
                                 population_grid=population_grid,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
                                 cell_size_y=opts.agr_cell_size,
@@ -351,14 +354,16 @@ def _get_threshold(opts):
     return threshold_grid
 
 
-def _load_mask_file(opts):
+def _load_mask_file(opts, include_area=False):
     """
     load GR mask
     Args:
         opts: options as defined in CFG-PARAMS-doc.md and TEA_CFG_DEFAULT.yaml
 
     Returns:
-        mask: GR mask (Xarray DataArray)
+        mask: GR mask (Xarray DataArray), or ``(mask, area_grid)`` when
+            ``include_area`` is true. Older mask files return ``None`` for
+            the area grid.
 
     """
     if opts.gr_type == 'polygon':
@@ -387,7 +392,10 @@ def _load_mask_file(opts):
         raise FileNotFoundError(maskpath)
     mask_file = xr.open_dataset(maskpath)
 
-    return mask_file.mask
+    mask = mask_file.mask
+    if include_area:
+        return mask, mask_file.data_vars.get('area_grid')
+    return mask
 
 
 def _load_population_grid(opts):
