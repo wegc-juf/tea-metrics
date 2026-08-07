@@ -15,7 +15,7 @@ mkvirtualenv <project_name>
 
 Then, install or upgrade the package using `pip`:
 ```bash
-pip install https://wegenernet.org/downloads/teametrics/teametrics-0.11.0-py3-none-any.whl
+pip install https://wegenernet.org/downloads/teametrics/teametrics-0.11.1-py3-none-any.whl
 ```
 
 ## Usage
