@@ -36,7 +36,8 @@ dependencies = [
     "scipy-stubs (>=1.18.0.1,<2.0.0.0)",
 ]
 
-dynamic = ["version", "classifiers"]
+dynamic = ["classifiers"]
+version = "0.10.15a0"
 
 [project.optional-dependencies]
 
@@ -85,7 +86,6 @@ persistent-substitution = true
 [tool.poetry]
 include = ["src/teametrics/config/*.yaml", "src/teametrics/data/examples/ERA5_Tx_1956-2024_CH.nc", "README.md",
     "LICENSE"]
-version = "0.10.14a0"
 
 [dependency-groups]
 dev = [

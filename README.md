@@ -15,7 +15,7 @@ mkvirtualenv <project_name>
 
 Then, install or upgrade the package using `pip`:
 ```bash
-pip install https://wegenernet.org/downloads/teametrics/teametrics-0.10.13rc2-py3-none-any.whl
+pip install https://wegenernet.org/downloads/teametrics/teametrics-0.10.15a0-py3-none-any.whl
 ```
 
 ## Usage
@@ -93,7 +93,7 @@ If you use this code, please cite:
 **This repository:**
 Fuchsberger, J., Kirchengast, G., and Haas, S. J. (2026). TEAmetrics software for _A new class of climate hazard 
 metrics and its demonstration: revealing a ten-fold increase of extreme heat over Europe_ and other applications. 
-Version 0.10. Zenodo. 
+Version 0.10.15a0. Zenodo.
 https://doi.org/10.5281/zenodo.17210239
 
 **The related paper:**
@@ -124,4 +124,3 @@ For the complete specification file see [**TEAmetrics_RCFspecs_v8-3Sep2025.md**]
 
 ## Changelog
 See [Releases](https://github.com/wegc-juf/tea-metrics/releases) and [Tags](https://github.com/wegc-juf/tea-metrics/tags) for a detailed changelog.
-
