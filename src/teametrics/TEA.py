@@ -1900,7 +1900,7 @@ class TEAIndicators:
         logger.info(f"Loading CTP results from {filepath}")
         if use_dask:
             self.ctp_results = xr.open_mfdataset(filepath, data_vars='minimal', combine='by_coords',
-                                                 coords='minimal', compat='override', join='exact',
+                                                 coords='minimal', compat='override', join='outer',
                                                  chunks='auto')
             configure_dask(self.ctp_results, use_dask=True)
             chunk_info = {
@@ -1928,7 +1928,7 @@ class TEAIndicators:
                     try:
                         self.ctp_results = xr.combine_by_coords(
                             datasets, data_vars='minimal', coords='minimal',
-                            compat='override', join='exact')
+                            compat='override', join='outer')
                         self.ctp_results.load()
                     finally:
                         for dataset in datasets:
