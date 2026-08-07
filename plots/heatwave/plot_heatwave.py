@@ -88,6 +88,60 @@ def _save_heatwave_csv(data, output_path, gr_area_size=None):
     dataframe.to_csv(_prepare_output_path(output_path))
 
 
+def _select_dtem(data, heat_map_date, source_name):
+    if data is None or 'DTEM' not in data:
+        return None
+    try:
+        return data['DTEM'].sel(time=heat_map_date)
+    except KeyError as error:
+        raise ValueError(f"Date {heat_map_date} is not available in {source_name} DTEM data") from error
+
+
+def plot_dtem_heatmap(data, heat_map_date, output_dir, parameter, region,
+                      detrended_data=None, detrend_ctp=None, separate=False):
+    real_world = _select_dtem(data, heat_map_date, 'real-world')
+    detrended = _select_dtem(detrended_data, heat_map_date, 'detrended')
+    if real_world is None and detrended is None:
+        raise ValueError('DTEM is not available in either real-world or detrended data')
+
+    fields = [field for field in (real_world, detrended) if field is not None]
+    vmax = max(float(field.max(skipna=True).values) for field in fields)
+    if vmax <= 0:
+        vmax = 1
+    date_label = np.datetime_as_string(np.asarray(fields[0].time.values), unit='D')
+    parameter_suffix = f'{parameter}_' if parameter else ''
+
+    map_fields = []
+    if real_world is not None:
+        map_fields.append((real_world, 'Real-world', ''))
+    if detrended is not None:
+        map_fields.append((detrended, 'Detrended', f'_DETREND_{detrend_ctp}'))
+
+    for field, title_suffix, filename_suffix in map_fields:
+        if separate:
+            figure, axes = plt.subplots(figsize=(10, 7), constrained_layout=True)
+            axes = [axes]
+        else:
+            figure, axes = plt.subplots(1, len(map_fields), figsize=(7 * len(map_fields), 6),
+                                        squeeze=False, constrained_layout=True)
+            axes = axes[0]
+
+        for axis, (map_field, panel_title, _) in zip(axes, map_fields if not separate else [(field, title_suffix, '')]):
+            plotted = map_field.where(map_field > 0).plot.pcolormesh(
+                ax=axis, cmap='YlOrRd', vmin=0, vmax=vmax, add_colorbar=False,
+                shading='auto')
+            axis.set_title(panel_title)
+            axis.set_xlabel('x (m)')
+            axis.set_ylabel('y (m)')
+            axis.set_aspect('equal')
+
+        figure.colorbar(plotted, ax=axes, label='DTEM (K)', shrink=0.85)
+        figure.suptitle(f'Gridded DTEM on {date_label} | {parameter} | {region}')
+        filename = f'heatwave_map_DTEM_{parameter_suffix}{date_label}{filename_suffix}_{region}.png'
+        figure.savefig(_prepare_output_path(output_dir / filename), dpi=180)
+        plt.close(figure)
+
+
 def plot_daily_heatwave(heatwave_data, heatwave_period, data_var="DTEMA_GR",
                         detrended_heatwave_data=None,
                         detrend_ctp=None,
@@ -277,10 +331,20 @@ def _getopts():
                         type=str,
                         default=None,
                         help='GeoRegion to plot (default: region from the configuration file)')
-    return parser.parse_args()
+    parser.add_argument('--heat-map-date',
+                        type=str,
+                        default=None,
+                        help='Plot gridded DTEM for one date (YYYY-MM-DD)')
+    parser.add_argument('--heat-map-separate',
+                        action='store_true',
+                        help='Save real-world and detrended DTEM maps as separate files')
+    opts = parser.parse_args()
+    if opts.heat_map_separate and opts.heat_map_date is None:
+        parser.error('--heat-map-separate requires --heat-map-date')
+    return opts
 
 
-def run_main(opts, detrend_ctp="JJA"):
+def run_main(opts, detrend_ctp="JJA", heat_map_date=None, heat_map_separate=False):
     parameter = _get_parameter_name(opts)
     data_var = parameter
     configured_output_path = Path(opts.outpath)
@@ -296,9 +360,14 @@ def run_main(opts, detrend_ctp="JJA"):
     #        detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir)
     #
     heatwave_period = ["2026-07-25", "2026-08-12"]
-    worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
-           region=opts.region, detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir,
-           parameter=parameter)
+    data, detrended_data = worker(
+        daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
+        region=opts.region, detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir,
+        parameter=parameter)
+    if heat_map_date is not None:
+        plot_dtem_heatmap(data, heat_map_date, heatwave_output_dir, parameter, opts.region,
+                          detrended_data=detrended_data, detrend_ctp=detrend_ctp,
+                          separate=heat_map_separate)
 
     # heatwave_period = ["2013-07-16", "2013-08-09"]
     # worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period, detrend_ctp=detrend_ctp)
@@ -323,6 +392,7 @@ def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data
         calc_and_plot_heatwave(data, heatwave_period, data_var=output_var,
                                detrended_data=detrended_output, detrend_ctp=detrend_ctp,
                                output_dir=output_dir, region=region, parameter=parameter)
+    return data, detrended_data
 
 
 if __name__ == "__main__":
@@ -330,5 +400,6 @@ if __name__ == "__main__":
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
     if cmd_opts.region is not None:
         opts.region = cmd_opts.region
-    run_main(opts, 'JJA')
+    run_main(opts, 'JJA', heat_map_date=cmd_opts.heat_map_date,
+             heat_map_separate=cmd_opts.heat_map_separate)
     # run_main(opts, 'June')
