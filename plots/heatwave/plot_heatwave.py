@@ -6,6 +6,7 @@ Plot heatwave data
 import argparse
 import logging
 import shutil
+import sys
 from datetime import datetime
 from pathlib import Path
 
@@ -403,7 +404,18 @@ def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.INFO)
+    stdout_handler.addFilter(lambda record: record.levelno == logging.INFO)
+
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(logging.WARNING)
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s: %(message)s",
+        handlers=[stdout_handler, stderr_handler],
+    )
     cmd_opts = _getopts()
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
     if cmd_opts.region is not None:
