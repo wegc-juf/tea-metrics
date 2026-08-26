@@ -7,7 +7,7 @@ import argparse
 import logging
 import shutil
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -50,6 +50,15 @@ def _get_parameter_name(opts):
     threshold = f"{opts.threshold:g}"
     suffix = "p" if opts.threshold_type == "perc" else ""
     return f"{opts.parameter}{threshold}{suffix}"
+
+
+def _parse_date(value):
+    try:
+        return date.fromisoformat(value).isoformat()
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            f"invalid date {value!r}; expected YYYY-MM-DD"
+        ) from error
 
 
 def get_data(data_var="Tx30", data_path=None, time_interval=None, region="AUT"):
@@ -346,13 +355,24 @@ def _getopts():
     parser.add_argument('--heat-map-separate',
                         action='store_true',
                         help='Save real-world and detrended DTEM maps as separate files')
+    parser.add_argument('--period',
+                        action='append',
+                        nargs=2,
+                        type=_parse_date,
+                        metavar=('START', 'END'),
+                        help='Heatwave period to process (YYYY-MM-DD YYYY-MM-DD); may be repeated')
     opts = parser.parse_args()
     if opts.heat_map_separate and opts.heat_map_date is None:
         parser.error('--heat-map-separate requires --heat-map-date')
+    if opts.period:
+        for start, end in opts.period:
+            if start > end:
+                parser.error(f'--period start {start} must not be after end {end}')
     return opts
 
 
-def run_main(opts, detrend_ctp="JJA", heat_map_date=None, heat_map_separate=False):
+def run_main(opts, detrend_ctp="JJA", heat_map_date=None, heat_map_separate=False,
+             heatwave_periods=None):
     parameter = _get_parameter_name(opts)
     data_var = parameter
     configured_output_path = Path(opts.outpath)
@@ -369,28 +389,24 @@ def run_main(opts, detrend_ctp="JJA", heat_map_date=None, heat_map_separate=Fals
                                       parameter=parameter)
         return data, detrended_data
     
-    heatwave_period = ["1983-07-16", "1983-08-02"]
-    call_worker(heatwave_period)
-    
-    heatwave_period = ["2013-07-16", "2013-08-09"]
-    call_worker(heatwave_period)
-    
-    heatwave_period = ["2026-06-17", "2026-07-02"]
-    call_worker(heatwave_period)
-    
-    heatwave_period = ["2026-07-07", "2026-07-19"]
-    call_worker(heatwave_period)
+    if heatwave_periods is None:
+        heatwave_periods = [
+            ["1983-07-16", "1983-08-02"],
+            ["2013-07-16", "2013-08-09"],
+            ["2026-06-17", "2026-07-02"],
+            ["2026-07-07", "2026-07-19"],
+            ["2026-08-19", "2026-08-30"],
+            ["2026-07-25", "2026-08-17"],
+        ]
 
-    heatwave_period = ["2026-07-25", "2026-08-17"]
-    data, detrended_data = call_worker(heatwave_period)
+    data = detrended_data = None
+    for heatwave_period in heatwave_periods:
+        data, detrended_data = call_worker(heatwave_period)
 
     if heat_map_date is not None:
         plot_dtem_heatmap(data, heat_map_date, heatwave_output_dir, parameter, opts.region,
                           detrended_data=detrended_data, detrend_ctp=detrend_ctp,
                           separate=heat_map_separate)
-
-    heatwave_period = ["2026-08-19", "2026-08-30"]
-    call_worker(heatwave_period)
 
 
 def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data_var: str, heatwave_period: list[str],
@@ -430,5 +446,6 @@ if __name__ == "__main__":
     if cmd_opts.region is not None:
         opts.region = cmd_opts.region
     run_main(opts, 'JJA', heat_map_date=cmd_opts.heat_map_date,
-             heat_map_separate=cmd_opts.heat_map_separate)
+             heat_map_separate=cmd_opts.heat_map_separate,
+             heatwave_periods=cmd_opts.period)
     # run_main(opts, 'June')
