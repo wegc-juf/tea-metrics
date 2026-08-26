@@ -20,7 +20,7 @@ common_params:
     unit: degC
     low_extreme: false
     significant_digits: 3
-    # file_format: NetCDF4  # output format for daily basis variables: "NetCDF4" (default) or "GeoTiff"
+    # file_format: NetCDF4
   time_params: &TIME
     start: 1961
     end: 2024
@@ -29,7 +29,7 @@ common_params:
     cc_period: 2010-2024
   paths: &PATHS
     input_data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/
-    # population_grid_path: /path/to/population_grid.nc  # Optional; variable: population
+    # population_grid_path: /path/to/population_grid.nc
     statpath: &statpath /home/wegnet/results/static/
     maskpath: *statpath
     mask_sub: masks/
