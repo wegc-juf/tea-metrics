@@ -2,12 +2,17 @@
 
 set -Eeuo pipefail
 
+# ============================================================================
+# BASH BOOLEAN WARNING: unlike Python, Bash treats exit status 0 as TRUE.
+# A function returns 0 for SUCCESS and a non-zero status for FAILURE.
+# ============================================================================
+
 usage() {
     cat <<'EOF'
 Usage: spartacus_workflow.sh [OPTIONS]
 
-Run the complete workflow when no options are supplied, or select one or more
-workflow stages to run:
+Run the configured default stages when no options are supplied, or select one
+or more workflow stages to run:
 
   --icon                 Download, regrid, and bias-correct ICON data
   --regrid-spartacus     Regrid SPARTACUS data
@@ -27,6 +32,20 @@ EOF
 }
 
 requested_stages=()
+# Configure the stages enabled when the script is run without options.
+default_stages=(
+    --icon
+    --regrid-spartacus
+    --calculate
+    --detrend
+    --calculate-detrended
+    --plot-heatwave
+    --sync
+    --decadal
+    --plot
+    --styria
+)
+
 while (($# > 0)); do
     case "$1" in
         --icon|--regrid-spartacus|--calculate|--detrend|--calculate-detrended|\
@@ -75,16 +94,24 @@ stage_enabled() {
     local requested
 
     if ((${#requested_stages[@]} == 0)); then
-        return 0
+        for requested in "${default_stages[@]}"; do
+            [[ "$requested" == "$stage" ]] && return 0  # 0 = TRUE: stage enabled
+        done
+        return 1  # non-zero = FALSE: stage disabled by default
     fi
     for requested in "${requested_stages[@]}"; do
-        [[ "$requested" == "$stage" ]] && return 0
+        [[ "$requested" == "$stage" ]] && return 0  # 0 = TRUE: stage enabled
     done
-    return 1
+    return 1  # non-zero = FALSE: stage not selected
 }
 
 printf '[%s] Starting SPARTACUS workflow. Log: %s\n' "$(date --iso-8601=seconds)" "$LOG_FILE"
 cd "$HOME/TEA-indicators/src"
+
+# ============================================================================
+# BASH BOOLEAN WARNING: these `if` conditions enter their blocks when the
+# function returns 0. That is Bash SUCCESS, and Bash interprets it as TRUE.
+# ============================================================================
 
 if stage_enabled --icon; then
     # download and regrid ICON data
