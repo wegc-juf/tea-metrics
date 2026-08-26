@@ -42,7 +42,7 @@ def _prepare_output_path(output_path):
         logger.debug("Backing up existing output to %s", backup_path)
         shutil.copy2(output_path, backup_path)
 
-    logger.info("Writing output to %s", output_path)
+    logger.debug("Writing output to %s", output_path)
     return output_path
 
 
@@ -401,6 +401,7 @@ def run_main(opts, detrend_ctp="JJA", heat_map_date=None, heat_map_separate=Fals
 
     data = detrended_data = None
     for heatwave_period in heatwave_periods:
+        logger.info("Writing output to %s", heatwave_output_dir)
         data, detrended_data = call_worker(heatwave_period)
 
     if heat_map_date is not None:
