@@ -4,6 +4,7 @@
 Plot heatwave data
 """
 import argparse
+import logging
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,8 @@ import numpy as np
 import xarray as xr
 
 from teametrics.common.config import load_opts
+
+logger = logging.getLogger(__name__)
 
 plot_data = True
 show_plots = False
@@ -35,8 +38,10 @@ def _prepare_output_path(output_path):
                 f"{output_path.stem}_{timestamp}_{counter}{output_path.suffix}"
             )
             counter += 1
+        logger.debug("Backing up existing output to %s", backup_path)
         shutil.copy2(output_path, backup_path)
 
+    logger.info("Writing output to %s", output_path)
     return output_path
 
 
@@ -63,14 +68,14 @@ def get_data(data_var="Tx30", data_path=None, time_interval=None, region="AUT"):
     elif 2021 <= year <= 2026:
         daily_file_names = f"DBV_{data_var}.0degC_{region}_annual_SPARTACUS_2021to2026.nc"
     else:
-        print(f"No data available for the specified time interval: {time_interval}")
+        logger.warning("No data available for the specified time interval: %s", time_interval)
         return None
     try:
-        print(f"Loading data from {data_path + daily_file_names} for variable {data_var} and time interval"
-              f" {time_interval}")
+        logger.info("Loading data from %s for variable %s and time interval %s",
+                    data_path + daily_file_names, data_var, time_interval)
         data = xr.open_dataset(data_path + daily_file_names)
     except FileNotFoundError:
-        print(f"File {daily_file_names} not found in {data_path}. Please check the path and file name.")
+        logger.warning("File %s not found in %s", daily_file_names, data_path)
         return None
     return data
 
@@ -261,9 +266,10 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
     gr_area_size = _get_gr_area_size(data)
     heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave = calc_heatwave_metrics(
         data, heatwave_period, data_var=data_var, add_values=None)
-    print(f"Heatwave TEX_GR = S_GR for period {heatwave_period[0]} to {heatwave_period[1]}:"
-          f" {heatwave_total.values:.0f} areal degC days / event, event_mean MA_GR = {mean_heatwave.values:.0f} "
-          f"areal degC, event_max MA_GR = {heatwave_data.max().values:.0f} areal degC")
+    logger.info("Heatwave TEX_GR = S_GR for period %s to %s: %s areal degC days / event, "
+                "event_mean MA_GR = %s areal degC, event_max MA_GR = %s areal degC",
+                heatwave_period[0], heatwave_period[1], f"{heatwave_total.values:.0f}",
+                f"{mean_heatwave.values:.0f}", f"{heatwave_data.max().values:.0f}")
     if save_data:
         # save csv files for heatwave_data, heatwave_total, heatwave_cumulative, mean_heatwave
         parameter_suffix = f'{parameter}_' if parameter else ''
@@ -280,10 +286,11 @@ def calc_and_plot_heatwave(data, heatwave_period, data_var="DTEMA_GR", detrended
         detrended_heatwave_data, detrended_heatwave_total, detrended_heatwave_cumulative, detrended_mean_heatwave = (
             calc_heatwave_metrics(
                 detrended_data, heatwave_period, data_var=data_var, add_values=None))
-        print(f"Detrended Heatwave TEX_GR = S_GR for period {heatwave_period[0]} to {heatwave_period[1]}:"
-              f" {detrended_heatwave_total.values:.0f} areal degC days / event, event_mean MA_GR ="
-              f" {detrended_mean_heatwave.values:.0f} "
-              f"areal degC, event_max MA_GR = {detrended_heatwave_data.max().values:.0f} areal degC")
+        logger.info("Detrended Heatwave TEX_GR = S_GR for period %s to %s: %s areal degC days / event, "
+                    "event_mean MA_GR = %s areal degC, event_max MA_GR = %s areal degC",
+                    heatwave_period[0], heatwave_period[1], f"{detrended_heatwave_total.values:.0f}",
+                    f"{detrended_mean_heatwave.values:.0f}",
+                    f"{detrended_heatwave_data.max().values:.0f}")
         if save_data:
             # save csv files for detrended_heatwave_data, detrended_heatwave_total, detrended_heatwave_cumulative,
             #  detrended_mean_heatwave
@@ -382,10 +389,10 @@ def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data
     detrended_data = get_data(data_var, daily_data_path_detrended, heatwave_period, region=region)
     for output_var in ('DTEA_GR', 'DTEM_GR', 'DTEMA_GR'):
         if output_var not in data:
-            print(f"Variable {output_var} not found in real-world data; skipping")
+            logger.warning("Variable %s not found in real-world data; skipping", output_var)
             continue
         if detrended_data is not None and output_var not in detrended_data:
-            print(f"Variable {output_var} not found in detrended data; plotting real-world data only")
+            logger.warning("Variable %s not found in detrended data; plotting real-world data only", output_var)
             detrended_output = None
         else:
             detrended_output = detrended_data
@@ -396,6 +403,7 @@ def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     cmd_opts = _getopts()
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
     if cmd_opts.region is not None:
