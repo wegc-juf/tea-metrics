@@ -371,8 +371,8 @@ def check_type(key, value):
         raise argparse.ArgumentTypeError("compression_level must be between 0 and 9.")
     if key == 'parallel_workers' and not 1 <= value <= 4:
         raise argparse.ArgumentTypeError("parallel_workers must be between 1 and 4.")
-    if key == 'mask_parallel_workers' and not 1 <= value <= 32:
-        raise argparse.ArgumentTypeError("mask_parallel_workers must be between 1 and 32.")
+    if key == 'mask_parallel_workers' and not 1 <= value <= 100:
+        raise argparse.ArgumentTypeError("mask_parallel_workers must be between 1 and 100.")
     # check for correct unit
     if key == 'unit':
         unit = cfunits.Units(value)
