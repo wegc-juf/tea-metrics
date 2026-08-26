@@ -363,25 +363,34 @@ def run_main(opts, detrend_ctp="JJA", heat_map_date=None, heat_map_separate=Fals
         configured_output_path / f"SPARTACUS_detrended/{detrend_ctp}" / "daily_basis_variables"
     ) + "/"
     
-    # heatwave_period = ["2026-06-17", "2026-07-01"]
-    # worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
-    #        detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir)
-    #
-    heatwave_period = ["2026-07-25", "2026-08-12"]
-    data, detrended_data = worker(
-        daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
-        region=opts.region, detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir,
-        parameter=parameter)
+    def call_worker(heatwave_period):
+        data, detrended_data = worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period,
+                                      region=opts.region, detrend_ctp=detrend_ctp, output_dir=heatwave_output_dir,
+                                      parameter=parameter)
+        return data, detrended_data
+    
+    heatwave_period = ["1983-07-16", "1983-08-02"]
+    call_worker(heatwave_period)
+    
+    heatwave_period = ["2013-07-16", "2013-08-09"]
+    call_worker(heatwave_period)
+    
+    heatwave_period = ["2026-06-17", "2026-07-02"]
+    call_worker(heatwave_period)
+    
+    heatwave_period = ["2026-07-07", "2026-07-19"]
+    call_worker(heatwave_period)
+
+    heatwave_period = ["2026-07-25", "2026-08-17"]
+    data, detrended_data = call_worker(heatwave_period)
+
     if heat_map_date is not None:
         plot_dtem_heatmap(data, heat_map_date, heatwave_output_dir, parameter, opts.region,
                           detrended_data=detrended_data, detrend_ctp=detrend_ctp,
                           separate=heat_map_separate)
 
-    # heatwave_period = ["2013-07-16", "2013-08-09"]
-    # worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period, detrend_ctp=detrend_ctp)
-    
-    # heatwave_period = ["1983-07-16", "1983-08-02"]
-    # worker(daily_data_path_detrended, daily_data_path_real_world, data_var, heatwave_period, detrend_ctp=detrend_ctp)
+    heatwave_period = ["2026-08-19", "2026-08-30"]
+    call_worker(heatwave_period)
 
 
 def worker(daily_data_path_detrended: str, daily_data_path_real_world: str, data_var: str, heatwave_period: list[str],
