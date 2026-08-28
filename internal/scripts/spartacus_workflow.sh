@@ -144,9 +144,9 @@ fi
 
 if stage_enabled --plot-heatwave; then
     # plot heatwave data
-    run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_update.yaml" --period 2026-08-19 2026-09-15
-    run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx35_update.yaml" --period 2026-08-19 2026-09-15
-    run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx40_update.yaml" --period 2026-08-19 2026-09-15
+    run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_update.yaml" --period 2026-08-19 2026-09-15 --outpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/current
+    run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx35_update.yaml" --period 2026-08-19 2026-09-15 --outpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/current
+    run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx40_update.yaml" --period 2026-08-19 2026-09-15 --outpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/current
 fi
 
 if stage_enabled --sync; then
@@ -171,7 +171,7 @@ if stage_enabled --styria; then
     run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/CW2_daily_Styria.yaml --loglevel INFO
 
     # plot heatwave data
-    run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml" --period 2026-08-19 2026-09-15
+    run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/Tx30_Styria_StatATGrid.yaml" --period 2026-08-19 2026-09-15 --outpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/current
 
     # calculate decadal data
     run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/Tx30_Styria_decadal.yaml --loglevel INFO

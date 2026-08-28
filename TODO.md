@@ -2,7 +2,7 @@
 
 ## General Issues (High Priority)
 
-- [ ] Check why TEX results differ from old ones according to gki
+- [x] Check why TEX results differ from old ones according to gki
 
 ## General Issues
 - [ ] Check NetCDF compression performance, compare without compression but rounding enabled

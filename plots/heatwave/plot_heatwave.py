@@ -348,6 +348,10 @@ def _getopts():
                         type=str,
                         default=None,
                         help='GeoRegion to plot (default: region from the configuration file)')
+    parser.add_argument('--outpath',
+                        type=Path,
+                        default=None,
+                        help='Output directory (default: outpath from the configuration file)')
     parser.add_argument('--heat-map-date',
                         type=str,
                         default=None,
@@ -372,11 +376,11 @@ def _getopts():
 
 
 def run_main(opts, detrend_ctp="JJA", heat_map_date=None, heat_map_separate=False,
-             heatwave_periods=None):
+             heatwave_periods=None, output_path=None):
     parameter = _get_parameter_name(opts)
     data_var = parameter
     configured_output_path = Path(opts.outpath)
-    heatwave_output_dir = configured_output_path / "heatwave_data"
+    heatwave_output_dir = Path(output_path) if output_path is not None else configured_output_path
     heatwave_output_dir.mkdir(parents=True, exist_ok=True)
     daily_data_path_real_world = str(configured_output_path / "daily_basis_variables") + "/"
     daily_data_path_detrended = str(
@@ -447,5 +451,6 @@ if __name__ == "__main__":
         opts.region = cmd_opts.region
     run_main(opts, 'JJA', heat_map_date=cmd_opts.heat_map_date,
              heat_map_separate=cmd_opts.heat_map_separate,
-             heatwave_periods=cmd_opts.period)
+             heatwave_periods=cmd_opts.period,
+             output_path=cmd_opts.outpath)
     # run_main(opts, 'June')
