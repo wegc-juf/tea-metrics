@@ -65,9 +65,9 @@ while (($# > 0)); do
     esac
 done
 
-HEATWAVE_PLOT_DIR=/data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/
-PLOT_SYNC_DIR="/nas/share/ccr/wegnet/projects/TEA/heatwaves/202607"
-PLOT_SYNC_DIR_UNICLOUD="/mnt/unicloud/juergen.fuchsberger/TEA-indicators/heatwaves/202607"
+HEATWAVE_PLOT_DIR=/data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/current/
+PLOT_SYNC_DIR="/nas/share/ccr/wegnet/projects/TEA/heatwaves/current"
+PLOT_SYNC_DIR_UNICLOUD="/mnt/unicloud/juergen.fuchsberger/TEA-indicators/heatwaves/current"
 
 source /home/juf/TEA-indicators/.venv/bin/activate
 
@@ -145,8 +145,8 @@ fi
 if stage_enabled --plot-heatwave; then
     # plot heatwave data
     run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx30_update.yaml" --period 2026-08-19 2026-09-15 --outpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/current
-    run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx35_update.yaml" --period 2026-08-19 2026-09-15 --outpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/current
-    run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx40_update.yaml" --period 2026-08-19 2026-09-15 --outpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/current
+#    run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx35_update.yaml" --period 2026-08-19 2026-09-15 --outpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/current
+#    run_step ../plots/heatwave/plot_heatwave.py -cf "$HOME/TEA-indicators/internal/config/WEGC/heatwave_paper_Tx40_update.yaml" --period 2026-08-19 2026-09-15 --outpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/current
 fi
 
 if stage_enabled --sync; then
@@ -161,8 +161,8 @@ fi
 
 if stage_enabled --plot; then
     # plot data
-    run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR" --csv --no-show
-    run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR" --csv --no-show --run-name current_detrended
+    run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR/../Fig5/" --csv --no-show
+    run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR/../Fig5/" --csv --no-show --run-name current_detrended
 fi
 
 if stage_enabled --styria; then
@@ -178,8 +178,8 @@ if stage_enabled --styria; then
     run_step python -m teametrics.calc_TEA --config-file /home/juf/TEA-indicators/internal/config/WEGC/CW2_decadal_Styria.yaml --loglevel INFO
 
     # plot data
-    run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR" --region Steiermark --csv --no-show
-    run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR" --region Steiermark --csv --no-show --run-name current_detrended
+    run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR/../Fig5/" --region Steiermark --csv --no-show
+    run_step /home/juf/TEA-indicators/plots/paper-figs/plot_Fig5.py --output-dir "$HEATWAVE_PLOT_DIR/../Fig5/" --region Steiermark --csv --no-show --run-name current_detrended
 fi
 
 if stage_enabled --sync; then
