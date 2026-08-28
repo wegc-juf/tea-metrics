@@ -128,6 +128,8 @@ def _get_default_opts(fname, opts):
         opts.significant_digits = 3
     if 'compression_level' not in opts:
         opts.compression_level = 1
+    if 'zlib_compression' not in opts:
+        opts.zlib_compression = True
     if 'file_format' not in opts:
         opts.file_format = 'NetCDF4'
 
@@ -282,6 +284,7 @@ def check_type(key, value):
         'min_duration': float,
         'significant_digits': int,
         'compression_level': int,
+        'zlib_compression': bool,
         'file_format': str,
 
         # time parameters

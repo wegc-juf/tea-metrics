@@ -38,7 +38,7 @@ class TEAIndicators:
                  population_grid=None,
                  low_extreme=False,
                  unit='', mask=None, apply_mask=True, ctp=None, use_dask=False, significant_digits: int = 2,
-                 compression_level: int = 1,
+                 compression_level: int = 1, zlib_compression: bool = True,
                  ref_period=(1961, 1990), **kwargs):
         """
         Initialize TEAIndicators object
@@ -56,6 +56,7 @@ class TEAIndicators:
             use_dask: use dask for calculations. Default: False
             significant_digits: least significant digits for netCDF output compression. If -1, no rounding is
             applied. Default: 2
+            zlib_compression: use zlib compression when writing NetCDF output. Default: True
         """
         if threshold is not None and isinstance(threshold, (int, float)):
             if input_data is not None:
@@ -70,6 +71,7 @@ class TEAIndicators:
         if not 0 <= compression_level <= 9:
             raise ValueError("compression_level must be between 0 and 9")
         self.compression_level = compression_level
+        self.zlib_compression = zlib_compression
 
         # set default x and y dim names
         self.xdim = 'lon'
@@ -838,18 +840,11 @@ class TEAIndicators:
             dataset = dataset.compute()
             logger.debug(f"Computed Dask data for NetCDF serialization in {time.perf_counter() - start:.2f}s")
 
-        # save to netCDF with compression and rounding to reduce file size
+        # Save to NetCDF with independently configurable rounding and compression.
         output_path = filepath
         start = time.perf_counter()
         if digits >= 0:
             logger.debug(f"Rounding all data to {digits} significant digits")
-            encoding = {
-                v: {
-                    "zlib": True,
-                    "complevel": self.compression_level,
-                }
-                for v in dataset.data_vars
-            }
             rounded_data_vars = {
                 name: data.round(decimals=digits)
                 if np.issubdtype(data.dtype, np.number) else data
@@ -857,10 +852,24 @@ class TEAIndicators:
             }
             rounded = dataset.assign(rounded_data_vars)
             logger.debug(f"Saving rounded dataset to {output_path}")
-            rounded.to_netcdf(output_path, encoding=encoding)
+            if self.zlib_compression:
+                encoding = {
+                    v: {"zlib": True, "complevel": self.compression_level}
+                    for v in rounded.data_vars
+                }
+                rounded.to_netcdf(output_path, encoding=encoding)
+            else:
+                rounded.to_netcdf(output_path)
         else:
             logger.debug(f"Saving dataset to {output_path} without rounding")
-            dataset.to_netcdf(output_path)
+            if self.zlib_compression:
+                encoding = {
+                    v: {"zlib": True, "complevel": self.compression_level}
+                    for v in dataset.data_vars
+                }
+                dataset.to_netcdf(output_path, encoding=encoding)
+            else:
+                dataset.to_netcdf(output_path)
         logger.debug(f"Serialized NetCDF output {output_path} in {time.perf_counter() - start:.2f}s")
 
     def _is_raster_variable(self, var_data):

@@ -67,6 +67,7 @@ calc_TEA:
   recalc_daily: true
   hourly: false
   compression_level: 1
+  zlib_compression: true
   decadal: true
   recalc_decadal: true
   spreads: true

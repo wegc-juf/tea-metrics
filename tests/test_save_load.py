@@ -9,21 +9,29 @@ from conftest import EXPECTED_CRS
 
 class TestSaveLoadDaily:
     def test_netcdf_compression_level(self, tmp_path, monkeypatch):
-        tea = TEAIndicators(compression_level=1)
-        dataset = xr.Dataset({"value": xr.DataArray([1.0, 2.0], dims="time")})
+        tea = TEAIndicators(compression_level=1, significant_digits=3, zlib_compression=True)
+        dataset = xr.Dataset({"value": xr.DataArray([1.2345, 2.3456], dims="time")})
         calls = []
+        saved_datasets = []
 
         def capture_to_netcdf(self, filepath, encoding=None):
             calls.append(encoding)
+            saved_datasets.append(self)
 
         monkeypatch.setattr(xr.Dataset, "to_netcdf", capture_to_netcdf)
         tea._to_netcdf(dataset, tmp_path / "compressed.nc")
         assert calls[-1]["value"]["complevel"] == 1
         assert calls[-1]["value"]["zlib"] is True
 
-        tea.significant_digits = -1
+        tea.zlib_compression = False
         tea._to_netcdf(dataset, tmp_path / "uncompressed.nc")
         assert calls[-1] is None
+        np.testing.assert_allclose(saved_datasets[-1].value.values, [1.234, 2.346])
+
+        tea.significant_digits = -1
+        tea.zlib_compression = True
+        tea._to_netcdf(dataset, tmp_path / "unrounded_compressed.nc")
+        assert calls[-1]["value"]["zlib"] is True
 
     def test_netcdf_computes_dask_data_before_serialization(self, tmp_path, monkeypatch):
         tea = TEAIndicators(use_dask=True)
