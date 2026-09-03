@@ -95,7 +95,7 @@ The command-line log level can be set with `--loglevel` (or `-ll`): `DEBUG`, `IN
 | *orofile*            | File with orography information of target grid.                                                                                                         | path   | null                                 | KeyVariable_GeographicDomain                                                                                                    |
 | *lsmfile*            | Only necessary if mask for EUR should be created. File with land-sea-mask of target grid.                                                               | path   | null                                 | KeyVariable_GeographicDomain                                                                                                    | 
 
-| *mask_parallel_workers* | Maximum number of worker threads for large polygon-mask intersection jobs. Values from 1 to 32 are allowed. Defaults to *parallel_workers*. | int | 1 | n/a |
+| *mask_parallel_workers* | Maximum number of worker threads for large polygon-mask intersection jobs. Values from 1 to 100 are allowed. Defaults to *parallel_workers*. | int | 1 | n/a |
 | *calculate_area* | Calculate and save full and altitude-filtered mask area grids and their summed sizes. | bool | true | n/a |
 
 ## regrid_SPARTACUS_to_WEGNext
