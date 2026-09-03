@@ -44,9 +44,10 @@ class TestSaveLoadDaily:
                                 for data in self.data_vars.values()))
 
         monkeypatch.setattr(xr.Dataset, "to_netcdf", capture_to_netcdf)
-        tea._to_netcdf(dataset, tmp_path / "computed.nc")
+        computed = tea._to_netcdf(dataset, tmp_path / "computed.nc")
 
         assert observed == [False]
+        assert all(getattr(data.data, "chunks", None) is None for data in computed.data_vars.values())
 
     def test_save_and_load_daily_roundtrip(self, tea_constant, tmp_path):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)

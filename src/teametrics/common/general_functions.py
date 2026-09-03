@@ -332,7 +332,9 @@ def get_gridded_data(start, end, opts, period='annual', hourly=False):
     if opts.dataset == 'SPARTACUS':
         data = data.drop_vars('lambert_conformal_conic')
 
-    data, opts.use_dask = configure_dask_data(data, use_dask=opts.use_dask)
+    data, opts.use_dask = configure_dask_data(
+        data, use_dask=opts.use_dask, dask_workers=getattr(opts, 'dask_workers', None)
+    )
 
     return data
 

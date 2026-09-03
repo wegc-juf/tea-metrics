@@ -433,47 +433,59 @@ class TEAIndicators:
 
     def _calc_DTEEC_legacy(self):
         """
-        Calculate DTEEC with the original row-wise NumPy implementation.
+        Calculate DTEEC eagerly with a vectorized spatial state scan.
 
-        This implementation is retained for compatibility and for small eager
-        calculations where Dask overhead is not useful.
+        Event runs are followed along the time axis for all spatial cells at
+        once, avoiding one Python function call and several allocations per
+        cell.
         """
         if self.daily_results['DTEC'] is None:
             self._calc_DTEC()
         dtec = self.daily_results.DTEC
-
-        dteec = xr.full_like(dtec, np.nan)
-
         if self.gridded:
-            # loop through all rows and calculate DTEEC
-            for iy in range(len(dtec[self.ydim])):
-                dtec_row = dtec.isel({self.ydim: iy})
-                # skip all nan rows
-                if np.isnan(dtec_row.values).all():
-                    continue
-                try:
-                    tdim_idx = dtec_row.dims.index(self.tdim)
-                except ValueError:
-                    raise ValueError(f"Time dimension '{self.tdim}' not found in DTEC data. "
-                                     f"Available dimensions: {dtec_row.dims}")
-                dteec_row = np.apply_along_axis(self._calc_dteec_1d, axis=tdim_idx,
-                                                arr=dtec_row.values)
-
-                try:
-                    ydim_idx = dtec.dims.index(self.ydim)
-                except ValueError:
-                    raise ValueError(f"Y dimension '{self.ydim}' not found in DTEC data. "
-                                     f"Available dimensions: {dtec.dims}")
-                dteec_slice = [slice(None)] * dteec.ndim
-                dteec_slice[ydim_idx] = iy
-                dteec[tuple(dteec_slice)] = dteec_row
+            if self.tdim not in dtec.dims:
+                raise ValueError(f"Time dimension '{self.tdim}' not found in DTEC data. "
+                                 f"Available dimensions: {dtec.dims}")
+            time_axis = dtec.dims.index(self.tdim)
+            dtec_values = dtec.values
+            dteec_values = self._calc_dteec_nd(dtec_values, time_axis=time_axis)
+            y_axis = dtec.dims.index(self.ydim)
+            reduction_axes = tuple(axis for axis in range(dtec.ndim) if axis != y_axis)
+            all_nan_rows = np.isnan(dtec_values).all(axis=reduction_axes)
+            row_selector = [slice(None)] * dtec.ndim
+            row_selector[y_axis] = all_nan_rows
+            dteec_values[tuple(row_selector)] = np.nan
+            dteec = xr.DataArray(dteec_values, coords=dtec.coords, dims=dtec.dims)
         else:
+            dteec = xr.full_like(dtec, np.nan)
             dteec[:] = self._calc_dteec_1d(dtec_cell=dtec.values)
 
         if self.mask is not None and self.apply_mask:
             dteec = dteec.where(self.mask > 0)
         dteec.attrs = get_attrs(vname='DTEEC')
         self.daily_results['DTEEC'] = dteec
+
+    def _calc_dteec_nd(self, dtec, time_axis=0):
+        """Place one event marker at each exceedance run's midpoint."""
+        values = np.moveaxis(np.asarray(dtec), time_axis, 0)
+        flat_values = values.reshape(values.shape[0], -1)
+        events = np.full(flat_values.shape, self.null_val, dtype=values.dtype)
+        active = np.zeros(flat_values.shape[1], dtype=bool)
+        starts = np.empty(flat_values.shape[1], dtype=np.int32)
+
+        for time_index in range(flat_values.shape[0] + 1):
+            current = (flat_values[time_index] == 1) if time_index < flat_values.shape[0] else np.zeros_like(active)
+            ending = active & ~current
+            ending_cells = np.flatnonzero(ending)
+            if ending_cells.size:
+                middle = (starts[ending_cells] + time_index - 1) // 2
+                events[middle, ending_cells] = 1
+            starting = current & ~active
+            starts[starting] = time_index
+            active = current
+
+        events = events.reshape(values.shape)
+        return np.moveaxis(events, 0, time_axis)
 
     def _calc_DTEEC_parallel(self):
         """Calculate DTEEC over spatial chunks using Dask-compatible ufuncs."""
@@ -486,16 +498,17 @@ class TEAIndicators:
                              f"Available dimensions: {dtec.dims}")
 
         dteec = xr.apply_ufunc(
-            self._calc_dteec_1d,
+            lambda values: self._calc_dteec_nd(values, time_axis=-1),
             dtec,
             input_core_dims=[[self.tdim]],
             output_core_dims=[[self.tdim]],
-            vectorize=True,
             dask='parallelized',
             output_dtypes=[dtec.dtype],
             dask_gufunc_kwargs={'allow_rechunk': True},
         )
         dteec = dteec.transpose(*dtec.dims)
+        row_dims = [dim for dim in dtec.dims if dim != self.ydim]
+        dteec = dteec.where(dtec.notnull().any(dim=row_dims))
         if self.mask is not None and self.apply_mask:
             dteec = dteec.where(self.mask > 0)
         dteec.attrs = get_attrs(vname='DTEEC')
@@ -811,7 +824,7 @@ class TEAIndicators:
                 if save_tiff:
                     self._save_geotiff(filepath, variables)
                 logger.info(f"Saving daily results to {filepath}")
-                self._to_netcdf(dataset=self.daily_results, filepath=filepath)
+                self.daily_results = self._to_netcdf(dataset=self.daily_results, filepath=filepath)
             except PermissionError as err:
                 if not DEBUG:
                     raise err
@@ -820,7 +833,7 @@ class TEAIndicators:
                 filepath = os.path.join('/tmp/', filename)
                 if os.path.exists(filepath):
                     os.remove(filepath)
-                self._to_netcdf(dataset=self.daily_results, filepath=filepath)
+                self.daily_results = self._to_netcdf(dataset=self.daily_results, filepath=filepath)
 
     def _to_netcdf(self, dataset: Dataset, filepath):
         """
@@ -871,6 +884,7 @@ class TEAIndicators:
             else:
                 dataset.to_netcdf(output_path)
         logger.debug(f"Serialized NetCDF output {output_path} in {time.perf_counter() - start:.2f}s")
+        return dataset
 
     def _is_raster_variable(self, var_data):
         """
@@ -2658,10 +2672,26 @@ class TEAIndicators:
                 self._daily_results_filtered[var] = self._daily_results_filtered[var].where(
                     self._daily_results_filtered[var] > 0)
 
-        # resample to CTP
-        CTP_resampler = self._daily_results_filtered.resample(time=self.CTP_freqs[self.CTP])
-        self._CTP_resample_mean = CTP_resampler.mean('time', skipna=True)
-        self._CTP_resample_sum = CTP_resampler.sum('time', skipna=False)
+        mean_vars = [
+            var for var in ('Nhours', 'Nhours_GR', 'h_rise', 'h_rise_GR', 'h_set', 'h_set_GR')
+            if var in self._daily_results_filtered
+        ]
+        sum_vars = [
+            var for var in (
+                'DTEEC', 'DTEC', 'DTEEC_GR', 'DTEC_GR', 'DTEM', 'DTEM_GR',
+                'DTEM_Max_GR', 'DTEMA_GR', 'DTEMA', 'DTEMP_GR', 'DTEMP', 'DTEA',
+            )
+            if var in self._daily_results_filtered
+        ]
+        frequency = self.CTP_freqs[self.CTP]
+        self._CTP_resample_mean = (
+            self._daily_results_filtered[mean_vars].resample(time=frequency).mean('time', skipna=True)
+            if mean_vars else xr.Dataset()
+        )
+        self._CTP_resample_sum = (
+            self._daily_results_filtered[sum_vars].resample(time=frequency).sum('time', skipna=False)
+            if sum_vars else xr.Dataset()
+        )
 
         # dask does not support median for resampling so resample only what is necessary
         self._CTP_resample_median = xr.Dataset()

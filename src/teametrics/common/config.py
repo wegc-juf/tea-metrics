@@ -165,6 +165,8 @@ def _get_default_opts(fname, opts):
     # general options
     if 'use_dask' not in opts:
         opts.use_dask = 'auto'
+    if 'dask_workers' not in opts:
+        opts.dask_workers = None
 
     # calc_TEA.py options
     if fname == 'calc_TEA':
@@ -308,6 +310,7 @@ def check_type(key, value):
 
         # general options
         'use_dask': (bool, str),
+        'dask_workers': int,
 
         # calc_TEA.py
         'recalc_threshold': bool,
@@ -370,6 +373,8 @@ def check_type(key, value):
                                          f'but got {value} of type {type(value)} instead.')
     if key == 'use_dask' and isinstance(value, str) and value != 'auto':
         raise argparse.ArgumentTypeError("use_dask must be True, False, or 'auto'.")
+    if key == 'dask_workers' and not 1 <= value <= 64:
+        raise argparse.ArgumentTypeError("dask_workers must be between 1 and 64.")
     if key == 'compression_level' and not 0 <= value <= 9:
         raise argparse.ArgumentTypeError("compression_level must be between 0 and 9.")
     if key == 'parallel_workers' and not 1 <= value <= 4:

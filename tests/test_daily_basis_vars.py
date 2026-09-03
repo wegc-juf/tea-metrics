@@ -77,9 +77,32 @@ class TestCalcDTEM:
 
 
 class TestCalcDTEEC:
+    def test_DTEEC_nd_matches_1d_reference(self, tea_constant):
+        dtec = np.array([
+            [[1, 0, np.nan], [0, 1, 1]],
+            [[1, 1, np.nan], [0, 1, 0]],
+            [[0, 1, 1], [1, 1, 0]],
+            [[1, 1, 1], [1, 0, 1]],
+        ])
+        expected = np.apply_along_axis(tea_constant._calc_dteec_1d, 0, dtec)
+
+        result = tea_constant._calc_dteec_nd(dtec)
+
+        np.testing.assert_array_equal(result, expected)
+
+    def test_DTEEC_legacy_preserves_all_nan_rows(self, tea_constant):
+        tea_constant._calc_DTEM()
+        tea_constant._calc_DTEC()
+        tea_constant.daily_results['DTEC'][{tea_constant.ydim: 0}] = np.nan
+
+        tea_constant._calc_DTEEC_legacy()
+
+        assert tea_constant.daily_results.DTEEC.isel({tea_constant.ydim: 0}).isnull().all()
+
     def test_DTEEC_parallel_matches_legacy(self, tea_constant):
         tea_constant._calc_DTEM()
         tea_constant._calc_DTEC()
+        tea_constant.daily_results['DTEC'][{tea_constant.ydim: 0}] = np.nan
         tea_constant._calc_DTEEC_legacy()
         legacy = tea_constant.daily_results.DTEEC.copy()
 

@@ -74,3 +74,4 @@ calc_TEA:
   decadal_only: false
   parallel_workers: 1
   use_dask: auto
+  dask_workers: null

@@ -14,7 +14,7 @@ _MIB = 1024 ** 2
 _GIB = 1024 ** 3
 
 
-def configure_dask(data, use_dask='auto'):
+def configure_dask(data, use_dask='auto', dask_workers=None):
     """
     Resolve Dask usage and configure the local threaded scheduler.
 
@@ -41,7 +41,10 @@ def configure_dask(data, use_dask='auto'):
 
     workers_by_memory = max(1, available_memory // _GIB)
     worker_cap = 64 if use_dask is True else 16
-    workers = min(cpu_count, workers_by_memory, worker_cap)
+    if dask_workers is not None and dask_workers < 1:
+        raise ValueError("dask_workers must be at least 1")
+    workers = min(cpu_count, workers_by_memory, worker_cap,
+                  dask_workers if dask_workers is not None else worker_cap)
     dask.config.set(scheduler='threads', num_workers=workers)
     logger.info(f"Dask enabled with {workers} threaded workers "
                 f"({available_memory / _GIB:.1f} GiB available, "
@@ -49,7 +52,7 @@ def configure_dask(data, use_dask='auto'):
     return True
 
 
-def configure_dask_data(data, use_dask='auto'):
+def configure_dask_data(data, use_dask='auto', dask_workers=None):
     """Return data with resource-aware Dask settings applied."""
     if use_dask is False:
         start = time.perf_counter()
@@ -57,7 +60,7 @@ def configure_dask_data(data, use_dask='auto'):
         logger.info(f"Loaded input data eagerly in {time.perf_counter() - start:.2f}s")
         return data, False
 
-    resolved = configure_dask(data, use_dask=use_dask)
+    resolved = configure_dask(data, use_dask=use_dask, dask_workers=dask_workers)
     if not resolved:
         start = time.perf_counter()
         data.load()

@@ -26,15 +26,15 @@ def _opts():
     )
 
 
-def test_mask_parallel_workers_allows_ceiling_32():
-    check_type('mask_parallel_workers', 32)
+def test_mask_parallel_workers_allows_ceiling_100():
+    check_type('mask_parallel_workers', 100)
 
     try:
-        check_type('mask_parallel_workers', 33)
+        check_type('mask_parallel_workers', 101)
     except argparse.ArgumentTypeError:
         pass
     else:
-        raise AssertionError('mask_parallel_workers should be capped at 32')
+        raise AssertionError('mask_parallel_workers should be capped at 100')
 
 
 def test_create_mask_file_includes_last_row_and_column(monkeypatch):
