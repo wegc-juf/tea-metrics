@@ -1556,7 +1556,7 @@ class TEAIndicators:
         """
         calculate maximum event extremity per CTP with a minimum event duration.
         """
-        logger.info(f"Calculating {metric_label} per CTP...")
+        logger.debug(f"Calculating {metric_label} per CTP...")
         if self.CTP is None:
             return
         if self._CTP_resample_sum is None:
