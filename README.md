@@ -18,6 +18,11 @@ Then, install or upgrade the package using `pip`:
 pip install https://wegenernet.org/downloads/teametrics/teametrics-0.12.0-py3-none-any.whl
 ```
 
+For ICON/GRIB processing, install the optional `grib` dependencies:
+```bash
+pip install "teametrics[grib] @ https://wegenernet.org/downloads/teametrics/teametrics-0.12.0-py3-none-any.whl"
+```
+
 ## Usage
 
 ### 1) Download of input datasets
