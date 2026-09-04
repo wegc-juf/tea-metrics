@@ -99,6 +99,15 @@ class TestCalcDTEEC:
 
         assert tea_constant.daily_results.DTEEC.isel({tea_constant.ydim: 0}).isnull().all()
 
+    def test_DTEEC_legacy_accepts_integer_data(self, tea_constant):
+        tea_constant.daily_results['DTEC'] = xr.ones_like(tea_constant.input_data, dtype=np.int16)
+
+        tea_constant._calc_DTEEC_legacy()
+
+        assert tea_constant.daily_results.DTEEC.dtype == np.dtype('int16')
+        assert tea_constant.daily_results.DTEEC.sum() == tea_constant.input_data.isel(
+            {tea_constant.tdim: 0}).size
+
     def test_DTEEC_parallel_matches_legacy(self, tea_constant):
         tea_constant._calc_DTEM()
         tea_constant._calc_DTEC()

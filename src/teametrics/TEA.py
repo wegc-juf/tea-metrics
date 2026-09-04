@@ -473,9 +473,10 @@ class TEAIndicators:
             y_axis = dtec.dims.index(self.ydim)
             reduction_axes = tuple(axis for axis in range(dtec.ndim) if axis != y_axis)
             all_nan_rows = np.isnan(dtec_values).all(axis=reduction_axes)
-            row_selector = [slice(None)] * dtec.ndim
-            row_selector[y_axis] = all_nan_rows
-            dteec_values[tuple(row_selector)] = np.nan
+            if all_nan_rows.any():
+                row_selector = [slice(None)] * dtec.ndim
+                row_selector[y_axis] = all_nan_rows
+                dteec_values[tuple(row_selector)] = np.nan
             dteec = xr.DataArray(dteec_values, coords=dtec.coords, dims=dtec.dims)
         else:
             dteec = xr.full_like(dtec, np.nan)
