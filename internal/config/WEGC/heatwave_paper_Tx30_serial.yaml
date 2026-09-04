@@ -10,7 +10,7 @@ common_params:
     low_extreme: false
     file_format: GeoTiff
     # file_format: NetCDF4
-    significant_digits: 3
+    rounding_decimal_places: 3
   time_params: &TIME
     start: 1961
     end: 2026

@@ -124,8 +124,15 @@ def _get_default_opts(fname, opts):
         opts.low_extreme = False
     if 'min_exceedance_area' not in opts:
         opts.min_exceedance_area = 1
-    if 'significant_digits' not in opts:
-        opts.significant_digits = 3
+    if 'significant_digits' in opts:
+        if 'rounding_decimal_places' in opts:
+            raise ValueError("Set only rounding_decimal_places; significant_digits is deprecated.")
+        warnings.warn("significant_digits is deprecated; use rounding_decimal_places instead.",
+                      DeprecationWarning, stacklevel=2)
+        opts.rounding_decimal_places = opts.significant_digits
+        delattr(opts, 'significant_digits')
+    elif 'rounding_decimal_places' not in opts:
+        opts.rounding_decimal_places = 3
     if 'compression_level' not in opts:
         opts.compression_level = 1
     if 'zlib_compression' not in opts:
@@ -284,7 +291,7 @@ def check_type(key, value):
         'low_extreme': bool,
         'min_exceedance_area': float,
         'min_duration': float,
-        'significant_digits': int,
+        'rounding_decimal_places': int,
         'compression_level': int,
         'zlib_compression': bool,
         'file_format': str,

@@ -34,12 +34,24 @@ class TEAIndicators:
     Preprint – April 2025. 40 pp. Wegener Center, University of Graz, Graz, Austria, 2025.
     """
 
+    @property
+    def significant_digits(self):
+        warnings.warn("significant_digits is deprecated; use rounding_decimal_places instead.",
+                      DeprecationWarning, stacklevel=2)
+        return self.rounding_decimal_places
+
+    @significant_digits.setter
+    def significant_digits(self, value):
+        warnings.warn("significant_digits is deprecated; use rounding_decimal_places instead.",
+                      DeprecationWarning, stacklevel=2)
+        self.rounding_decimal_places = value
+
     def __init__(self, input_data=None, threshold=None, min_area=1., area_grid=None,
                  population_grid=None,
                  low_extreme=False,
-                 unit='', mask=None, apply_mask=True, ctp=None, use_dask=False, significant_digits: int = 2,
+                 unit='', mask=None, apply_mask=True, ctp=None, use_dask=False, significant_digits: int = None,
                  compression_level: int = 1, zlib_compression: bool = True,
-                 ref_period=(1961, 1990), **kwargs):
+                 ref_period=(1961, 1990), rounding_decimal_places: int = None, **kwargs):
         """
         Initialize TEAIndicators object
         Args:
@@ -54,8 +66,9 @@ class TEAIndicators:
             mask: mask grid for input data containing nan values for cells that should be masked. Default: None
             ctp: Climatic Time Period (CTP) to resample to. For allowed values see set_ctp method. Default: None
             use_dask: use dask for calculations. Default: False
-            significant_digits: least significant digits for netCDF output compression. If -1, no rounding is
-            applied. Default: 2
+            significant_digits: deprecated alias for rounding_decimal_places
+            rounding_decimal_places: decimal places retained in NetCDF output. If -1, no rounding is applied.
+                                     Default: 2
             zlib_compression: use zlib compression when writing NetCDF output. Default: True
         """
         if threshold is not None and isinstance(threshold, (int, float)):
@@ -67,7 +80,15 @@ class TEAIndicators:
                 raise ValueError("Either input_data grid or mask must be provided for using a fixed threshold!")
         self.threshold_grid = threshold
 
-        self.significant_digits = significant_digits
+        if significant_digits is not None:
+            if rounding_decimal_places is not None:
+                raise ValueError("Set only rounding_decimal_places; significant_digits is deprecated.")
+            warnings.warn("significant_digits is deprecated; use rounding_decimal_places instead.",
+                          DeprecationWarning, stacklevel=2)
+            rounding_decimal_places = significant_digits
+        if rounding_decimal_places is None:
+            rounding_decimal_places = 2
+        self.rounding_decimal_places = rounding_decimal_places
         if not 0 <= compression_level <= 9:
             raise ValueError("compression_level must be between 0 and 9")
         self.compression_level = compression_level
@@ -710,8 +731,10 @@ class TEAIndicators:
             self._calc_DTEP()
         if 'DTEP' not in self.daily_results:
             return
-        dtep = self.daily_results.DTEP
-        dtep_gr = dtep.sum(dim=(self.xdim, self.ydim), skipna=True)
+        # Apply the unit conversion after reduction so eager and Dask do not
+        # round cell-level quotients in different summation orders.
+        dtep_gr = (self.daily_results.DTEC * self.population_grid).sum(
+            dim=(self.xdim, self.ydim), skipna=True) / 10000
         dtep_gr.attrs = get_attrs(vname='DTEP_GR')
         dtep_gr = dtep_gr.rename('DTEP_GR')
         self.daily_results['DTEP_GR'] = dtep_gr
@@ -846,7 +869,7 @@ class TEAIndicators:
         Returns:
 
         """
-        digits = self.significant_digits
+        digits = self.rounding_decimal_places
         if any(getattr(data.data, 'chunks', None) is not None for data in dataset.data_vars.values()):
             logger.debug("Dataset contains dask arrays; computing data before saving to netCDF")
             start = time.perf_counter()
@@ -857,34 +880,51 @@ class TEAIndicators:
         output_path = filepath
         start = time.perf_counter()
         if digits >= 0:
-            logger.debug(f"Rounding all data to {digits} significant digits")
-            rounded_data_vars = {
-                name: data.round(decimals=digits)
-                if np.issubdtype(data.dtype, np.number) else data
-                for name, data in dataset.data_vars.items()
-            }
-            rounded = dataset.assign(rounded_data_vars)
-            logger.debug(f"Saving rounded dataset to {output_path}")
-            if self.zlib_compression:
-                encoding = {
-                    v: {"zlib": True, "complevel": self.compression_level}
-                    for v in rounded.data_vars
-                }
-                rounded.to_netcdf(output_path, encoding=encoding)
-            else:
-                rounded.to_netcdf(output_path)
+            logger.debug(f"Rounding all data to {digits} decimal places")
+            rounded_data_vars = {}
+            for name, data in dataset.data_vars.items():
+                output_data = data.round(decimals=digits) if np.issubdtype(data.dtype, np.number) else data
+                if (digits <= 3 and np.issubdtype(output_data.dtype, np.floating)
+                        and self.xdim in output_data.dims and self.ydim in output_data.dims):
+                    if self._float32_preserves_rounding(output_data, digits):
+                        output_data = output_data.astype(np.float32)
+                    else:
+                        logger.warning(f"Keeping {name} as float64 because float32 cannot preserve "
+                                       f"{digits} decimal places over its value range")
+                rounded_data_vars[name] = output_data
+            output_dataset = dataset.assign(rounded_data_vars)
         else:
-            logger.debug(f"Saving dataset to {output_path} without rounding")
+            output_dataset = dataset
+
+        encoding = {}
+        for name, data in output_dataset.data_vars.items():
+            var_encoding = {}
             if self.zlib_compression:
-                encoding = {
-                    v: {"zlib": True, "complevel": self.compression_level}
-                    for v in dataset.data_vars
-                }
-                dataset.to_netcdf(output_path, encoding=encoding)
-            else:
-                dataset.to_netcdf(output_path)
+                var_encoding.update(zlib=True, complevel=self.compression_level)
+            if var_encoding:
+                encoding[name] = var_encoding
+
+        logger.debug(f"Saving dataset to {output_path}")
+        output_dataset.to_netcdf(output_path, encoding=encoding or None)
         logger.debug(f"Serialized NetCDF output {output_path} in {time.perf_counter() - start:.2f}s")
         return dataset
+
+    @staticmethod
+    def _float32_preserves_rounding(data, decimal_places):
+        values = data.values
+        if values.size == 0:
+            return True
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', RuntimeWarning)
+            minimum = np.nanmin(values)
+            maximum = np.nanmax(values)
+        if np.isnan(minimum) and np.isnan(maximum):
+            return True
+        if not np.isfinite(minimum) or not np.isfinite(maximum):
+            return False
+        max_abs = max(abs(minimum), abs(maximum))
+        float32_spacing = abs(float(np.spacing(np.float32(max_abs))))
+        return float32_spacing / 2 <= 0.5 * 10 ** -decimal_places
 
     def _is_raster_variable(self, var_data):
         """

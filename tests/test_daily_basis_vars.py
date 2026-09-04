@@ -169,10 +169,23 @@ class TestCalcDTEPGR:
 
     def test_DTEP_GR_is_sum_over_space(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
-        expected = tea_constant.daily_results.DTEP.sum(
-            dim=(tea_constant.xdim, tea_constant.ydim), skipna=True).values
+        expected = (tea_constant.daily_results.DTEC * tea_constant.population_grid).sum(
+            dim=(tea_constant.xdim, tea_constant.ydim), skipna=True).values / 10000
         np.testing.assert_array_equal(
             tea_constant.daily_results.DTEP_GR.values, expected)
+
+    def test_DTEP_GR_dask_matches_eager_at_rounding_boundary(self, tea_constant):
+        tea_constant.population_grid[:] = [[5278382, 1], [1, 1]]
+        tea_constant.calc_daily_basis_vars(grid=True, gr=False)
+        tea_constant._calc_DTEP_GR()
+        eager = tea_constant.daily_results.DTEP_GR.copy()
+
+        tea_constant.daily_results = tea_constant.daily_results.drop_vars('DTEP_GR')
+        tea_constant.daily_results['DTEC'] = tea_constant.daily_results.DTEC.chunk(
+            {tea_constant.ydim: 1, tea_constant.xdim: 1})
+        tea_constant._calc_DTEP_GR()
+
+        xr.testing.assert_identical(tea_constant.daily_results.DTEP_GR.compute(), eager)
 
     def test_DTEP_GR_skipped_without_population(self, tea_constant_no_pop):
         tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)

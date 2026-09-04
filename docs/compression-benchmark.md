@@ -1,7 +1,7 @@
 # NetCDF Compression Benchmark
 
 Benchmark of the first `calc_TEA` calculation from the SPARTACUS workflow
-(`Tx30`, 2021-2026, `significant_digits: 3`, `compression_level: 1`). The
+(`Tx30`, 2021-2026, `rounding_decimal_places: 3`, `compression_level: 1`). The
 compressed cases used `zlib_compression: true`; the uncompressed cases used
 `zlib_compression: false`.
 

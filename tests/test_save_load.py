@@ -3,13 +3,27 @@ import pandas as pd
 import xarray as xr
 import dask
 import dask.array as da
+import pytest
 from teametrics.TEA import TEAIndicators
 from conftest import EXPECTED_CRS
 
 
 class TestSaveLoadDaily:
+    def test_significant_digits_alias(self):
+        with pytest.warns(DeprecationWarning):
+            tea = TEAIndicators(significant_digits=4)
+        assert tea.rounding_decimal_places == 4
+
+        with pytest.warns(DeprecationWarning):
+            tea.significant_digits = 2
+        assert tea.rounding_decimal_places == 2
+
+    def test_rounding_alias_conflict_is_rejected(self):
+        with pytest.raises(ValueError, match="Set only rounding_decimal_places"):
+            TEAIndicators(significant_digits=2, rounding_decimal_places=3)
+
     def test_netcdf_compression_level(self, tmp_path, monkeypatch):
-        tea = TEAIndicators(compression_level=1, significant_digits=3, zlib_compression=True)
+        tea = TEAIndicators(compression_level=1, rounding_decimal_places=3, zlib_compression=True)
         dataset = xr.Dataset({"value": xr.DataArray([1.2345, 2.3456], dims="time")})
         calls = []
         saved_datasets = []
@@ -28,10 +42,38 @@ class TestSaveLoadDaily:
         assert calls[-1] is None
         np.testing.assert_allclose(saved_datasets[-1].value.values, [1.234, 2.346])
 
-        tea.significant_digits = -1
+        tea.rounding_decimal_places = -1
         tea.zlib_compression = True
         tea._to_netcdf(dataset, tmp_path / "unrounded_compressed.nc")
         assert calls[-1]["value"]["zlib"] is True
+
+    def test_spatial_float_output_uses_safe_float32_encoding(self, tmp_path, monkeypatch):
+        tea = TEAIndicators(rounding_decimal_places=3, zlib_compression=False)
+        dataset = xr.Dataset({"value": xr.DataArray(
+            [[1.2345, 2.3456]], dims=("lat", "lon"))})
+        calls = []
+
+        def capture_to_netcdf(self, filepath, encoding=None):
+            calls.append((encoding, self.value.dtype))
+
+        monkeypatch.setattr(xr.Dataset, "to_netcdf", capture_to_netcdf)
+        tea._to_netcdf(dataset, tmp_path / "float32.nc")
+
+        assert calls == [(None, np.dtype("float32"))]
+
+    def test_spatial_float_output_keeps_float64_when_precision_is_unsafe(self, tmp_path, monkeypatch):
+        tea = TEAIndicators(rounding_decimal_places=3, zlib_compression=False)
+        dataset = xr.Dataset({"value": xr.DataArray(
+            [[16384.001, 16384.002]], dims=("lat", "lon"))})
+        calls = []
+
+        def capture_to_netcdf(self, filepath, encoding=None):
+            calls.append(encoding)
+
+        monkeypatch.setattr(xr.Dataset, "to_netcdf", capture_to_netcdf)
+        tea._to_netcdf(dataset, tmp_path / "float64.nc")
+
+        assert calls == [None]
 
     def test_netcdf_computes_dask_data_before_serialization(self, tmp_path, monkeypatch):
         tea = TEAIndicators(use_dask=True)
@@ -57,6 +99,8 @@ class TestSaveLoadDaily:
         tea2.load_daily_results(path)
         for var in tea_constant.daily_results.data_vars:
             assert var in tea2.daily_results
+        assert tea2.daily_results.DTEM.dtype == np.dtype("float32")
+        assert tea2.daily_results.DTEM_GR.dtype == np.dtype("float64")
 
     def test_save_daily_with_tiff(self, tea_constant, tmp_path):
         tea_constant.calc_daily_basis_vars(grid=True, gr=False)

@@ -43,22 +43,22 @@ def calc_tea_indicators(opts):
     Args:
         opts: options as defined in CFG-PARAMS-doc.md and TEA_CFG_DEFAULT.yaml
     """
-
+    
     # load mask if needed
     if 'maskpath' in opts and 'station' not in opts:
         mask, area_grid = _load_mask_file(opts, include_area=True)
     else:
         mask = None
         area_grid = None
-
+    
     # calculate daily and annual climatic time period indicators
     if not opts.decadal_only:
-
+        
         # load threshold grid or set threshold value
         if 'station' not in opts:
             gridded = True
             threshold_grid = _get_threshold(opts)
-
+            
             # do calcs in chunks of 10 years for gridded data
             starts = np.arange(opts.start, opts.end, 10)
             ends = np.append(np.arange(opts.start + 10 - 1, opts.end, 10), opts.end)
@@ -67,7 +67,7 @@ def calc_tea_indicators(opts):
             threshold_grid = None
             starts = [opts.start]
             ends = [opts.end]
-
+        
         chunks = list(zip(starts, ends))
         if (getattr(opts, 'parallel_workers', 1) > 1 and gridded and len(chunks) > 1
                 and 'agr' not in opts):
@@ -82,25 +82,25 @@ def calc_tea_indicators(opts):
             logger.info('Only one decade requested. Calculating daily/CTP indicators in one process.')
             for p_start, p_end in chunks:
                 _calculate_chunk(opts, mask, threshold_grid, gridded, int(p_start), int(p_end), area_grid)
-
+    
     # calculate decadal indicators and amplification factors
     if opts.decadal or opts.decadal_only or opts.recalc_decadal:
         if 'agr' in opts:
             tea = TEAAgr(mask=mask, gr_grid_res=opts.grg_grid_spacing,
-                         significant_digits=opts.significant_digits, ref_period=opts.ref_period,
+                         rounding_decimal_places=opts.rounding_decimal_places, ref_period=opts.ref_period,
                          agr_frac_min=opts.agr_frac_min, min_duration=opts.min_duration,
                          land_frac_min=opts.land_frac_min, zlib_compression=opts.zlib_compression)
         else:
-            tea = TEAIndicators(significant_digits=opts.significant_digits, ref_period=opts.ref_period,
+            tea = TEAIndicators(rounding_decimal_places=opts.rounding_decimal_places, ref_period=opts.ref_period,
                                 use_dask=opts.use_dask, compression_level=opts.compression_level,
                                 zlib_compression=opts.zlib_compression)
-
+        
         # calculate decadal-mean ctp indicator variables
         calc_decadal_indicators(opts=opts, tea=tea)
-
+        
         # calculate amplification factors
         calc_amplification_factors(opts=opts, tea=tea)
-
+        
         # calculate AGR variables
         if 'agr' in opts:
             _load_or_generate_gr_grid_static(opts, tea)
@@ -122,7 +122,7 @@ def _calculate_chunk_worker(opts, start, end):
 def _calculate_chunk(opts, mask, threshold, gridded, start, end, area_grid=None):
     """Calculate and save daily and CTP results for one time chunk."""
     tea = calc_dbv_indicators(mask=mask, opts=opts, start=start, end=end,
-                               gridded=gridded, threshold=threshold, area_grid=area_grid)
+                              gridded=gridded, threshold=threshold, area_grid=area_grid)
     if 'agr' in opts:
         _load_or_generate_gr_grid_static(opts, tea)
     calc_annual_ctp_indicators(tea=tea, opts=opts, start=start, end=end)
@@ -135,7 +135,6 @@ def _get_chunk_workers(chunk_count, max_workers=4):
     available_memory = max(1, psutil.virtual_memory().available)
     workers_by_memory = max(1, available_memory // (32 * 1024 ** 3))
     return min(chunk_count, max(1, cpu_count // 4), workers_by_memory, max_workers, 4)
-
 
 
 def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, area_grid=None):
@@ -158,9 +157,9 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
     dbv_outpath = f'{opts.outpath}/daily_basis_variables'
     if not os.path.exists(dbv_outpath):
         os.makedirs(dbv_outpath)
-
+    
     logger.info(f'Calculating TEA indicators for years {start}-{end}.')
-
+    
     # use either TEAIndicators or TEAAgr class depending on the options
     if 'agr' in opts:
         agr_str = f'AGR-'
@@ -168,16 +167,16 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
     else:
         agr_str = ''
         TEA_class_obj = TEAIndicators
-
+    
     population_grid = _load_population_grid(opts)
-
+    
     # load land-sea mask for AGR
     if 'agr' in opts and 'maskpath' in opts:
         # load land-sea mask for AGR
         lsm = _load_lsm_file(opts)
     else:
         lsm = None
-
+    
     # DBV can't be the same for AGR and non-AGR (AGR is always without mask and has margins) so optionally add agr_str
     if gridded:
         name = opts.region
@@ -186,10 +185,10 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
     dbv_filename = (f'{dbv_outpath}/'
                     f'DBV_{opts.param_str}_{agr_str}{name}_annual_{opts.dataset}'
                     f'_{start}to{end}.nc')
-
+    
     # recalculate daily basis variables if needed
     if opts.recalc_daily or not os.path.exists(dbv_filename):
-
+        
         # always calculate annual basis variables to later extract sub-annual values
         period = 'annual'
         if gridded:
@@ -197,7 +196,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
         else:
             data = get_csv_data(opts)
             threshold = create_threshold_grid(opts, data=data)
-
+        
         # reduce extent of data to the region of interest
         # TODO: use this also for non-AGR and test
         if 'agr' in opts:
@@ -206,44 +205,44 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
                 data, mask, threshold = reduced
             else:
                 data, mask, threshold, population_grid = reduced
-
+        
         if opts.primary_threshold is not None:
             logger.info(f'Applying primary threshold of {opts.primary_threshold} to input data')
             if opts.low_extreme:
                 data = data.where(data <= opts.primary_threshold, opts.threshold)
             else:
                 data = data.where(data >= opts.primary_threshold, opts.threshold)
-
+        
         if not os.path.exists(dbv_filename):
             logger.info(f'Daily basis variable file {dbv_filename} not found. '
                         'Daily basis variables will be calculated.')
         else:
             logger.info('recalc_daily is set: Daily basis variables will be recalculated. Period set to annual.')
-
+        
         # set min area to < 1 grid cell area so that all exceedance days are considered
         min_area = 0.0001
-
+        
         # initialize TEA object
         if 'agr' in opts:
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 population_grid=population_grid,
                                 min_area=min_area, low_extreme=opts.low_extreme,
-                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                  use_dask=opts.use_dask,
-                                  compression_level=opts.compression_level,
-                                 cell_size_y=opts.agr_cell_size,
-                                 significant_digits=opts.significant_digits, agr_frac_min=opts.agr_frac_min,
-                                 land_frac_min=opts.land_frac_min, min_duration=opts.min_duration,
-                                 zlib_compression=opts.zlib_compression)
+                                unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
+                                use_dask=opts.use_dask,
+                                compression_level=opts.compression_level,
+                                cell_size_y=opts.agr_cell_size,
+                                rounding_decimal_places=opts.rounding_decimal_places, agr_frac_min=opts.agr_frac_min,
+                                land_frac_min=opts.land_frac_min, min_duration=opts.min_duration,
+                                zlib_compression=opts.zlib_compression)
         else:
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
                                 population_grid=population_grid,
-                                 min_area=min_area, low_extreme=opts.low_extreme,
-                                  unit=opts.unit, area_grid=area_grid, land_sea_mask=lsm,
-                                 significant_digits=opts.significant_digits,
-                                 use_dask=opts.use_dask, compression_level=opts.compression_level,
-                                 zlib_compression=opts.zlib_compression)
-
+                                min_area=min_area, low_extreme=opts.low_extreme,
+                                unit=opts.unit, area_grid=area_grid, land_sea_mask=lsm,
+                                rounding_decimal_places=opts.rounding_decimal_places,
+                                use_dask=opts.use_dask, compression_level=opts.compression_level,
+                                zlib_compression=opts.zlib_compression)
+        
         # computation of daily basis variables (Methods chapter 3)
         if gridded:
             gr = True
@@ -252,16 +251,16 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
         start_calc = time.perf_counter()
         tea.calc_daily_basis_vars(gr=gr)
         logger.info(f"Calculated daily basis variables in {time.perf_counter() - start_calc:.2f}s")
-
+        
         # calculate hourly indicators
         if opts.hourly:
             _calc_hourly_indicators(tea=tea, opts=opts, start=start, end=end)
-
+        
         # Daily calculations no longer need the full input time series. Release
         # it before serializing daily results, which creates rounded copies.
         tea.input_data = None
         gc.collect()
-
+        
         # save results
         create_tea_history(cfg_params=opts, tea=tea, dataset='daily_results')
         tea.save_daily_results(filepath=dbv_filename, save_tiff=opts.file_format == 'GeoTiff')
@@ -278,15 +277,15 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
                                 low_extreme=opts.low_extreme,
                                 population_grid=population_grid,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                 cell_size_y=opts.agr_cell_size,
-                                 significant_digits=opts.significant_digits, agr_frac_min=opts.agr_frac_min,
-                                 zlib_compression=opts.zlib_compression)
+                                cell_size_y=opts.agr_cell_size,
+                                rounding_decimal_places=opts.rounding_decimal_places, agr_frac_min=opts.agr_frac_min,
+                                zlib_compression=opts.zlib_compression)
         else:
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
                                 population_grid=population_grid,
-                                 unit=opts.unit,
-                                 land_sea_mask=lsm, significant_digits=opts.significant_digits,
-                                 zlib_compression=opts.zlib_compression)
+                                unit=opts.unit,
+                                land_sea_mask=lsm, rounding_decimal_places=opts.rounding_decimal_places,
+                                zlib_compression=opts.zlib_compression)
         logger.info(
             f'Loading daily basis variables from {dbv_filename}; if you want to recalculate them, '
             'set --recalc-daily.')
@@ -303,7 +302,7 @@ def calc_annual_ctp_indicators(tea, opts, start, end):
         start: start year
         end: end year
     """
-
+    
     if 'station' not in opts:
         # apply criterion that DTEA_GR > DTEA_min and all GR variables use same dates,
         # dtea_min is given in areals (1 areal = 100 km2)
@@ -311,17 +310,17 @@ def calc_annual_ctp_indicators(tea, opts, start, end):
         if dtea_min > 0:
             logger.info(f'Applying minimum exceedance area of {dtea_min} areal (100 km2) to all GR variables')
             tea.update_min_area(dtea_min)
-
+    
     if 'agr' in opts:
         tea.land_frac_min = opts.land_frac_min
         tea.min_duration = opts.min_duration
-
+    
     # calculate annual climatic time period indicators
     logger.info('Calculating annual CTP indicators...')
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="invalid value encountered in multiply")
         tea.calc_annual_ctp_indicators(opts.period, drop_daily_results=True)
-
+    
     # save output
     _save_ctp_output(opts=opts, tea=tea, start=start, end=end)
 
@@ -351,11 +350,11 @@ def _get_threshold(opts):
         else:
             logger.info(f'Loading threshold grid from {threshold_file}')
             threshold_grid = xr.open_dataset(threshold_file).threshold
-
+    
     # from now on, only deviations from the threshold are considered ==> set unit to Kelvin
     if opts.unit == 'degC':
         opts.unit = 'K'
-
+    
     return threshold_grid
 
 
@@ -396,7 +395,7 @@ def _load_mask_file(opts, include_area=False):
     if not maskpath.is_file():
         raise FileNotFoundError(maskpath)
     mask_file = xr.open_dataset(maskpath)
-
+    
     mask = mask_file.mask
     if include_area:
         return mask, mask_file.data_vars.get('area_grid')
@@ -413,7 +412,7 @@ def _load_population_grid(opts):
     population_path = getattr(opts, 'population_grid_path', None)
     if population_path is None:
         return None
-
+    
     logger.info(f'Loading population grid from {population_path}')
     population_file = xr.open_dataset(population_path)
     if 'population' in population_file.data_vars:
@@ -449,7 +448,7 @@ def _compare_to_ctp_ref(tea, ctp_filename_ref):
         tea: TEA object
         ctp_filename_ref: reference file
     """
-
+    
     if os.path.exists(ctp_filename_ref):
         logger.info(f'Comparing results to reference file {ctp_filename_ref}')
         tea_ref = TEAIndicators()
@@ -476,11 +475,11 @@ def _save_ctp_output(opts, tea, start, end):
     outpath = _get_ctp_filepath(start, end, opts)
     
     path_ref = outpath.replace('.nc', '_ref.nc')
-
+    
     logger.info(f'Saving CTP indicators to {outpath}')
     tea.save_ctp_results(filepath=outpath, save_tiff=opts.file_format == 'GeoTiff',
                          )
-
+    
     if opts.compare_to_ref:
         _compare_to_ctp_ref(tea, path_ref)
 
@@ -513,7 +512,7 @@ def _get_ctp_filepath(start, end, opts, annual_agr=False) -> str:
     
     if 'station' in opts:
         region = opts.station
-        
+    
     outpath = (f'{opts.outpath}/ctp_indicator_variables/'
                f'CTP_{opts.param_str}_{grg_str}{region}_{opts.period}_{opts.dataset}'
                f'_{start}to{end}.nc')
@@ -538,7 +537,7 @@ def _save_grg_mask(opts, grg_mask, grg_areas):
     except PermissionError:
         os.remove(area_grid_file)
         grg_areas.to_netcdf(area_grid_file)
-
+    
     # save GRG mask
     create_history_from_cfg(cfg_params=opts, ds=grg_mask)
     mask_file = (Path(opts.maskpath) / opts.mask_sub /
@@ -575,7 +574,7 @@ def _load_or_generate_gr_grid_static(opts, tea):
         # set GR grid mask and area grid
         tea.gr_grid_mask = gr_grid_mask
         tea.gr_grid_areas = gr_grid_areas
-
+    
     # set cell_size
     tea.cell_size_y = opts.agr_cell_size
 
@@ -596,28 +595,28 @@ def _calc_x_y_range(cell_size_y, mask):
     """
     x_dim, y_dim = TEAIndicators.find_dim_names(mask)
     valid_cells = mask.where(mask > 0, drop=True)
-
+    
     y_min = math.floor(valid_cells[y_dim].min().values - cell_size_y / 2)
     if y_min < float(mask[y_dim].min().values):
         y_min = float(mask[y_dim].min().values)
     y_max = math.ceil(valid_cells[y_dim].max().values + cell_size_y / 2)
     if y_max > float(mask[y_dim].max().values):
         y_max = float(mask[y_dim].max().values)
-
+    
     if x_dim == 'x' and y_dim == 'y':
         # if coordinates are named x and y, we assume they are in a projected coordinate system and use the same
         # cell size for both dimensions
         cell_size_x = cell_size_y
     else:
         cell_size_x = 1 / np.cos(np.deg2rad(y_max)) * cell_size_y
-
+    
     x_min = math.floor(valid_cells[x_dim].min().values - cell_size_x / 2)
     if x_min < float(mask[x_dim].min().values):
         x_min = float(mask[x_dim].min().values)
     x_max = math.ceil(valid_cells[x_dim].max().values + cell_size_x / 2)
     if x_max > float(mask[x_dim].max().values):
         x_max = float(mask[x_dim].max().values)
-
+    
     return x_min, y_min, x_max, y_max
 
 
@@ -638,7 +637,7 @@ def _reduce_region(opts, data, mask, threshold=None, full_region=False, populati
     """
     cell_size_y = opts.agr_cell_size
     xdim, ydim = TEAIndicators.find_dim_names(mask)
-
+    
     # preselect region to reduce computation time (incl. some margins to avoid boundary effects)
     if full_region:
         y_min = float(mask[ydim].min().values)
@@ -647,14 +646,14 @@ def _reduce_region(opts, data, mask, threshold=None, full_region=False, populati
         x_max = float(mask[xdim].max().values)
     else:
         x_min, y_min, x_max, y_max = _calc_x_y_range(cell_size_y, mask)
-
+    
     if opts.region == 'EUR':
         # hardcoded extent for EUR region
         lons = np.arange(-12, 40.5, opts.grg_grid_spacing)
         cell_size_lon = 1 / np.cos(np.deg2rad(y_max)) * cell_size_y
         x_min = math.floor(lons[0] - cell_size_lon / 2)
         x_max = math.ceil(lons[-1] + cell_size_lon / 2)
-
+    
     # get order of y coordinates
     y_ascending = mask[ydim][1] > mask[ydim][0]
     if not y_ascending:
@@ -666,10 +665,10 @@ def _reduce_region(opts, data, mask, threshold=None, full_region=False, populati
     proc_mask = mask.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
     if threshold is not None and opts.threshold_type != 'abs':
         threshold = threshold.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
-
+    
     if population_grid is not None:
         population_grid = population_grid.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
-
+    
     if population_grid is not None:
         return proc_data, proc_mask, threshold, population_grid
     return proc_data, proc_mask, threshold
@@ -682,28 +681,28 @@ def _getopts():
     Returns:
         opts: command line parameters
     """
-
+    
     parser = argparse.ArgumentParser()
-
+    
     parser.add_argument('--config-file', '-cf',
                         dest='config_file',
                         type=str,
                         default='../TEA_CFG.yaml',
                         help='TEA configuration file (default: TEA_CFG.yaml)')
-
+    
     parser.add_argument('--version', '-v',
                         action='version',
                         version=TEA_VERSION,
                         help='show version and exit')
-
+    
     parser.add_argument('--loglevel', '-ll',
                         type=str.upper,
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
                         default='DEBUG',
                         help='set logging level (default: DEBUG)')
-
+    
     myopts = parser.parse_args()
-
+    
     return myopts
 
 
@@ -722,11 +721,11 @@ def _calc_hourly_indicators(tea, opts, start, end):
     """
     # load data
     data = get_gridded_data(start=start, end=end, opts=opts, hourly=True)
-
+    
     if 'agr' in opts:
         # reduce data to the region of interest
         data, _, _ = _reduce_region(opts, data, tea.mask, full_region=True)
-
+    
     logger.info('Calculating hourly basis variables.')
     # calculate hourly indicators
     tea.calc_hourly_indicators(input_data=data)
@@ -746,7 +745,7 @@ def _calc_agr_mean_and_spread(opts, tea):
     crop_to_shp = False
     agr_x_range = None
     agr_y_range = None
-
+    
     if opts.agr_range is not None:
         agr_x_range = opts.agr_range[-2:]
         agr_y_range = opts.agr_range[:2]
@@ -759,10 +758,10 @@ def _calc_agr_mean_and_spread(opts, tea):
         tea.mask = mask_file
         _load_or_generate_gr_grid_static(agr_opts, tea)
         crop_to_shp = True
-
+    
     tea.calc_agr_vars(y_range=agr_y_range, x_range=agr_x_range, spreads=opts.spreads, crop_to_shp=crop_to_shp,
                       calc_annual=opts.annual_spreads)
-
+    
     # save results
     # # decadal
     outpath_decadal = get_decadal_outpath(opts, opts.agr)
@@ -782,7 +781,7 @@ def _calc_agr_mean_and_spread(opts, tea):
     create_tea_history(cfg_params=opts, tea=tea, dataset='decadal_results')
     tea.save_decadal_results(filepath=outpath_decadal, save_tiff=opts.file_format == 'GeoTiff',
                              )
-
+    
     # # annual
     if opts.annual_spreads:
         filepath_annual = _get_ctp_filepath(opts.start, opts.end, opts, annual_agr=True)
@@ -792,8 +791,8 @@ def _calc_agr_mean_and_spread(opts, tea):
         tea.ctp_results = tea.ctp_results.drop_vars(
             [var for var in tea.ctp_results.data_vars if 'AGR' not in var])
         tea.save_ctp_results(filepath=filepath_annual, save_tiff=opts.file_format == 'GeoTiff',
-                              )
-
+                             )
+    
     # # amplification factors
     outpath_ampl = get_amplification_outpath(opts, opts.agr)
     logger.info(f'Saving AGR amplification factors to {outpath_ampl}')
@@ -844,7 +843,7 @@ def run():
     Returns:
 
     """
-
+    
     # suppress warnings
     warnings.filterwarnings(action='ignore', message='All-NaN slice encountered')
     warnings.filterwarnings(action='ignore', message='divide by zero encountered in divide')
@@ -854,16 +853,16 @@ def run():
     cmd_opts = _getopts()
     set_log_level(cmd_opts.loglevel)
     logger.info(f'Running teametrics version {TEA_VERSION}')
-
+    
     # load CFG parameters
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
-
+    
     # download example file if specified in config
     if 'example' in opts.input_data_path:
         from .TEA_example import dl_example_file
         eRA5_file, example_path = dl_example_file()
         opts.input_data_path = example_path
-
+    
     # calculate TEA indicators
     calc_tea_indicators(opts)
 

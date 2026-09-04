@@ -8,7 +8,7 @@ common_params:
     threshold_type: perc
     unit: degC
     low_extreme: false
-    significant_digits: 3
+    rounding_decimal_places: 3
   time_params: &TIME
     start: 1961
     end: 2024
@@ -49,4 +49,3 @@ create_region_masks:
   shpfile: /data/reloclim/backup/GEO/shapefiles/OEKS15/good/AUSTRIA.shp
   orofile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/ERA5_orography.nc
   lsmfile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/ERA5_LSM.nc
-
