@@ -68,7 +68,7 @@ class TEAIndicators:
             use_dask: use dask for calculations. Default: False
             significant_digits: deprecated alias for rounding_decimal_places
             rounding_decimal_places: decimal places retained in NetCDF output. If -1, no rounding is applied.
-                                     Default: 2
+                                     Default: 3
             zlib_compression: use zlib compression when writing NetCDF output. Default: True
         """
         if threshold is not None and isinstance(threshold, (int, float)):
@@ -87,7 +87,7 @@ class TEAIndicators:
                           DeprecationWarning, stacklevel=2)
             rounding_decimal_places = significant_digits
         if rounding_decimal_places is None:
-            rounding_decimal_places = 2
+            rounding_decimal_places = 3
         self.rounding_decimal_places = rounding_decimal_places
         if not 0 <= compression_level <= 9:
             raise ValueError("compression_level must be between 0 and 9")
