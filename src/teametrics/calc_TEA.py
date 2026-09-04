@@ -698,9 +698,9 @@ def _getopts():
     parser.add_argument('--loglevel', '-ll',
                         type=str.upper,
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-                        default='DEBUG',
-                        help='set logging level (default: DEBUG)')
-    
+                        default='INFO',
+                        help='set logging level (default: INFO)')
+
     myopts = parser.parse_args()
     
     return myopts

@@ -15,7 +15,12 @@ mkvirtualenv <project_name>
 
 Then, install or upgrade the package using `pip`:
 ```bash
-pip install https://wegenernet.org/downloads/teametrics/teametrics-0.11.1-py3-none-any.whl
+pip install https://wegenernet.org/downloads/teametrics/teametrics-0.12.0-py3-none-any.whl
+```
+
+For ICON/GRIB processing, install the optional `grib` dependencies:
+```bash
+pip install "teametrics[grib] @ https://wegenernet.org/downloads/teametrics/teametrics-0.12.0-py3-none-any.whl"
 ```
 
 ## Usage
@@ -93,7 +98,7 @@ If you use this code, please cite:
 **This repository:**
 Fuchsberger, J., Kirchengast, G., and Haas, S. J. (2026). TEAmetrics software for _A new class of climate hazard 
 metrics and its demonstration: revealing a ten-fold increase of extreme heat over Europe_ and other applications. 
-Version 0.11. Zenodo.
+Version 0.12. Zenodo.
 https://doi.org/10.5281/zenodo.17210239
 
 **The related paper:**

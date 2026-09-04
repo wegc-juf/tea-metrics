@@ -11,8 +11,14 @@ default:
     - echo "extra-index-url = https://wegcpypi.uni-graz.at/simple" >> /etc/pip.conf
 
 stages:
-#  - test
+  - test
   - publish
+
+test:
+  stage: test
+  script:
+    - poetry install --no-interaction
+    - poetry run pytest
 
 publish:package:
   stage: publish

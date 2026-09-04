@@ -1610,7 +1610,7 @@ class TEAIndicators:
         """
         calculate maximum event extremity per CTP with a minimum event duration.
         """
-        logger.info(f"Calculating {metric_label} per CTP...")
+        logger.debug(f"Calculating {metric_label} per CTP...")
         if self.CTP is None:
             return
         if self._CTP_resample_sum is None:
@@ -1963,7 +1963,8 @@ class TEAIndicators:
         logger.info(f"Loading CTP results from {filepath}")
         if use_dask:
             self.ctp_results = xr.open_mfdataset(filepath, data_vars='minimal', combine='by_coords',
-                                                 coords='minimal', compat='override', join='outer',
+                                                 coords='minimal', compat='override', join='exact',
+                                                 combine_attrs='drop_conflicts',
                                                  chunks='auto')
             configure_dask(self.ctp_results, use_dask=True)
             chunk_info = {
@@ -1991,7 +1992,8 @@ class TEAIndicators:
                     try:
                         self.ctp_results = xr.combine_by_coords(
                             datasets, data_vars='minimal', coords='minimal',
-                            compat='override', join='outer')
+                            compat='override', join='exact',
+                            combine_attrs='drop_conflicts')
                         self.ctp_results.load()
                     finally:
                         for dataset in datasets:

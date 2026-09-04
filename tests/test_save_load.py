@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 import xarray as xr
 import dask
 import dask.array as da
@@ -158,7 +159,27 @@ class TestSaveLoadCTP:
             assert variable in loaded.ctp_results
         assert loaded.ctp_results.sizes["time"] == tea_constant.ctp_results.sizes["time"]
 
-    def test_load_split_ctp_results_with_different_spatial_extent(self, tea_constant, tmp_path):
+    @pytest.mark.parametrize("use_dask", [False, True])
+    def test_load_split_ctp_results_with_different_history(self, tea_constant, tmp_path, use_dask):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        first = tmp_path / "ctp_first.nc"
+        second = tmp_path / "ctp_second.nc"
+        first_results = tea_constant.ctp_results.isel(time=slice(None, 5)).copy()
+        first_results.attrs["history"] = "first CTP calculation"
+        second_results = tea_constant.ctp_results.isel(time=slice(5, None)).copy()
+        second_results.attrs["history"] = "second CTP calculation"
+        first_results.to_netcdf(first)
+        second_results.to_netcdf(second)
+
+        loaded = TEAIndicators(unit="K")
+        loaded.load_ctp_results([first, second], use_dask=use_dask)
+
+        assert loaded.ctp_results.sizes["time"] == tea_constant.ctp_results.sizes["time"]
+        assert "history" not in loaded.ctp_results.attrs
+
+    @pytest.mark.parametrize("use_dask", [False, True])
+    def test_load_split_ctp_results_rejects_different_spatial_extent(self, tea_constant, tmp_path, use_dask):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant.calc_annual_ctp_indicators(ctp="annual")
         first = tmp_path / "ctp_first.nc"
@@ -167,10 +188,8 @@ class TestSaveLoadCTP:
         tea_constant.ctp_results.isel(time=slice(5, None)).to_netcdf(second)
 
         loaded = TEAIndicators(unit="K")
-        loaded.load_ctp_results([first, second], use_dask=False)
-
-        assert loaded.ctp_results.sizes["lon"] == tea_constant.ctp_results.sizes["lon"]
-        assert loaded.ctp_results["EM_avg"].isel(time=0, lon=-1).isnull().all().item()
+        with pytest.raises(ValueError, match="join='exact'"):
+            loaded.load_ctp_results([first, second], use_dask=use_dask)
 
     def test_load_split_ctp_results_configures_dask(self, tea_constant, tmp_path):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)

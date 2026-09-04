@@ -115,9 +115,10 @@ files = [
 name = "cffi"
 version = "2.1.0"
 description = "Foreign Function Interface for Python calling C code."
-optional = false
+optional = true
 python-versions = ">=3.10"
 groups = ["main"]
+markers = "extra == \"grib\""
 files = [
     {file = "cffi-2.1.0-cp310-cp310-macosx_10_15_x86_64.whl", hash = "sha256:b65f590ef2a44640f9a05dbb548a429b4ade77913ce683ac8b1480777658a6c0"},
     {file = "cffi-2.1.0-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:164bff1657b2a74f0b6d54e11c9b375bc97b931f2ca9c43fcf875838da1570dd"},
@@ -228,9 +229,10 @@ pycparser = {version = "*", markers = "implementation_name != \"PyPy\""}
 name = "cfgrib"
 version = "0.9.15.1"
 description = "Python interface to map GRIB files to the NetCDF Common Data Model following the CF Convention using ecCodes."
-optional = false
+optional = true
 python-versions = ">=3.7"
 groups = ["main"]
+markers = "extra == \"grib\""
 files = [
     {file = "cfgrib-0.9.15.1-py3-none-any.whl", hash = "sha256:f1bee90e86917389be9f767051bf32d00f95f6f4e4312b344567511b3cfd62d2"},
     {file = "cfgrib-0.9.15.1.tar.gz", hash = "sha256:d959d8b97e55a63646fa86686b297905ff7f2918a91e3a11d6292dab09598e4d"},
@@ -702,19 +704,37 @@ files = [
 
 [[package]]
 name = "eccodes"
-version = "2.47.0"
+version = "2.41.0"
 description = "Python interface to the ecCodes GRIB and BUFR decoder/encoder"
-optional = false
+optional = true
 python-versions = "*"
 groups = ["main"]
+markers = "extra == \"grib\""
 files = [
-    {file = "eccodes-2.47.0-cp310-cp310-win_amd64.whl", hash = "sha256:3a7438b259188821a5b05e5dd814f83924936ff9fe0897f6a157506fcaea9baf"},
-    {file = "eccodes-2.47.0-cp311-cp311-win_amd64.whl", hash = "sha256:3b71ae31bca13e4b62712405d7eb3c988b71b0b0bbd85fe4d3eacac7fc67ae27"},
-    {file = "eccodes-2.47.0-cp312-cp312-win_amd64.whl", hash = "sha256:7ab3b689fd3caa07451f7bcf07329b2268acdc7434bcedac8b13d1f20d3389c0"},
-    {file = "eccodes-2.47.0-cp313-cp313-win_amd64.whl", hash = "sha256:f5f9b71b6e2cb8c9b8349b88a09791e8fb6d51a4396d7160b3da2a83149a4973"},
-    {file = "eccodes-2.47.0-cp39-cp39-win_amd64.whl", hash = "sha256:867419198114f1a4620f0df00a0c17a4b3a8d4c5f284c14fd23e3d2723494580"},
-    {file = "eccodes-2.47.0-py3-none-any.whl", hash = "sha256:13d0b28bd58e94e2c303f42415ca0dcc56ab3febf0f52b1fb0f1d4aa5e7db8e1"},
-    {file = "eccodes-2.47.0.tar.gz", hash = "sha256:ae9207ef27c67656d068aab97f172abeb85fc3620f56faa22fdac5b1be75de69"},
+    {file = "eccodes-2.41.0-cp310-cp310-macosx_13_0_arm64.whl", hash = "sha256:1205a20c8f081f14cf97696928bfa64ee50760a726a5ae7b96f577db18df97c9"},
+    {file = "eccodes-2.41.0-cp310-cp310-macosx_13_0_x86_64.whl", hash = "sha256:0ca32c3291a2ed96313f8830b27f25e4db7747fbede9af72096409964f896cda"},
+    {file = "eccodes-2.41.0-cp310-cp310-manylinux_2_28_x86_64.whl", hash = "sha256:3cff916d08dc525d3123a45eaef3e06f6eb6b45fe313c40aabf253e4a5c1e713"},
+    {file = "eccodes-2.41.0-cp310-cp310-win_amd64.whl", hash = "sha256:560f2c5d1a6b303455924faa6c6db20f6dc5cfdde38fefffbd85486be25fc78d"},
+    {file = "eccodes-2.41.0-cp311-cp311-macosx_13_0_arm64.whl", hash = "sha256:30c0ac320c5feb2bd8febee6611ba0efa3fd8d4b6696b7d383a8e856c6586b81"},
+    {file = "eccodes-2.41.0-cp311-cp311-macosx_13_0_x86_64.whl", hash = "sha256:cdb3b5c9ff131159bb928c8e6c0e0e7c6d01e075a57b3b58393dae2722d7497c"},
+    {file = "eccodes-2.41.0-cp311-cp311-manylinux_2_28_x86_64.whl", hash = "sha256:cf16b5f17dcffcb20c28066f068aca21b3b1da075b22be941b2714f2938bf38b"},
+    {file = "eccodes-2.41.0-cp311-cp311-win_amd64.whl", hash = "sha256:4a4e614ab47233750c0cb370a72d111f90d156201d0044eab3a687d63fa6f4bf"},
+    {file = "eccodes-2.41.0-cp312-cp312-macosx_13_0_arm64.whl", hash = "sha256:56803ac38e5b50377054cb2b944c8982d6fcfca0c25b4d04fe1ef94ba81b202c"},
+    {file = "eccodes-2.41.0-cp312-cp312-macosx_13_0_x86_64.whl", hash = "sha256:ae3a0f62a4b1107fe9f8362d58e4f452891ccbcc6aaecca5437724223f71a974"},
+    {file = "eccodes-2.41.0-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:bb0182f7ce3c907671860ab554430be053f37f227789a7a27b2d06118fe48c97"},
+    {file = "eccodes-2.41.0-cp312-cp312-win_amd64.whl", hash = "sha256:81ca80d251be3fa66c42c020538cd67b12ed6e7c79e1e10299dc36dc07d28678"},
+    {file = "eccodes-2.41.0-cp313-cp313-macosx_13_0_arm64.whl", hash = "sha256:1c139783f385e0e102556f468fd089cfd6a27990711869aa73a589512533c8ba"},
+    {file = "eccodes-2.41.0-cp313-cp313-macosx_13_0_x86_64.whl", hash = "sha256:d30637b18f75f654340f08a0e003b6aa1db28aa62cc041571a1c7529922a3922"},
+    {file = "eccodes-2.41.0-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:e32c531e45ec818bcc9c0d7b2b6ff68d11f446f4c9b129e9cc8d31a23b0f401c"},
+    {file = "eccodes-2.41.0-cp313-cp313-win_amd64.whl", hash = "sha256:9a2d6dd911e146cfad69641dae0a90969b45a974a448c5279ab909237a2c6c08"},
+    {file = "eccodes-2.41.0-cp38-cp38-manylinux_2_28_x86_64.whl", hash = "sha256:3cf64ec8f7f1f3eb7519c4ac1d23cf05b7bbdf334b1fe0edb41c7a492743c2f9"},
+    {file = "eccodes-2.41.0-cp38-cp38-win_amd64.whl", hash = "sha256:ae95de8d6c69264aedf86104a9c4bf9251de88e61b5351a2b41aca3d5acc68d7"},
+    {file = "eccodes-2.41.0-cp39-cp39-macosx_13_0_arm64.whl", hash = "sha256:102b21bf7f6dd1ef8882f1f8a8f037dd176750e230cc1c3d03e93019716caf8e"},
+    {file = "eccodes-2.41.0-cp39-cp39-macosx_13_0_x86_64.whl", hash = "sha256:e5dd9cc5a272a1d11b52084fc47eeb795c18c9ad9e4a691c8f6d154cb3be1c42"},
+    {file = "eccodes-2.41.0-cp39-cp39-manylinux_2_28_x86_64.whl", hash = "sha256:b85d659874900c9a88838511e2da3635cf2b21e88db22db776a046cdaa667337"},
+    {file = "eccodes-2.41.0-cp39-cp39-win_amd64.whl", hash = "sha256:d59ee628b0b64ab175e055b120d1b07faedc1dead46b6aba363317e449718dac"},
+    {file = "eccodes-2.41.0-py3-none-any.whl", hash = "sha256:f3f4444757aac6a249cc47947dee5660309d48854ebfc5e6ca8515374398e1bf"},
+    {file = "eccodes-2.41.0.tar.gz", hash = "sha256:f3e209f5da5a7fcee4942295db4ee7888e077bd2e0342e6170ec5fedb9b29840"},
 ]
 
 [package.dependencies]
@@ -742,9 +762,10 @@ tests = ["asttokens (>=2.1.0)", "coverage", "coverage-enable-subprocess", "ipyth
 name = "findlibs"
 version = "0.1.3"
 description = "A package to search for shared libraries on various platforms"
-optional = false
+optional = true
 python-versions = ">=3.10"
 groups = ["main"]
+markers = "extra == \"grib\""
 files = [
     {file = "findlibs-0.1.3-py3-none-any.whl", hash = "sha256:9c14f8506cdcd37e38369259f8cd9aa3c002d58cd7c2beff4852bd205495c555"},
     {file = "findlibs-0.1.3.tar.gz", hash = "sha256:49bbe509c8b439ecd9c0d021c301aa9db643a2e6ab4e189a40b505ee4a49db62"},
@@ -1917,10 +1938,10 @@ tests = ["pytest"]
 name = "pycparser"
 version = "3.0"
 description = "C parser in Python"
-optional = false
+optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "implementation_name != \"PyPy\""
+markers = "extra == \"grib\" and implementation_name != \"PyPy\""
 files = [
     {file = "pycparser-3.0-py3-none-any.whl", hash = "sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992"},
     {file = "pycparser-3.0.tar.gz", hash = "sha256:600f49d217304a5902ac3c37e1281c9fe94e4d0489de643a9504c5cdfdfc6b29"},
@@ -2684,7 +2705,10 @@ parallel = ["dask[complete]"]
 types = ["pandas-stubs", "scipy-stubs", "types-PyYAML", "types-Pygments", "types-colorama", "types-decorator", "types-defusedxml", "types-docutils", "types-networkx", "types-openpyxl", "types-pexpect", "types-psutil", "types-pycurl", "types-python-dateutil", "types-pytz", "types-requests", "types-setuptools"]
 viz = ["cartopy (>=0.23)", "matplotlib (>=3.8)", "nc-time-axis", "seaborn"]
 
+[extras]
+grib = ["cfgrib", "eccodes"]
+
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13, <3.15"
-content-hash = "5a459b06f42c80769893c5b76d507d28179903c8cc1f9fefdef2aac8d2ad8240"
+content-hash = "571368f6acc8886c95091f201e145543aa0dfcdbe82dd321de1b515f61f13058"
