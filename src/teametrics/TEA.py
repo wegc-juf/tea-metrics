@@ -1014,7 +1014,7 @@ class TEAIndicators:
                         var_data = year_data[var]
                         var_data = self._ensure_crs(var_data)
                         var_filepath = yearly_filepath.replace(ext, f'_{var}.tiff')
-                        logger.info(f"Saving raster variable '{var}' for year {year} to {var_filepath}")
+                        logger.debug(f"Saving raster variable '{var}' for year {year} to {var_filepath}")
                         var_data.rio.to_raster(var_filepath, compress='LZW')
                         saved_files.append(var_filepath)
                     except Exception as e:
@@ -1026,7 +1026,7 @@ class TEAIndicators:
                     var_data = dataset[var]
                     var_data = self._ensure_crs(var_data)
                     var_filepath = filepath.replace(ext, f'_{var}.tiff')
-                    logger.info(f"Saving raster variable '{var}' to {var_filepath}")
+                    logger.debug(f"Saving raster variable '{var}' to {var_filepath}")
                     var_data.rio.to_raster(var_filepath, compress='LZW')
                     saved_files.append(var_filepath)
                 except Exception as e:

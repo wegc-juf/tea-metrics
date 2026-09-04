@@ -19,7 +19,7 @@ common_params:
   dataset: &DATA
     dataset: SPARTACUS
   paths: &PATHS
-    data_path: &data_path /data/arsclisys/normal/SPARTACUS/reproj_StatAT/v2.1/
+    data_path: &data_path /data/arsclisys/normal/SPARTACUS/reproj_StatAT/detrended/JJA/
     input_data_path: *data_path
     statpath: &statpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/
     maskpath: *statpath
@@ -32,7 +32,7 @@ calc_TEA:
   <<: *TIME
   <<: *DATA
   <<: *PATHS
-  outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/
+  outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/SPARTACUS_detrended/JJA/
   recalc_threshold: false
   recalc_daily: true
   decadal: true
