@@ -108,6 +108,15 @@ class TestCalcDTEEC:
         assert tea_constant.daily_results.DTEEC.sum() == tea_constant.input_data.isel(
             {tea_constant.tdim: 0}).size
 
+        eager = tea_constant.daily_results.DTEEC.copy()
+        tea_constant.daily_results['DTEC'] = tea_constant.daily_results.DTEC.chunk(
+            {tea_constant.ydim: 1, tea_constant.xdim: 1})
+        tea_constant._calc_DTEEC_parallel()
+        parallel = tea_constant.daily_results.DTEEC.compute()
+
+        assert parallel.dtype == np.dtype('int16')
+        xr.testing.assert_equal(parallel, eager)
+
     def test_DTEEC_parallel_matches_legacy(self, tea_constant):
         tea_constant._calc_DTEM()
         tea_constant._calc_DTEC()

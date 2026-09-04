@@ -529,8 +529,9 @@ class TEAIndicators:
             dask_gufunc_kwargs={'allow_rechunk': True},
         )
         dteec = dteec.transpose(*dtec.dims)
-        row_dims = [dim for dim in dtec.dims if dim != self.ydim]
-        dteec = dteec.where(dtec.notnull().any(dim=row_dims))
+        if np.issubdtype(dtec.dtype, np.floating):
+            row_dims = [dim for dim in dtec.dims if dim != self.ydim]
+            dteec = dteec.where(dtec.notnull().any(dim=row_dims))
         if self.mask is not None and self.apply_mask:
             dteec = dteec.where(self.mask > 0)
         dteec.attrs = get_attrs(vname='DTEEC')
