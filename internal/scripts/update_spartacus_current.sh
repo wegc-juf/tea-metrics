@@ -94,7 +94,7 @@ update_file() {
 
 failures=0
 for year in "${years[@]}"; do
-    for parameter in TN TX; do
+    for parameter in TN TX RR; do
         if ! update_file "$parameter" "$year"; then
             failures=$((failures + 1))
         fi
