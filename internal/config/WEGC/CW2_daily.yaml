@@ -22,6 +22,7 @@ common_params:
     statpath: &statpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/
     maskpath: *statpath
     mask_sub: masks/
+    population_grid_path: /data/users/alm/StatAT_data/OGDEXT_RASTER_1_STATISTIK_AUSTRIA_L001000_LAEA/Austria_population_1km_2019.nc
 
 calc_TEA:
   <<: *GR
@@ -36,7 +37,8 @@ calc_TEA:
   spreads: false
   decadal_only: false
   recalc_decadal: false
-  use_dask: auto
+  use_dask: true
+  dask_workers: 4
   compression_level: 1
   parallel_workers: 1
 
