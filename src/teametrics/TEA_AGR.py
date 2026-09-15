@@ -135,8 +135,10 @@ class TEAAgr(TEAIndicators):
             if land_frac < self.land_frac_min:
                 return None
 
-        # select data for cell
-        cell_data = self.daily_results.sel({self.ydim: slice_y, self.xdim: slice_x})
+        # A GR variable is already reduced over the parent domain and cannot be
+        # reused for this cell. The child recalculates all GR variables below.
+        cell_data = self.get_daily_results(grid=True, gr=False).sel(
+            {self.ydim: slice_y, self.xdim: slice_x})
         # select static data for cell
         cell_area_grid = self.area_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
 
@@ -146,6 +148,10 @@ class TEAAgr(TEAIndicators):
         
         # select threshold grid for cell
         cell_threshold_grid = self.threshold_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
+        if self.population_grid is not None:
+            cell_population_grid = self.population_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
+        else:
+            cell_population_grid = None
         
         if len(cell_area_grid[self.ydim]) == 0 or len(cell_area_grid[self.xdim]) == 0:
             return None
@@ -153,7 +159,7 @@ class TEAAgr(TEAIndicators):
         # TODO: optimize for x y grids (xarray method)
         # two options: either return data itself and stack to xarray then calculate TEA or return individual TEA objects
         tea_sub_gr = TEAIndicators(area_grid=cell_area_grid, min_area=self._min_area, unit=self.unit, ctp=self.CTP,
-                                   threshold=cell_threshold_grid)
+                                   threshold=cell_threshold_grid, population_grid=cell_population_grid)
         tea_sub_gr.set_daily_results(cell_data)
         return tea_sub_gr
 

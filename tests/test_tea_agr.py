@@ -111,6 +111,57 @@ class TestCalcAreaWeightedMean:
         assert np.isclose(result.values, expected)
 
 
+class TestSelectSubGr:
+    def test_recalculates_aggregate_variables_for_selected_cell(self):
+        lat = np.arange(4.0, 0.0, -0.5)
+        lon = np.arange(0.0, 4.0, 0.5)
+        times = pd.date_range("2000-01-01", periods=2, freq="D")
+        values = np.full((len(times), len(lat), len(lon)), 10.0)
+        values[:, :4, :4] = 1.0
+        data = xr.DataArray(
+            values,
+            coords={"time": times, "lat": lat, "lon": lon},
+            dims=("time", "lat", "lon"),
+            attrs={"coordinate_sys": EXPECTED_CRS},
+        )
+        threshold = xr.zeros_like(data.isel(time=0))
+        population = xr.full_like(threshold, 100.0)
+        population.loc[{"lat": lat[:4], "lon": lon[:4]}] = 10.0
+        tea = TEAAgr(
+            input_data=data,
+            threshold=threshold,
+            population_grid=population,
+            unit="K",
+            land_frac_min=0,
+        )
+        tea.calc_daily_basis_vars(grid=True, gr=True)
+
+        tea_sub = tea.select_sub_gr(ycoord=3.0, xcoord=1.0)
+
+        assert tea_sub is not None
+        assert "DTEMA_GR" not in tea_sub.daily_results
+        assert "DTEMP_GR" not in tea_sub.daily_results
+
+        tea_sub.calc_daily_basis_vars(grid=False, gr=True)
+
+        xr.testing.assert_allclose(
+            tea_sub.daily_results.DTEMA_GR,
+            tea_sub.daily_results.DTEM_GR * tea_sub.daily_results.DTEA_GR,
+        )
+        xr.testing.assert_allclose(
+            tea_sub.daily_results.DTEMP_GR,
+            tea_sub.daily_results.DTEM_GR * tea_sub.daily_results.DTEP_GR,
+        )
+        assert not np.allclose(
+            tea_sub.daily_results.DTEMA_GR.values,
+            tea.daily_results.DTEMA_GR.values,
+        )
+        assert not np.allclose(
+            tea_sub.daily_results.DTEMP_GR.values,
+            tea.daily_results.DTEMP_GR.values,
+        )
+
+
 class TestGetCTPResults:
     def test_get_ctp_results_returns_empty(self):
         from teametrics.TEA_AGR import TEAAgr
