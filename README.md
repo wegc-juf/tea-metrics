@@ -15,12 +15,12 @@ mkvirtualenv <project_name>
 
 Then, install or upgrade the package using `pip`:
 ```bash
-pip install https://wegenernet.org/downloads/teametrics/teametrics-0.13.0-py3-none-any.whl
+pip install https://wegenernet.org/downloads/teametrics/teametrics-0.13.1-py3-none-any.whl
 ```
 
 For ICON/GRIB processing, install the optional `grib` dependencies:
 ```bash
-pip install "teametrics[grib] @ https://wegenernet.org/downloads/teametrics/teametrics-0.13.0-py3-none-any.whl"
+pip install "teametrics[grib] @ https://wegenernet.org/downloads/teametrics/teametrics-0.13.1-py3-none-any.whl"
 ```
 
 ## Usage
@@ -128,6 +128,6 @@ TEAmetrics compute runs. **The following definitions apply** and are **summarize
 For the complete specification file see [**TEAmetrics_RCFspecs_v8-3Sep2025.md**](https://github.com/wegc-juf/tea-metrics/blob/main/docs/TEAmetrics_RCFspecs_v8-3Sep2025.md).
 
 ## Changelog
-See the [v0.13.0 release notes](docs/releases/v0.13.0.md) for the latest performance, Dask, and output-format changes.
+See the [v0.13.1 release notes](docs/releases/v0.13.1.md) for the latest bug fixes.
 
 See [Releases](https://github.com/wegc-juf/tea-metrics/releases) and [Tags](https://github.com/wegc-juf/tea-metrics/tags) for a detailed changelog.
