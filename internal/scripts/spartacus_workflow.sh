@@ -67,7 +67,7 @@ done
 
 HEATWAVE_PLOT_DIR=/data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwaves/current/
 PLOT_SYNC_DIR="/nas/share/ccr/wegnet/projects/TEA/heatwaves/current"
-PLOT_SYNC_DIR_UNICLOUD="/mnt/unicloud/juergen.fuchsberger/TEA-indicators/heatwaves/current"
+PLOT_SYNC_DIR_UNICLOUD="unicloud:TEA-indicators/heatwaves/current"
 
 source /home/juf/TEA-indicators/.venv/bin/activate
 
@@ -185,5 +185,5 @@ fi
 if stage_enabled --sync; then
     # sync
     run_step rsync -av "$HEATWAVE_PLOT_DIR" "$PLOT_SYNC_DIR"
-    run_step rsync -av "$HEATWAVE_PLOT_DIR" "$PLOT_SYNC_DIR_UNICLOUD"
+    run_step rclone sync "$HEATWAVE_PLOT_DIR" "$PLOT_SYNC_DIR_UNICLOUD"
 fi
