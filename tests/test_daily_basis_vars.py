@@ -274,6 +274,8 @@ class TestUpdateMinArea:
         tea_constant._CTP_resample_sum = xr.Dataset({'stale': xr.DataArray(1)})
         tea_constant._CTP_resample_mean = xr.Dataset({'stale': xr.DataArray(1)})
         tea_constant.ctp_results = xr.Dataset({'stale': xr.DataArray(1)})
+        tea_constant.decadal_results = xr.Dataset({'stale': xr.DataArray(1)})
+        tea_constant._decadal_ED = xr.Dataset({'stale': xr.DataArray(1)})
 
         tea_constant.update_min_area(min_area=1e100)
 
@@ -286,6 +288,8 @@ class TestUpdateMinArea:
         assert tea_constant._CTP_resample_sum is None
         assert tea_constant._CTP_resample_mean is None
         assert not tea_constant.ctp_results.data_vars
+        assert not tea_constant.decadal_results.data_vars
+        assert not tea_constant._decadal_ED.data_vars
 
 
 class TestCalcDTECGR:

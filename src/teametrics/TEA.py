@@ -1108,6 +1108,8 @@ class TEAIndicators:
         self._CTP_resample_sum = None
         self._CTP_resample_mean = None
         self.ctp_results = xr.Dataset()
+        self.decadal_results = xr.Dataset()
+        self._decadal_ED = xr.Dataset()
 
     # ### Hourly indicators ###
     def calc_hourly_indicators(self, input_data):
