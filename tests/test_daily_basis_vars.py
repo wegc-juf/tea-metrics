@@ -242,6 +242,52 @@ class TestCalcDTEAGR:
         assert "GR" in tea_constant.daily_results.DTEA_GR.attrs["long_name"]
 
 
+class TestUpdateMinArea:
+    def test_recalculates_cached_gr_compounds(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        assert np.any(tea_constant.daily_results.DTEMA_GR.values > 0)
+        assert np.any(tea_constant.daily_results.DTEMP_GR.values > 0)
+
+        tea_constant.update_min_area(min_area=1e100)
+
+        assert np.all(tea_constant.daily_results.DTEC_GR.values == 0)
+        assert np.all(tea_constant.daily_results.DTEM_GR.values == 0)
+        assert np.all(tea_constant.daily_results.DTEMA_GR.values == 0)
+        assert np.all(tea_constant.daily_results.DTEMP_GR.values == 0)
+        np.testing.assert_array_equal(
+            tea_constant.daily_results.DTEMA_GR.values,
+            (tea_constant.daily_results.DTEM_GR * tea_constant.daily_results.DTEA_GR).values,
+        )
+        np.testing.assert_array_equal(
+            tea_constant.daily_results.DTEMP_GR.values,
+            (tea_constant.daily_results.DTEM_GR * tea_constant.daily_results.DTEP_GR).values,
+        )
+
+    def test_invalidates_hourly_and_ctp_caches(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        for variable in (
+            'Nhours_GR', 'DTED_GR', 't_hfirst_GR', 't_hlast_GR', 't_hmax_GR',
+            'h_rise_GR', 'h_set_GR',
+        ):
+            tea_constant.daily_results[variable] = tea_constant.daily_results.DTEC_GR.copy()
+        tea_constant._daily_results_filtered = tea_constant.daily_results.copy()
+        tea_constant._CTP_resample_sum = xr.Dataset({'stale': xr.DataArray(1)})
+        tea_constant._CTP_resample_mean = xr.Dataset({'stale': xr.DataArray(1)})
+        tea_constant.ctp_results = xr.Dataset({'stale': xr.DataArray(1)})
+
+        tea_constant.update_min_area(min_area=1e100)
+
+        for variable in (
+            'Nhours_GR', 'DTED_GR', 't_hfirst_GR', 't_hlast_GR', 't_hmax_GR',
+            'h_rise_GR', 'h_set_GR',
+        ):
+            assert variable not in tea_constant.daily_results
+        assert tea_constant._daily_results_filtered is None
+        assert tea_constant._CTP_resample_sum is None
+        assert tea_constant._CTP_resample_mean is None
+        assert not tea_constant.ctp_results.data_vars
+
+
 class TestCalcDTECGR:
     def test_DTEC_GR_exists(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)

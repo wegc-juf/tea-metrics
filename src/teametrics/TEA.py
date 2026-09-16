@@ -1073,16 +1073,41 @@ class TEAIndicators:
         else:
             return self.daily_results
 
+    def _invalidate_daily_results(self, *variables):
+        """Remove cached daily results that depend on changed inputs."""
+        variables = [var for var in variables if var in self.daily_results]
+        if variables:
+            self.daily_results = self.daily_results.drop_vars(variables)
+
     def update_min_area(self, min_area):
         """
         update the minimum area for a timestep to be considered as exceedance
+
+        If hourly indicators have already been calculated, their GR aggregates
+        are invalidated and must be regenerated with ``calc_hourly_indicators``.
         """
         self._min_area = min_area
+
+        # The threshold changes the GR event mask. Invalidate all cached
+        # quantities derived from that mask before recalculating daily values.
+        self._invalidate_daily_results(
+            'DTEMA_GR', 'DTEMP_GR', 'DTEM_Max_GR', 'DTEEC_GR',
+            'Nhours_GR', 'DTED_GR', 't_hfirst_GR', 't_hlast_GR', 't_hmax_GR',
+            'h_rise_GR', 'h_set_GR',
+        )
         self._calc_DTEC_GR()
         self._calc_DTEM_GR()
         self._calc_DTEMA_GR()
+        self._calc_DTEMP_GR()
         self._calc_DTEM_Max_GR()
         self._calc_DTEEC_GR()
+
+        # Daily results may already have been resampled or copied for CTP
+        # calculations. Those caches depend on the invalidated GR variables.
+        self._daily_results_filtered = None
+        self._CTP_resample_sum = None
+        self._CTP_resample_mean = None
+        self.ctp_results = xr.Dataset()
 
     # ### Hourly indicators ###
     def calc_hourly_indicators(self, input_data):
