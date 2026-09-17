@@ -1,6 +1,7 @@
 """Downscale Austrian population stocks with a 1 km allocation-weight grid."""
 
 import argparse
+from datetime import datetime, timezone
 from pathlib import Path
 
 import geopandas as gpd
@@ -102,7 +103,6 @@ def downscale_year(factors, totals, region_id, population, year):
         "long_name": "Downscaled population count per 1 km grid cell",
         "units": "1",
         "allocation_method": "regional total multiplied by normalized reference-grid weight",
-        "source_year": int(year),
     }
     return result
 
@@ -119,8 +119,56 @@ def downscale_series(factors_by_year, totals_by_year, region_id, population, sou
         "allocation_grid_role": "Normalized within-region allocation weights only",
         "grid_crs": GRID_CRS,
         "conservation": "Regional source totals are conserved except for floating-point precision",
+        "source_population_product": source_name,
     }
     return result
+
+
+def create_joint_series(nuts_factors, ardeco_totals, municipality_factors, statat_totals, population):
+    """Use ARDECO before municipal stocks become available, then StatAT stocks."""
+    arrays = []
+    sources = []
+    levels = []
+    for year in sorted(ardeco_totals):
+        if year in statat_totals:
+            array = downscale_year(
+                municipality_factors[year], statat_totals[year], "g_id", population, year
+            )
+            sources.append("Statistics Austria municipality population stock")
+            levels.append("municipality")
+        else:
+            array = downscale_year(nuts_factors, ardeco_totals[year], "NUTS_ID", population, year)
+            sources.append("ARDECO NUTS-3 population stock")
+            levels.append("NUTS3")
+        arrays.append(array.expand_dims(year=[year]))
+    result = xr.concat(arrays, dim="year").to_dataset()
+    result["source_population_product"] = xr.DataArray(
+        sources, dims="year", coords={"year": result.year}
+    )
+    result["source_region_level"] = xr.DataArray(
+        levels, dims="year", coords={"year": result.year}
+    )
+    result["source_population_product"].attrs["long_name"] = "Population source used for each year"
+    result["source_region_level"].attrs["long_name"] = "Administrative level constraining each year"
+    result.attrs = {
+        "title": "Austrian joint best-guess downscaled population",
+        "allocation_grid_role": "Normalized within-region allocation weights only",
+        "grid_crs": GRID_CRS,
+        "conservation": "Regional source totals are conserved except for floating-point precision",
+        "source_hierarchy": "ARDECO NUTS-3 before municipal data; Statistics Austria municipality stocks thereafter",
+    }
+    return result
+
+
+def add_provenance(dataset, allocation_grid, population_source, boundaries):
+    """Attach enough provenance to reproduce a generated population product."""
+    dataset.attrs.update({
+        "date_created": datetime.now(timezone.utc).isoformat(),
+        "allocation_grid": str(allocation_grid),
+        "population_source": str(population_source),
+        "regional_boundaries": str(boundaries),
+    })
+    return dataset
 
 
 def load_ardeco_totals(path, start_year, end_year):
@@ -171,17 +219,23 @@ def run(args=None):
     parser.add_argument("--municipality-boundary-template", required=True,
                         help="Boundary path or URL; use {year} only with same-vintage totals")
     parser.add_argument("--output-directory", required=True)
-    parser.add_argument("--start-year", type=int, default=2011)
-    parser.add_argument("--end-year", type=int, default=2025)
+    parser.add_argument("--start-year", type=int, default=2002,
+                        help="First Statistics Austria municipality and joint-product year")
+    parser.add_argument("--end-year", type=int, default=2026)
+    parser.add_argument("--nuts3-start-year", type=int, default=1960,
+                        help="First ARDECO NUTS-3 and joint-product year")
     parsed = parser.parse_args(args)
     if parsed.end_year < parsed.start_year:
         parser.error("end-year must not precede start-year")
 
+    if parsed.nuts3_start_year > parsed.start_year:
+        parser.error("nuts3-start-year must not follow start-year")
+
     population, cells, cell_area = load_allocation_grid(parsed.grid)
-    years = range(parsed.start_year, parsed.end_year + 1)
-    ardeco = load_ardeco_totals(parsed.ardeco, parsed.start_year, parsed.end_year)
+    municipality_years = range(parsed.start_year, parsed.end_year + 1)
+    ardeco = load_ardeco_totals(parsed.ardeco, parsed.nuts3_start_year, parsed.end_year)
     statat = load_statat_totals(parsed.statat_directory, parsed.start_year, parsed.end_year)
-    missing_years = set(years).difference(ardeco)
+    missing_years = set(range(parsed.nuts3_start_year, parsed.end_year + 1)).difference(ardeco)
     if missing_years:
         raise ValueError(f"ARDECO is missing years: {sorted(missing_years)}")
 
@@ -189,33 +243,38 @@ def run(args=None):
     nuts = nuts[nuts["NUTS_ID"].astype(str).str.startswith("AT")]
     nuts_factors = allocation_factors(cells, cell_area, nuts, "NUTS_ID")
     nuts_series = downscale_series(
-        {year: nuts_factors for year in years}, ardeco, "NUTS_ID", population, "ARDECO NUTS-3 stocks"
+        {year: nuts_factors for year in ardeco}, ardeco, "NUTS_ID", population, "ARDECO NUTS-3 stocks"
     )
 
     municipality_factors = {}
     boundary_template = parsed.municipality_boundary_template
     if "{year}" in boundary_template:
-        for year in years:
+        for year in municipality_years:
             boundaries = _read_boundaries(boundary_template.format(year=year))
             municipality_factors[year] = allocation_factors(cells, cell_area, boundaries, "g_id")
     else:
         boundaries = _read_boundaries(boundary_template)
         factors = allocation_factors(cells, cell_area, boundaries, "g_id")
-        municipality_factors = {year: factors for year in years}
+        municipality_factors = {year: factors for year in municipality_years}
     municipality_series = downscale_series(
         municipality_factors, statat, "g_id", population, "Statistics Austria municipality stocks"
     )
-    joint_series = municipality_series.copy(deep=True)
-    joint_series.attrs = {
-        **joint_series.attrs,
-        "title": "Austrian joint best-guess downscaled population",
-        "source_hierarchy": "Statistics Austria municipality stocks are authoritative at their published 2025 territorial status",
-    }
+    joint_series = create_joint_series(
+        nuts_factors, ardeco, municipality_factors, statat, population
+    )
+
+    add_provenance(nuts_series, parsed.grid, parsed.ardeco, parsed.nuts3_boundaries)
+    add_provenance(municipality_series, parsed.grid, parsed.statat_directory, boundary_template)
+    add_provenance(joint_series, parsed.grid, f"{parsed.ardeco}; {parsed.statat_directory}",
+                   f"{parsed.nuts3_boundaries}; {boundary_template}")
 
     output = Path(parsed.output_directory)
-    _write(nuts_series, output / "population_nuts3_ardeco.nc")
-    _write(municipality_series, output / "population_municipality_statat.nc")
-    _write(joint_series, output / "population_joint_best_guess.nc")
+    _write(nuts_series, output / "nuts3_ardeco" /
+           f"population_1km_{min(ardeco)}-{max(ardeco)}_ardeco_nuts3.nc")
+    _write(municipality_series, output / "municipality_statat" /
+           f"population_1km_{min(statat)}-{max(statat)}_statat_municipality.nc")
+    _write(joint_series, output / "joint_best_guess" /
+           f"population_1km_{min(ardeco)}-{max(ardeco)}_joint_best_guess.nc")
 
 
 if __name__ == "__main__":

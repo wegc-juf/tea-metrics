@@ -4,7 +4,9 @@ import pandas as pd
 import xarray as xr
 from shapely.geometry import box
 
-from teametrics.utils.downscale_population import allocation_factors, downscale_year
+from teametrics.utils.downscale_population import (
+    allocation_factors, create_joint_series, downscale_year,
+)
 
 
 def test_downscale_conserves_each_regional_total():
@@ -46,3 +48,22 @@ def test_allocation_factors_split_boundary_cells_by_area():
     factors = allocation_factors(cells, 1_000_000, regions, "region")
 
     np.testing.assert_allclose(factors.fraction.to_numpy(), [1.0, 1.0])
+
+
+def test_joint_series_records_the_source_transition():
+    population = xr.DataArray([[1.0]], dims=("northing", "easting"))
+    factors = pd.DataFrame({"region": ["AT1"], "cell": [0], "fraction": [1.0]})
+    municipality_factors = {2002: factors.rename(columns={"region": "g_id"})}
+    nuts_factors = factors.rename(columns={"region": "NUTS_ID"})
+
+    result = create_joint_series(
+        nuts_factors,
+        {1960: pd.Series({"AT1": 10}), 2002: pd.Series({"AT1": 20})},
+        municipality_factors,
+        {2002: pd.Series({"AT1": 30})},
+        population,
+    )
+
+    assert result.population.sel(year=1960).item() == 10
+    assert result.population.sel(year=2002).item() == 30
+    assert result.source_region_level.values.tolist() == ["NUTS3", "municipality"]

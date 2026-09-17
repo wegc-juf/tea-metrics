@@ -8,13 +8,19 @@ For each source region `r`, cell `i`, and year `y`:
 population(i, y) = source_total(r, y) * reference_weight(i, r) / sum(reference_weight(:, r))
 ```
 
-The grid-cell weight is the reference population count times the fraction of the cell lying in the source region. This conserves every source-region total, apart from floating-point precision.
+The grid-cell allocation weight is:
+
+```text
+reference_weight(i, r) = reference_population(i) * area(cell_i intersect region_r) / area(cell_i)
+```
+
+Thus, a cell entirely inside a region retains its reference population count as its weight; a boundary-crossing cell contributes its count in proportion to the covered area. This conserves every source-region total, apart from floating-point precision.
 
 ## Products
 
-- `population_nuts3_ardeco.nc`: ARDECO NUTS-3 stocks allocated with grid weights.
-- `population_municipality_statat.nc`: Statistics Austria municipality stocks allocated with grid weights.
-- `population_joint_best_guess.nc`: the municipality-constrained product. Statistics Austria is authoritative because it is official and more detailed; ARDECO remains available independently as the NUTS-3 product.
+- `nuts3_ardeco/population_1km_1960-<end>_ardeco_nuts3.nc`: ARDECO NUTS-3 stocks allocated with grid weights.
+- `municipality_statat/population_1km_2002-<end>_statat_municipality.nc`: Statistics Austria municipality stocks allocated with grid weights.
+- `joint_best_guess/population_1km_1960-<end>_joint_best_guess.nc`: ARDECO NUTS-3 allocation through 2001, then the more detailed Statistics Austria municipality allocation. The per-year `source_population_product` and `source_region_level` variables explicitly record this transition.
 
 The supplied Statistics Austria population-stock CSVs are retrospectively harmonized to the **2025 municipality territorial status**, including historical years. Use the matching 2025 `OGDEXT_GEM_1` WFS layer and its `g_id` GKZ field for this source:
 
