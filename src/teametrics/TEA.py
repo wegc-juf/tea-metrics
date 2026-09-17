@@ -741,21 +741,48 @@ class TEAIndicators:
         dtep_gr = dtep_gr.rename('DTEP_GR')
         self.daily_results['DTEP_GR'] = dtep_gr
 
+    def _calc_DTEM_PW_GR(self):
+        """Calculate population-weighted daily exceedance magnitude for the GR."""
+        if 'DTEM_PW_GR' in self.daily_results:
+            return
+        if 'DTEMP' not in self.daily_results:
+            self._calc_DTEMP()
+        if 'DTEMP' not in self.daily_results:
+            return
+        if 'DTEP_GR' not in self.daily_results:
+            self._calc_DTEP_GR()
+        if 'DTEP_GR' not in self.daily_results:
+            return
+        if 'DTEC_GR' not in self.daily_results:
+            self._calc_DTEC_GR()
+
+        dtemp_sum = self.daily_results.DTEMP.sum(dim=(self.xdim, self.ydim), skipna=True)
+        dtem_pw_gr = (dtemp_sum / self.daily_results.DTEP_GR).where(
+            self.daily_results.DTEP_GR > 0, self.null_val
+        )
+        dtem_pw_gr = dtem_pw_gr.where(self.daily_results.DTEC_GR == 1, self.null_val)
+        dtem_pw_gr = dtem_pw_gr.rename('DTEM_PW_GR')
+        dtem_pw_gr.attrs = get_attrs(vname='DTEM_PW_GR', data_unit=self.unit)
+        self.daily_results['DTEM_PW_GR'] = dtem_pw_gr
+
     def _calc_DTEMP_GR(self):
         """
         calculate GR Daily Threshold Exceedance Magnitude * Population (auxiliary)
         """
         if 'DTEMP_GR' in self.daily_results:
             return
-        if 'DTEM_GR' not in self.daily_results:
-            self._calc_DTEM_GR()
+        if 'DTEM_PW_GR' not in self.daily_results:
+            self._calc_DTEM_PW_GR()
             if 'DTEMP_GR' in self.daily_results:
                 return
-        if 'DTEP_GR' not in self.daily_results:
-            self._calc_DTEP_GR()
-        if 'DTEP_GR' not in self.daily_results:
+        if 'DTEM_PW_GR' not in self.daily_results:
             return
-        dtemp_gr = self.daily_results.DTEM_GR * self.daily_results.DTEP_GR
+        # Sum the gridded quantity directly so the regional and gridded
+        # population-extremity definitions remain exactly consistent for
+        # qualifying GR events.
+        dtemp_gr = self.daily_results.DTEMP.sum(dim=(self.xdim, self.ydim), skipna=True)
+        dtemp_gr = dtemp_gr.where(self.daily_results.DTEC_GR == 1, self.null_val)
+        dtemp_gr = dtemp_gr.rename('DTEMP_GR')
         dtemp_gr.attrs = get_attrs(vname='DTEMP_GR', data_unit=self.unit)
         self.daily_results['DTEMP_GR'] = dtemp_gr
 
@@ -1091,7 +1118,7 @@ class TEAIndicators:
         # The threshold changes the GR event mask. Invalidate all cached
         # quantities derived from that mask before recalculating daily values.
         self._invalidate_daily_results(
-            'DTEMA_GR', 'DTEMP_GR', 'DTEM_Max_GR', 'DTEEC_GR',
+            'DTEMA_GR', 'DTEMP_GR', 'DTEM_PW_GR', 'DTEM_Max_GR', 'DTEEC_GR',
             'Nhours_GR', 'DTED_GR', 't_hfirst_GR', 't_hlast_GR', 't_hmax_GR',
             'h_rise_GR', 'h_set_GR',
         )

@@ -117,6 +117,16 @@ class TestCalcPTEX:
             tea_constant.ctp_results["pTEX_GR"].values,
             tea_constant._CTP_resample_sum.DTEMP_GR.values)
 
+    def test_pTEX_GR_is_spatial_sum_of_pTEX(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        xr.testing.assert_allclose(
+            tea_constant.ctp_results["pTEX_GR"],
+            tea_constant.ctp_results["pTEX"].sum(
+                dim=(tea_constant.xdim, tea_constant.ydim), skipna=True
+            ),
+        )
+
     def test_pTEX_attrs(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant.calc_annual_ctp_indicators(ctp="annual")

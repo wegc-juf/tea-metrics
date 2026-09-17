@@ -35,6 +35,8 @@ def get_attrs(vname=None, dec=False, spread=None, period='', data_unit=''):
         'DTEC': {'long_name': 'daily threshold exceedance count', 'units': '1'},
         'DTED': {'long_name': 'daily threshold exceedance duration', 'units': 'h'},
         'DTEM': {'long_name': 'daily threshold exceedance magnitude', 'units': data_unit},
+        'DTEM_PW': {'long_name': 'daily population-weighted threshold exceedance magnitude',
+                    'units': data_unit},
         'DTEA': {'long_name': 'daily threshold exceedance area', 'units': data_unit},
         'DTEP': {'long_name': 'daily threshold exceedance population', 'units': '10^4 person'},
         'DTEMA': {'long_name': 'daily threshold exceedance magnitude * area (auxiliary)',

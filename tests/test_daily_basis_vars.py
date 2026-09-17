@@ -217,10 +217,18 @@ class TestCalcDTEMPGR:
 
     def test_DTEMP_GR_formula(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
-        expected = tea_constant.daily_results.DTEM_GR.values * \
-            tea_constant.daily_results.DTEP_GR.values
+        expected = tea_constant.daily_results.DTEMP.sum(
+            dim=(tea_constant.xdim, tea_constant.ydim), skipna=True
+        ).where(tea_constant.daily_results.DTEC_GR == 1, tea_constant.null_val).values
         np.testing.assert_array_equal(
             tea_constant.daily_results.DTEMP_GR.values, expected)
+
+    def test_DTEMP_GR_uses_population_weighted_magnitude(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        np.testing.assert_allclose(
+            tea_constant.daily_results.DTEMP_GR.values,
+            (tea_constant.daily_results.DTEM_PW_GR * tea_constant.daily_results.DTEP_GR).values,
+        )
 
     def test_DTEMP_GR_attrs(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
@@ -260,7 +268,9 @@ class TestUpdateMinArea:
         )
         np.testing.assert_array_equal(
             tea_constant.daily_results.DTEMP_GR.values,
-            (tea_constant.daily_results.DTEM_GR * tea_constant.daily_results.DTEP_GR).values,
+            tea_constant.daily_results.DTEMP.sum(
+                dim=(tea_constant.xdim, tea_constant.ydim), skipna=True
+            ).where(tea_constant.daily_results.DTEC_GR == 1, tea_constant.null_val).values,
         )
 
     def test_invalidates_hourly_and_ctp_caches(self, tea_constant):
