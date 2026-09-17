@@ -67,3 +67,4 @@ def test_joint_series_records_the_source_transition():
     assert result.population.sel(year=1960).item() == 10
     assert result.population.sel(year=2002).item() == 30
     assert result.source_region_level.values.tolist() == ["NUTS3", "municipality"]
+    assert "Do not use" in result.attrs["trend_use_warning"]

@@ -156,6 +156,8 @@ def create_joint_series(nuts_factors, ardeco_totals, municipality_factors, stata
         "grid_crs": GRID_CRS,
         "conservation": "Regional source totals are conserved except for floating-point precision",
         "source_hierarchy": "ARDECO NUTS-3 before municipal data; Statistics Austria municipality stocks thereafter",
+        "trend_use_warning": "Do not use this mixed-resolution product for grid-cell or small-region trend studies "
+                             "across 2001-2002. The allocation regime changes from NUTS-3 to municipality in 2002.",
     }
     return result
 
