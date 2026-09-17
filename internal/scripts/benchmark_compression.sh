@@ -4,6 +4,8 @@ set -Eeuo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 PYTHON=${PYTHON:-"$ROOT/.venv/bin/python"}
+# WEGC203058:
+#PYTHON=/home/wegnet/.virtualenvs/teametrics-4Hw8N_wB-py3.14/bin/python3
 BASE_CONFIG=${BASE_CONFIG:-"$ROOT/internal/config/WEGC/heatwave_paper_Tx30_update.yaml"}
 RUN_ID=${BENCHMARK_RUN_ID:-"$(hostname -s)_$(date +%Y%m%d_%H%M%S)"}
 DATA_ROOT=${DATA_ROOT:-"/data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/tea-compression-benchmark/$RUN_ID"}
