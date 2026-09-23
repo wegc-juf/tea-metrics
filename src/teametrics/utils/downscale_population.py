@@ -102,6 +102,7 @@ def downscale_year(factors, totals, region_id, population, year):
     result.attrs = {
         "long_name": "Downscaled population count per 1 km grid cell",
         "units": "1",
+        "population_representation": "count_per_grid_cell",
         "allocation_method": "regional total multiplied by normalized reference-grid weight",
     }
     return result

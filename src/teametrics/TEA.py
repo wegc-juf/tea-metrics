@@ -59,8 +59,8 @@ class TEAIndicators:
             threshold: either gridded threshold values (xarray DataArray) or a constant threshold value (int, float)
             min_area: minimum area for a timestep to be considered as exceedance. Default: 1
                       (1 areal according to equation 03)
-            area_grid: grid containing the area of each grid cell in areals (1 areal = 100 m²)
-            population_grid: grid containing the population of each grid cell
+            area_grid: grid containing the area of each grid cell in areals (1 areal = 100 km²)
+            population_grid: population counts per grid cell
             low_extreme: set to True if values below the threshold are considered as extreme events. Default: False
             unit: unit of the input data. Default: ''
             mask: mask grid for input data containing nan values for cells that should be masked. Default: None
@@ -137,7 +137,10 @@ class TEAIndicators:
             self.area_grid = area_grid
             self.gr_size = area_grid.sum().values
 
+        if input_data is not None and not str(unit).strip():
+            raise ValueError("A non-empty input-data unit is required for magnitude-based TEA indicators.")
         self.population_grid = population_grid
+        self._validate_population_grid()
         if input_data is None:
             self._normalize_population_grid_dims()
         self.input_data = None
@@ -262,7 +265,19 @@ class TEAIndicators:
         missing_dims = {self.xdim, self.ydim}.difference(self.population_grid.dims)
         if missing_dims:
             raise ValueError("Population grid must contain the active spatial dimensions "
-                             f"'{self.xdim}' and '{self.ydim}'. Missing: {sorted(missing_dims)}")
+                              f"'{self.xdim}' and '{self.ydim}'. Missing: {sorted(missing_dims)}")
+
+    def _validate_population_grid(self):
+        """Reject population densities when population metadata are available."""
+        if self.population_grid is None:
+            return
+        units = str(self.population_grid.attrs.get('units', '')).strip().lower()
+        if units and units not in {'1', 'person', 'persons', 'people'}:
+            raise ValueError("Population grid must contain counts of persons per grid cell, "
+                             f"not '{units}'.")
+        representation = self.population_grid.attrs.get('population_representation')
+        if representation and representation != 'count_per_grid_cell':
+            raise ValueError("Population grid representation must be 'count_per_grid_cell'.")
         
     @staticmethod
     def find_dim_names(data):

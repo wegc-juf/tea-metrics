@@ -257,12 +257,12 @@ def _add_area_variables(ds, full_mask, mask, opts):
     area_grid = _create_area_grid(mask)
     area_attrs = {
         'long_name': 'mask-weighted grid-cell area',
-        'units': 'areal (100 m2)',
+        'units': 'areal (100 km2)',
         'coordinate_sys': f'EPSG:{opts.target_sys}',
     }
     area_size_attrs = {
         'long_name': 'summed mask area',
-        'units': 'areal (100 m2)',
+        'units': 'areal (100 km2)',
     }
     area_grid_full.attrs = area_attrs
     area_grid.attrs = area_attrs
