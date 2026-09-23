@@ -129,6 +129,12 @@ class TestSaveLoadCTP:
         assert tea2._crs == EXPECTED_CRS
         for var in tea_constant.ctp_results.data_vars:
             assert var in tea2.ctp_results
+        xr.testing.assert_allclose(
+            tea2.ctp_results['pTEX_GR'],
+            tea2.ctp_results['pTEX'].sum(
+                dim=(tea2.xdim, tea2.ydim), skipna=True
+            ),
+        )
 
     def test_ctp_interval_vars_datetime(self, tea_constant, tmp_path):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)

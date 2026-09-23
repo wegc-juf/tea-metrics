@@ -275,17 +275,19 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
                 data, mask, threshold, population_grid = reduced
             tea = TEA_class_obj(threshold=threshold, mask=mask,
                                 low_extreme=opts.low_extreme,
-                                population_grid=population_grid,
-                                unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                cell_size_y=opts.agr_cell_size,
-                                rounding_decimal_places=opts.rounding_decimal_places, agr_frac_min=opts.agr_frac_min,
-                                zlib_compression=opts.zlib_compression)
+                                 population_grid=population_grid,
+                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
+                                 cell_size_y=opts.agr_cell_size,
+                                 rounding_decimal_places=opts.rounding_decimal_places, agr_frac_min=opts.agr_frac_min,
+                                 compression_level=opts.compression_level,
+                                 zlib_compression=opts.zlib_compression)
         else:
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,
-                                population_grid=population_grid,
-                                unit=opts.unit,
-                                land_sea_mask=lsm, rounding_decimal_places=opts.rounding_decimal_places,
-                                zlib_compression=opts.zlib_compression)
+                                 population_grid=population_grid,
+                                 unit=opts.unit,
+                                 land_sea_mask=lsm, rounding_decimal_places=opts.rounding_decimal_places,
+                                 compression_level=opts.compression_level,
+                                 zlib_compression=opts.zlib_compression)
         logger.info(
             f'Loading daily basis variables from {dbv_filename}; if you want to recalculate them, '
             'set --recalc-daily.')
