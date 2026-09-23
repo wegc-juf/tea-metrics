@@ -416,11 +416,20 @@ def _load_population_grid(opts):
     logger.info(f'Loading population grid from {population_path}')
     population_file = xr.open_dataset(population_path)
     if 'population' in population_file.data_vars:
-        return population_file.population
-    if len(population_file.data_vars) == 1:
-        return population_file[next(iter(population_file.data_vars))]
-    raise ValueError(f'Population grid file {population_path} must contain a "population" '
-                     'variable or exactly one data variable.')
+        population = population_file.population
+    elif len(population_file.data_vars) == 1:
+        population = population_file[next(iter(population_file.data_vars))]
+    else:
+        raise ValueError(f'Population grid file {population_path} must contain a "population" '
+                         'variable or exactly one data variable.')
+    population.attrs = {
+        **population.attrs,
+        'population_source_path': str(population_path),
+        'population_source_product': population_file.attrs.get('source_population_product', ''),
+        'population_source_hierarchy': population_file.attrs.get('source_hierarchy', ''),
+        'allocation_grid': population_file.attrs.get('allocation_grid', ''),
+    }
+    return population
 
 
 def _load_lsm_file(opts):
@@ -667,6 +676,13 @@ def _reduce_region(opts, data, mask, threshold=None, full_region=False, populati
         threshold = threshold.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
     
     if population_grid is not None:
+        dim_map = {}
+        if 'easting' in population_grid.dims:
+            dim_map['easting'] = xdim
+        if 'northing' in population_grid.dims:
+            dim_map['northing'] = ydim
+        if dim_map:
+            population_grid = population_grid.rename(dim_map)
         population_grid = population_grid.sel({ydim: slice(y_min, y_max), xdim: slice(x_min, x_max)})
     
     if population_grid is not None:

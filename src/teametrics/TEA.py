@@ -268,7 +268,12 @@ class TEAIndicators:
                               f"'{self.xdim}' and '{self.ydim}'. Missing: {sorted(missing_dims)}")
 
     def _validate_population_grid(self):
-        """Reject population densities when population metadata are available."""
+        """Validate population-count metadata when it is present.
+
+        Population-dependent TEA variables require persons per grid cell.
+        Declared density units and unsupported representation markers are
+        rejected, while legacy grids with no population metadata remain valid.
+        """
         if self.population_grid is None:
             return
         units = str(self.population_grid.attrs.get('units', '')).strip().lower()
@@ -278,6 +283,78 @@ class TEAIndicators:
         representation = self.population_grid.attrs.get('population_representation')
         if representation and representation != 'count_per_grid_cell':
             raise ValueError("Population grid representation must be 'count_per_grid_cell'.")
+
+    def _population_time_basis(self):
+        """Return the temporal representation of the configured population grid.
+
+        Returns ``'static'`` for a spatial-only population grid and
+        ``'calendar_year'`` for a grid with one unique value per ``year``.
+        Raises a ``ValueError`` for unsupported non-spatial dimensions.
+        """
+        if self.population_grid is None:
+            return None
+        extra_dims = set(self.population_grid.dims).difference({self.xdim, self.ydim})
+        if not extra_dims:
+            return 'static'
+        if extra_dims == {'year'}:
+            if 'year' not in self.population_grid.coords:
+                raise ValueError("Annual population grid must provide a 'year' coordinate.")
+            years = np.asarray(self.population_grid.year.values)
+            if years.ndim != 1 or len(np.unique(years)) != len(years):
+                raise ValueError("Annual population grid must contain unique years.")
+            return 'calendar_year'
+        raise ValueError("Population grid may only have spatial dimensions or a 'year' dimension. "
+                         f"Unexpected dimensions: {sorted(extra_dims)}")
+
+    def _population_for_time(self, time):
+        """Return population counts aligned to supplied daily timestamps.
+
+        Static population is returned unchanged. Annual population is selected
+        by each timestamp's calendar year after exact spatial-coordinate
+        validation. Every requested calendar year must be present.
+
+        Args:
+            time: One-dimensional datetime coordinate for the daily data.
+
+        Returns:
+            A population DataArray with either spatial dimensions only or the
+            daily time and spatial dimensions.
+        """
+        if self.population_grid is None:
+            return None
+        basis = self._population_time_basis()
+        if basis == 'static':
+            return self.population_grid
+        for dim in (self.ydim, self.xdim):
+            if not self.population_grid[dim].equals(self.area_grid[dim]):
+                raise ValueError("Population grid coordinates must exactly match the area grid.")
+
+        years = np.asarray(time.dt.year.values)
+        available = set(np.asarray(self.population_grid.year.values).tolist())
+        missing = sorted(set(years.tolist()).difference(available))
+        if missing:
+            raise ValueError(f"Annual population grid is missing calendar years: {missing}")
+        indexer = xr.DataArray(years, dims=time.dims, coords=time.coords)
+        population = self.population_grid.sel(year=indexer)
+        return population.drop_vars('year')
+
+    def _population_provenance_attrs(self):
+        """Build serializable population source and calendar-basis metadata.
+
+        Returns:
+            A dictionary suitable for daily-basis or CTP dataset attributes.
+        """
+        if self.population_grid is None:
+            return {}
+        attrs = {'population_time_basis': self._population_time_basis()}
+        for key in ('population_source_path', 'population_source_product',
+                    'population_source_hierarchy', 'allocation_grid'):
+            if key in self.population_grid.attrs:
+                attrs[key] = self.population_grid.attrs[key]
+        if attrs['population_time_basis'] == 'calendar_year':
+            attrs['population_year_start'] = int(self.population_grid.year.min())
+            attrs['population_year_end'] = int(self.population_grid.year.max())
+        return attrs
         
     @staticmethod
     def find_dim_names(data):
@@ -415,8 +492,8 @@ class TEAIndicators:
                     raise ValueError("Input data and threshold results must have the same area")
                 if self.input_data.shape[-2:] != self.area_grid.shape:
                     raise ValueError("Input data and area results must have the same shape")
-                if self.population_grid is not None and self.population_grid.shape != self.area_grid.shape:
-                    raise ValueError("Input data and population grid must have the same shape")
+                if self.population_grid is not None:
+                    self._population_for_time(self.input_data[self.tdim])
 
     def _calc_DTEC(self):
         """
@@ -590,10 +667,12 @@ class TEAIndicators:
         if 'DTEC' not in self.daily_results:
             self._calc_DTEC()
         dtec = self.daily_results.DTEC
-        dtep = self._calc_TEP(dtec)
+        population = self._population_for_time(dtec['time'])
+        dtep = self._calc_TEP(dtec, population)
         dtep.attrs = get_attrs(vname='DTEP')
         self.daily_results['DTEP'] = dtep
         self.daily_results['population_grid'] = self.population_grid
+        self.daily_results.attrs.update(self._population_provenance_attrs())
 
     def _calc_TEA(self, tec):
         """
@@ -604,13 +683,15 @@ class TEAIndicators:
         tea = tec * self.area_grid
         return tea
 
-    def _calc_TEP(self, tec):
+    def _calc_TEP(self, tec, population=None):
         """
         calculate Threshold Exceedance Population
         """
-        if self.population_grid is None:
+        if population is None:
+            population = self.population_grid
+        if population is None:
             raise ValueError("Population grid must be set for threshold exceedance population calculations")
-        tep = tec * self.population_grid / 10000
+        tep = tec * population / 10000
         return tep
 
     def _calc_DTEA_GR(self, relative=False):
@@ -750,14 +831,20 @@ class TEAIndicators:
             return
         # Apply the unit conversion after reduction so eager and Dask do not
         # round cell-level quotients in different summation orders.
-        dtep_gr = (self.daily_results.DTEC * self.population_grid).sum(
+        population = self._population_for_time(self.daily_results.DTEC['time'])
+        dtep_gr = (self.daily_results.DTEC * population).sum(
             dim=(self.xdim, self.ydim), skipna=True) / 10000
         dtep_gr.attrs = get_attrs(vname='DTEP_GR')
         dtep_gr = dtep_gr.rename('DTEP_GR')
         self.daily_results['DTEP_GR'] = dtep_gr
 
     def _calc_DTEM_PW_GR(self):
-        """Calculate population-weighted daily exceedance magnitude for the GR."""
+        """Calculate population-weighted daily exceedance magnitude for the GR.
+
+        The magnitude is the spatial sum of gridded population extremity
+        divided by total exposed population. It is zero when the daily
+        exceedance does not qualify as a GeoRegion event.
+        """
         if 'DTEM_PW_GR' in self.daily_results:
             return
         if 'DTEMP' not in self.daily_results:
@@ -927,7 +1014,9 @@ class TEAIndicators:
             logger.debug(f"Rounding all data to {digits} decimal places")
             rounded_data_vars = {}
             for name, data in dataset.data_vars.items():
-                output_data = data.round(decimals=digits) if np.issubdtype(data.dtype, np.number) else data
+                output_data = (data.round(decimals=digits)
+                               if name != 'population_grid' and np.issubdtype(data.dtype, np.number)
+                               else data)
                 if (digits <= 3 and np.issubdtype(output_data.dtype, np.floating)
                         and self.xdim in output_data.dims and self.ydim in output_data.dims):
                     if self._float32_preserves_rounding(output_data, digits):
@@ -1082,11 +1171,29 @@ class TEAIndicators:
         """
         load all variables from filepath
         """
+        configured_population_time_basis = self._population_time_basis()
+        configured_population_source_path = (
+            self.population_grid.attrs.get('population_source_path')
+            if self.population_grid is not None else None
+        )
         self.daily_results = xr.open_dataset(filepath)
+        stored_population_time_basis = self.daily_results.attrs.get('population_time_basis')
+        stored_population_source_path = self.daily_results.attrs.get('population_source_path')
+        if (configured_population_time_basis == 'calendar_year'
+                and stored_population_time_basis != 'calendar_year'):
+            raise ValueError("Cached daily results do not use annual population; recalculate daily variables.")
+        if (configured_population_source_path and stored_population_source_path
+                and configured_population_source_path != stored_population_source_path):
+            raise ValueError("Cached daily results use a different population source; recalculate daily variables.")
         self.area_grid = self.daily_results.area_grid
         self.gr_size = self.area_grid.sum().values
         self.unit = self.daily_results.DTEM.attrs['units']
         self._find_dim_names(data=self.daily_results)
+        self.tdim = 'time'
+        if 'population_grid' in self.daily_results:
+            self.population_grid = self.daily_results.population_grid
+            self._validate_population_grid()
+            self._normalize_population_grid_dims()
         crs = self._read_crs(self.area_grid)
         if crs is not None:
             self._crs = crs
@@ -1097,6 +1204,7 @@ class TEAIndicators:
         """
         self.daily_results = daily_results
         self.unit = self.daily_results.DTEM.attrs['units']
+        self.tdim = 'time'
 
     def get_daily_results(self, grid=True, gr=True):
         """
@@ -1133,7 +1241,7 @@ class TEAIndicators:
         # The threshold changes the GR event mask. Invalidate all cached
         # quantities derived from that mask before recalculating daily values.
         self._invalidate_daily_results(
-            'DTEMA_GR', 'DTEMP_GR', 'DTEM_PW_GR', 'DTEM_Max_GR', 'DTEEC_GR',
+            'DTEP_GR', 'DTEMA_GR', 'DTEMP_GR', 'DTEM_PW_GR', 'DTEM_Max_GR', 'DTEEC_GR',
             'Nhours_GR', 'DTED_GR', 't_hfirst_GR', 't_hlast_GR', 't_hmax_GR',
             'h_rise_GR', 'h_set_GR',
         )
@@ -1626,11 +1734,13 @@ class TEAIndicators:
         if 'DTEMP_GR' in self._CTP_resample_sum:
             ptex = self._CTP_resample_sum.DTEMP_GR
             ptex.attrs = get_attrs(vname='pTEX_GR', data_unit=self.unit)
+            ptex.attrs.update(self._population_provenance_attrs())
             self.ctp_results['pTEX_GR'] = ptex
 
         if 'DTEMP' in self._CTP_resample_sum:
             ptex_nl = self._CTP_resample_sum.DTEMP
             ptex_nl.attrs = get_attrs(vname='pTEX', data_unit=self.unit)
+            ptex_nl.attrs.update(self._population_provenance_attrs())
             self.ctp_results['pTEX'] = ptex_nl
 
     @staticmethod
