@@ -160,19 +160,49 @@ class TestCalcExceedancePopulation:
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant.calc_annual_ctp_indicators(ctp="annual")
 
-        dtem_pw_gr = tea_constant._CTP_resample_sum['DTEM_PW_GR']
-        expected = (tea_constant.ctp_results['pTEX_GR'] / dtem_pw_gr).where(
-            dtem_pw_gr > 0, 0
+        pem_gr = tea_constant.ctp_results['pEM_GR']
+        expected = (tea_constant.ctp_results['pTEX_GR'] / pem_gr).where(
+            pem_gr > 0, 0
         )
         xr.testing.assert_allclose(tea_constant.ctp_results['EP_avg_GR'], expected)
         assert tea_constant.ctp_results['EP_avg_GR'].attrs['units'] == '10^4 person'
         assert tea_constant.ctp_results['EP_avg_GR'].attrs['metric_type'] == 'basic'
+
+    def test_population_weighted_magnitude_family(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        xr.testing.assert_allclose(
+            tea_constant.ctp_results['pEM_GR'],
+            tea_constant._CTP_resample_sum['DTEM_PW_GR'],
+        )
+        xr.testing.assert_allclose(
+            tea_constant.ctp_results['pEM_avg_GR'],
+            (tea_constant.ctp_results['pEM_GR'] / tea_constant.ctp_results['ED_GR']).where(
+                tea_constant.ctp_results['ED_GR'] > 0, 0
+            ),
+        )
+        xr.testing.assert_allclose(
+            tea_constant.ctp_results['pEM_avg_GR_Md'],
+            tea_constant._CTP_resample_median['DTEM_PW_GR'],
+        )
+        xr.testing.assert_allclose(
+            tea_constant.ctp_results['pEM_GR_Md'],
+            tea_constant.ctp_results['ED_GR'] * tea_constant.ctp_results['pEM_avg_GR_Md'],
+        )
 
     def test_EP_avg_GR_is_skipped_without_population(self, tea_constant_no_pop):
         tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
 
         assert 'EP_avg_GR' not in tea_constant_no_pop.ctp_results
+
+    def test_population_weighted_magnitudes_are_skipped_without_population(self, tea_constant_no_pop):
+        tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
+
+        for variable in ('pEM_GR', 'pEM_avg_GR', 'pEM_avg_GR_Md', 'pEM_GR_Md'):
+            assert variable not in tea_constant_no_pop.ctp_results
 
 
 class TestPopulationAndAreaExtremityUnits:

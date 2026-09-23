@@ -1741,37 +1741,77 @@ class TEAIndicators:
             self.ctp_results['TEX'] = tex_nl
 
     def _calc_annual_ptex(self):
+        """Calculate CTP population extremity derived from equation 21_3."""
         if 'DTEMP_GR' in self._CTP_resample_sum:
+            # Derived from equation 21_3 - change when defined in SN.
             ptex = self._CTP_resample_sum.DTEMP_GR
             ptex.attrs = get_attrs(vname='pTEX_GR', data_unit=self.unit)
             ptex.attrs.update(self._population_provenance_attrs())
             self.ctp_results['pTEX_GR'] = ptex
 
         if 'DTEMP' in self._CTP_resample_sum:
+            # Derived from equation 21_3 - change when defined in SN.
             ptex_nl = self._CTP_resample_sum.DTEMP
             ptex_nl.attrs = get_attrs(vname='pTEX', data_unit=self.unit)
             ptex_nl.attrs.update(self._population_provenance_attrs())
             self.ctp_results['pTEX'] = ptex_nl
 
     def _calc_annual_exceedance_population(self):
-        """Calculate cumulative and average population exposure for each CTP."""
+        """Calculate CTP population exposure derived from equation 21_1."""
         if 'DTEP' in self._CTP_resample_sum:
+            # Derived from equation 21_1 - change when defined in SN.
             ep = self._CTP_resample_sum.DTEP
             ep.attrs = get_attrs(vname='EP')
             ep.attrs.update(self._population_provenance_attrs())
             self.ctp_results['EP'] = ep
 
-        if ('pTEX_GR' not in self.ctp_results
-                or 'DTEM_PW_GR' not in self._CTP_resample_sum):
+        if 'pTEX_GR' not in self.ctp_results or 'pEM_GR' not in self.ctp_results:
             return
 
-        dtem_pw_gr = self._CTP_resample_sum.DTEM_PW_GR
-        ep_avg_gr = (self.ctp_results.pTEX_GR / dtem_pw_gr).where(
-            dtem_pw_gr > 0, 0
+        # Derived from equation 21_1 - change when defined in SN.
+        ep_avg_gr = (self.ctp_results.pTEX_GR / self.ctp_results.pEM_GR).where(
+            self.ctp_results.pEM_GR > 0, 0
         )
         ep_avg_gr.attrs = get_attrs(vname='EP_avg_GR')
         ep_avg_gr.attrs.update(self._population_provenance_attrs())
         self.ctp_results['EP_avg_GR'] = ep_avg_gr
+
+    def _calc_annual_population_weighted_magnitude(self):
+        """Calculate CTP population-weighted magnitudes derived from equations 18 and 19."""
+        if 'DTEM_PW_GR' not in self._CTP_resample_sum:
+            return
+
+        # Derived from equation 18_2 - change when defined in SN.
+        pem_gr = self._CTP_resample_sum.DTEM_PW_GR
+        pem_gr.attrs = get_attrs(vname='pEM_GR', data_unit=self.unit)
+        pem_gr.attrs.update(self._population_provenance_attrs())
+        self.ctp_results['pEM_GR'] = pem_gr
+
+        if 'ED_GR' not in self.ctp_results:
+            return
+
+        # Derived from equation 18_1 - change when defined in SN.
+        pem_avg_gr = (pem_gr / self.ctp_results.ED_GR).where(
+            self.ctp_results.ED_GR > 0, 0
+        )
+        pem_avg_gr.attrs = get_attrs(vname='pEM_avg_GR', data_unit=self.unit)
+        pem_avg_gr.attrs.update(self._population_provenance_attrs())
+        self.ctp_results['pEM_avg_GR'] = pem_avg_gr
+
+        if 'DTEM_PW_GR' not in self._CTP_resample_median:
+            return
+
+        # Derived from equation 19_3 - change when defined in SN.
+        pem_avg_gr_med = self._CTP_resample_median.DTEM_PW_GR
+        pem_avg_gr_med.attrs = get_attrs(vname='pEM_avg_GR_Md', data_unit=self.unit)
+        pem_avg_gr_med.attrs.update(self._population_provenance_attrs())
+        self.ctp_results['pEM_avg_GR_Md'] = pem_avg_gr_med
+
+        # Derived from equation 19_4 - change when defined in SN.
+        pem_gr_med = self.ctp_results.ED_GR * pem_avg_gr_med
+        pem_gr_med.attrs = get_attrs(vname='pEM_GR_Md', data_unit=self.unit)
+        pem_gr_med.attrs.update(self._population_provenance_attrs())
+        self.ctp_results['pEM_GR_Md'] = pem_gr_med
 
     @staticmethod
     def _calc_maximum_event_extremity_1d(dtec_cell, dtema_cell, time_cell, min_duration=1):
@@ -2119,6 +2159,7 @@ class TEAIndicators:
         self._calc_annual_event_duration()
         self._calc_hourly_ctp_vars()
         self._calc_annual_exceedance_magnitude()
+        self._calc_annual_population_weighted_magnitude()
         self._calc_annual_avg_duration_magnitude()
         self._calc_annual_htEX()
         self._calc_annual_total_events_extremity()
@@ -2952,7 +2993,7 @@ class TEAIndicators:
 
         # dask does not support median for resampling so resample only what is necessary
         self._CTP_resample_median = xr.Dataset()
-        for var in ['DTEM', 'DTEM_GR']:
+        for var in ['DTEM', 'DTEM_GR', 'DTEM_PW_GR']:
             if var in self._daily_results_filtered:
                 self._daily_results_filtered[var].load()
                 # equation 19_1 and equation 19_3
