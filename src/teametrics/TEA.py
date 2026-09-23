@@ -1934,10 +1934,10 @@ class TEAIndicators:
             self.ctp_results['EA'] = ea
 
         # equation 21_1
-        ea_avg = self.ctp_results.TEX_GR / self.ctp_results.EM_GR
-        ea_avg = xr.where(self.ctp_results.EM_GR == 0, 0, ea_avg)
-        ea_avg.attrs = get_attrs(vname='EA_avg_GR')
-        self.ctp_results['EA_avg_GR'] = ea_avg
+        ea_avg_gr = self.ctp_results.TEX_GR / self.ctp_results.EM_GR
+        ea_avg_gr = xr.where(self.ctp_results.EM_GR == 0, 0, ea_avg_gr)
+        ea_avg_gr.attrs = get_attrs(vname='EA_avg_GR')
+        self.ctp_results['EA_avg_GR'] = ea_avg_gr
 
     def _calc_annual_event_severity(self):
         """
@@ -2912,7 +2912,7 @@ class TEAIndicators:
         sum_vars = [
             var for var in (
                 'DTEEC', 'DTEC', 'DTEEC_GR', 'DTEC_GR', 'DTEM', 'DTEM_GR',
-                'DTEM_Max_GR', 'DTEMA_GR', 'DTEMA', 'DTEMP_GR', 'DTEMP', 'DTEA',
+                'DTEM_Max_GR', 'DTEMA_GR', 'DTEMA', 'DTEMP_GR', 'DTEMP', 'DTEA', 'DTEA_GR',
             )
             if var in self._daily_results_filtered
         ]
