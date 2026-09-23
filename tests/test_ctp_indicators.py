@@ -1,5 +1,7 @@
 import numpy as np
 import xarray as xr
+
+from teametrics.common.var_attrs import get_attrs
 from teametrics.TEA import TEAIndicators
 
 
@@ -136,6 +138,24 @@ class TestCalcPTEX:
             "10^4 person K d"
         assert tea_constant.ctp_results["pTEX_GR"].attrs["long_name"] == \
             "total events population-extremity (GR)"
+
+    def test_population_and_area_extremity_units(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        assert tea_constant.daily_results.DTEMA.attrs['units'] == '100 km^2 K'
+        assert tea_constant.daily_results.DTEMP.attrs['units'] == '10^4 person K'
+        assert tea_constant.daily_results.DTEMP_GR.attrs['units'] == '10^4 person K'
+        assert tea_constant.ctp_results.TEX.attrs['units'] == '100 km^2 K d'
+        assert tea_constant.ctp_results.TEX_GR.attrs['units'] == '100 km^2 K d'
+        assert tea_constant.ctp_results.pTEX.attrs['units'] == '10^4 person K d'
+        assert tea_constant.ctp_results.pTEX_GR.attrs['units'] == '10^4 person K d'
+
+
+def test_cumulative_area_and_event_count_units():
+    assert get_attrs('EA')['units'] == '100 km^2 d'
+    assert get_attrs('EA')['long_name'] == 'cumulative exceedance area'
+    assert get_attrs('EF')['units'] == '1'
+    assert get_attrs('EF')['long_name'] == 'event count in climatic time period'
 
     def test_pTEX_idempotent(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
