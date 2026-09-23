@@ -129,6 +129,9 @@ class TestSaveLoadCTP:
         assert tea2._crs == EXPECTED_CRS
         for var in tea_constant.ctp_results.data_vars:
             assert var in tea2.ctp_results
+        for var in ('EP', 'EP_avg_GR', 'pEM_GR', 'pEM_avg_GR',
+                    'pEM_avg_GR_Md', 'pEM_GR_Md'):
+            assert tea2.ctp_results[var].attrs['population_time_basis'] == 'static'
         xr.testing.assert_allclose(
             tea2.ctp_results['pTEX_GR'],
             tea2.ctp_results['pTEX'].sum(
