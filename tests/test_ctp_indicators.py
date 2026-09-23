@@ -183,6 +183,14 @@ class TestCalcExceedanceArea:
         assert "EA" in tea_constant.ctp_results
         assert "EA_avg_GR" in tea_constant.ctp_results
 
+    def test_returns_when_required_ctp_variables_cannot_be_created(self, tea_constant, monkeypatch):
+        tea_constant.ctp_results = xr.Dataset()
+        monkeypatch.setattr(tea_constant, '_calc_annual_total_events_extremity', lambda: None)
+
+        tea_constant._calc_annual_exceedance_area()
+
+        assert not tea_constant.ctp_results.data_vars
+
 
 class TestCalcEventSeverity:
     def test_ES_exists(self, tea_constant):

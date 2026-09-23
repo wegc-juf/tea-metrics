@@ -1922,11 +1922,13 @@ class TEAIndicators:
         calculate exceedance area (equation 21_1)
         """
         if 'TEX_GR' not in self.ctp_results:
-            return
-        if self.ctp_results['TEX_GR'] is None:
             self._calc_annual_total_events_extremity()
-        if self.ctp_results['EM_GR'] is None:
+        if 'TEX_GR' not in self.ctp_results:
+            return
+        if 'EM_GR' not in self.ctp_results:
             self._calc_annual_exceedance_magnitude()
+        if 'EM_GR' not in self.ctp_results:
+            return
             
         if 'DTEA' in self._CTP_resample_sum:
             ea = self._CTP_resample_sum.DTEA
