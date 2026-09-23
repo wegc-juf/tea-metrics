@@ -52,6 +52,30 @@ def test_annual_population_is_used_by_ctp_ptex():
     assert tea.ctp_results.pTEX_GR.attrs['population_year_end'] == 2002
 
 
+def test_annual_population_is_used_by_ctp_population_exposure():
+    tea = _annual_tea(_annual_population())
+    tea.calc_daily_basis_vars(grid=True, gr=True)
+    tea.calc_annual_ctp_indicators(ctp='annual')
+
+    np.testing.assert_allclose(
+        tea.ctp_results.EP.isel(lat=0, lon=0).values, [0.0101, 0.0102]
+    )
+    assert tea.ctp_results.EP.attrs['population_time_basis'] == 'calendar_year'
+    assert tea.ctp_results.EP.attrs['population_year_start'] == 2001
+    assert tea.ctp_results.EP.attrs['population_year_end'] == 2002
+
+
+def test_annual_population_is_used_by_ctp_average_population_exposure():
+    tea = _annual_tea(_annual_population())
+    tea.calc_daily_basis_vars(grid=True, gr=True)
+    tea.calc_annual_ctp_indicators(ctp='annual')
+
+    np.testing.assert_allclose(tea.ctp_results.EP_avg_GR.values, [0.0404, 0.0408])
+    assert tea.ctp_results.EP_avg_GR.attrs['population_time_basis'] == 'calendar_year'
+    assert tea.ctp_results.EP_avg_GR.attrs['population_year_start'] == 2001
+    assert tea.ctp_results.EP_avg_GR.attrs['population_year_end'] == 2002
+
+
 def test_annual_population_rejects_missing_calendar_year():
     with pytest.raises(ValueError, match=r'missing calendar years: \[2002\]'):
         _annual_tea(_annual_population(years=(2001,)))

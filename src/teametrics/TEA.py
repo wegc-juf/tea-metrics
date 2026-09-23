@@ -1753,6 +1753,26 @@ class TEAIndicators:
             ptex_nl.attrs.update(self._population_provenance_attrs())
             self.ctp_results['pTEX'] = ptex_nl
 
+    def _calc_annual_exceedance_population(self):
+        """Calculate cumulative and average population exposure for each CTP."""
+        if 'DTEP' in self._CTP_resample_sum:
+            ep = self._CTP_resample_sum.DTEP
+            ep.attrs = get_attrs(vname='EP')
+            ep.attrs.update(self._population_provenance_attrs())
+            self.ctp_results['EP'] = ep
+
+        if ('pTEX_GR' not in self.ctp_results
+                or 'DTEM_PW_GR' not in self._CTP_resample_sum):
+            return
+
+        dtem_pw_gr = self._CTP_resample_sum.DTEM_PW_GR
+        ep_avg_gr = (self.ctp_results.pTEX_GR / dtem_pw_gr).where(
+            dtem_pw_gr > 0, 0
+        )
+        ep_avg_gr.attrs = get_attrs(vname='EP_avg_GR')
+        ep_avg_gr.attrs.update(self._population_provenance_attrs())
+        self.ctp_results['EP_avg_GR'] = ep_avg_gr
+
     @staticmethod
     def _calc_maximum_event_extremity_1d(dtec_cell, dtema_cell, time_cell, min_duration=1):
         """
@@ -2103,6 +2123,7 @@ class TEAIndicators:
         self._calc_annual_htEX()
         self._calc_annual_total_events_extremity()
         self._calc_annual_ptex()
+        self._calc_annual_exceedance_population()
         self._calc_annual_hourly_total_events_extremity()
         self._calc_annual_exceedance_area()
         self._calc_annual_event_severity()
@@ -2915,6 +2936,7 @@ class TEAIndicators:
             var for var in (
                 'DTEEC', 'DTEC', 'DTEEC_GR', 'DTEC_GR', 'DTEM', 'DTEM_GR',
                 'DTEM_Max_GR', 'DTEMA_GR', 'DTEMA', 'DTEMP_GR', 'DTEMP', 'DTEA', 'DTEA_GR',
+                'DTEP', 'DTEM_PW_GR',
             )
             if var in self._daily_results_filtered
         ]

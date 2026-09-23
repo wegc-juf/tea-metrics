@@ -139,6 +139,43 @@ class TestCalcPTEX:
         assert tea_constant.ctp_results["pTEX_GR"].attrs["long_name"] == \
             "total events population-extremity (GR)"
 
+class TestCalcExceedancePopulation:
+    def test_EP_is_temporal_sum_of_DTEP(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        xr.testing.assert_allclose(
+            tea_constant.ctp_results['EP'],
+            tea_constant._CTP_resample_sum['DTEP'],
+        )
+        assert tea_constant.ctp_results['EP'].attrs['units'] == '10^4 person d'
+
+    def test_EP_is_skipped_without_population(self, tea_constant_no_pop):
+        tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
+
+        assert 'EP' not in tea_constant_no_pop.ctp_results
+
+    def test_EP_avg_GR_uses_population_weighted_magnitude(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        dtem_pw_gr = tea_constant._CTP_resample_sum['DTEM_PW_GR']
+        expected = (tea_constant.ctp_results['pTEX_GR'] / dtem_pw_gr).where(
+            dtem_pw_gr > 0, 0
+        )
+        xr.testing.assert_allclose(tea_constant.ctp_results['EP_avg_GR'], expected)
+        assert tea_constant.ctp_results['EP_avg_GR'].attrs['units'] == '10^4 person'
+        assert tea_constant.ctp_results['EP_avg_GR'].attrs['metric_type'] == 'basic'
+
+    def test_EP_avg_GR_is_skipped_without_population(self, tea_constant_no_pop):
+        tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
+
+        assert 'EP_avg_GR' not in tea_constant_no_pop.ctp_results
+
+
+class TestPopulationAndAreaExtremityUnits:
     def test_population_and_area_extremity_units(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant.calc_annual_ctp_indicators(ctp="annual")
