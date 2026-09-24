@@ -220,6 +220,23 @@ class TestCalcExceedancePopulation:
             tea_constant.ctp_results['ED_GR'] * tea_constant.ctp_results['pEM_avg_GR_Md'],
         )
 
+    def test_gridded_population_metric_family(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        ctp = tea_constant.ctp_results
+        for variable in ('EP_avg', 'pEM', 'pEM_avg', 'pEM_avg_Md', 'pEM_Md', 'pES_avg'):
+            assert variable in ctp
+            assert ctp[variable].attrs['population_time_basis'] == 'static'
+        xr.testing.assert_allclose(ctp['pEM'], tea_constant._CTP_resample_sum['DTEM'])
+        xr.testing.assert_allclose(ctp['pEM'], ctp['ED'] * ctp['pEM_avg'])
+        xr.testing.assert_allclose(ctp['pEM_Md'], ctp['ED'] * ctp['pEM_avg_Md'])
+        xr.testing.assert_allclose(ctp['EP_avg'], (ctp['pTEX'] / ctp['pEM']).where(ctp['pEM'] > 0, 0))
+        xr.testing.assert_allclose(
+            ctp['pES_avg'], ctp['ED_avg'] * ctp['pEM_avg'] * ctp['EP_avg']
+        )
+        xr.testing.assert_allclose(ctp['pTEX'], ctp['EF'] * ctp['pES_avg'])
+
     def test_population_extremity_identities(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant.calc_annual_ctp_indicators(ctp="annual")

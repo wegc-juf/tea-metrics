@@ -56,6 +56,36 @@ class TestCalcDecadalIndicators:
         )
         xr.testing.assert_allclose(dec['pTEX_GR'], dec['EF_GR'] * dec['pES_avg_GR'])
 
+    def test_gridded_population_decadal_compound_identities(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        tea_constant.calc_decadal_indicators(
+            decadal_window=(10, 5, 4), drop_annual_results=False,
+            calc_annual_ref=False)
+
+        dec = tea_constant.decadal_results
+        for variable in ('EP_avg', 'pEM', 'pEM_avg', 'pEM_avg_Md', 'pEM_Md', 'pES_avg', 'pTEX'):
+            assert variable in dec
+            assert dec[variable].attrs['population_time_basis'] == 'static'
+        xr.testing.assert_allclose(dec['pEM'], dec['ED'] * dec['pEM_avg'])
+        xr.testing.assert_allclose(dec['pEM_Md'], dec['ED'] * dec['pEM_avg_Md'])
+        xr.testing.assert_allclose(
+            dec['pES_avg'], dec['ED_avg'] * dec['pEM_avg'] * dec['EP_avg']
+        )
+        xr.testing.assert_allclose(dec['pTEX'], dec['EF'] * dec['pES_avg'])
+
+    def test_static_population_grid_is_preserved_in_decadal_results(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        tea_constant.calc_decadal_indicators(
+            decadal_window=(10, 5, 4), drop_annual_results=False,
+            calc_annual_ref=False)
+
+        dec = tea_constant.decadal_results
+        xr.testing.assert_allclose(dec['population_grid'], tea_constant.population_grid)
+        assert dec.population_grid.attrs['metric_type'] == 'metadata'
+        assert dec.population_grid.attrs['long_name'].startswith('decadal-mean ')
+
     def test_population_decadal_variables_are_skipped_without_population(self, tea_constant_no_pop):
         tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
@@ -63,7 +93,8 @@ class TestCalcDecadalIndicators:
             decadal_window=(10, 5, 4), drop_annual_results=False,
             calc_annual_ref=False)
 
-        for variable in ('pEM_GR', 'pEM_GR_Md', 'pES_avg_GR', 'pTEX_GR'):
+        for variable in ('EP_avg', 'pEM', 'pEM_avg', 'pEM_avg_Md', 'pEM_Md', 'pES_avg', 'pTEX',
+                         'pEM_GR', 'pEM_GR_Md', 'pES_avg_GR', 'pTEX_GR'):
             assert variable not in tea_constant_no_pop.decadal_results
 
     def test_decadal_spread_estimators(self, tea_constant):

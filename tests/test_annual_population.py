@@ -88,6 +88,36 @@ def test_annual_population_ctp_chunks_combine_by_time(tmp_path):
     np.testing.assert_array_equal(loaded.ctp_results.population_grid.time, tea.ctp_results.time)
 
 
+def test_annual_population_grid_uses_decadal_rolling_mean():
+    time = pd.date_range('2001-01-01', periods=15, freq='YS')
+    population = xr.DataArray(
+        np.arange(15 * 2 * 2, dtype=float).reshape(15, 2, 2),
+        dims=('time', 'lat', 'lon'),
+        coords={'time': time, 'lat': [47.0, 48.0], 'lon': [15.0, 16.0]},
+        attrs={
+            'long_name': 'annual population count per grid cell',
+            'metric_type': 'metadata',
+            'population_time_basis': 'calendar_year',
+        },
+    )
+    tea = object.__new__(TEAIndicators)
+    tea.unit = 'K'
+    tea.ctp_results = xr.Dataset({'population_grid': population})
+    tea.decadal_results = xr.Dataset()
+
+    tea._calc_decadal_mean((10, 5, 4))
+
+    expected = population.rolling(time=10, center=True, min_periods=1).mean()
+    expected[:5] = np.nan
+    expected[-4:] = np.nan
+    expected.attrs = population.attrs.copy()
+    expected.attrs['long_name'] = 'decadal-mean annual population count per grid cell'
+    expected.attrs['population_year_start'] = 2001
+    expected.attrs['population_year_end'] = 2015
+    expected = expected.rename('population_grid')
+    xr.testing.assert_identical(tea.decadal_results.population_grid, expected)
+
+
 def test_annual_population_is_used_by_ctp_population_exposure():
     tea = _annual_tea(_annual_population())
     tea.calc_daily_basis_vars(grid=True, gr=True)
