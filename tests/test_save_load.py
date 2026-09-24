@@ -129,6 +129,20 @@ class TestSaveLoadCTP:
         assert tea2._crs == EXPECTED_CRS
         for var in tea_constant.ctp_results.data_vars:
             assert var in tea2.ctp_results
+        for var in ('EP', 'EP_avg_GR', 'pEM_GR', 'pEM_avg_GR',
+                    'pEM_avg_GR_Md', 'pEM_GR_Md'):
+            assert tea2.ctp_results[var].attrs['population_time_basis'] == 'static'
+        np.testing.assert_array_equal(
+            tea2.ctp_results['population_grid'].values,
+            tea_constant.population_grid.values,
+        )
+        assert tea2.ctp_results['population_grid'].dims == tea_constant.population_grid.dims
+        xr.testing.assert_allclose(
+            tea2.ctp_results['pTEX_GR'],
+            tea2.ctp_results['pTEX'].sum(
+                dim=(tea2.xdim, tea2.ydim), skipna=True
+            ),
+        )
 
     def test_ctp_interval_vars_datetime(self, tea_constant, tmp_path):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)

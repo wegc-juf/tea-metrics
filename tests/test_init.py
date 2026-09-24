@@ -18,6 +18,17 @@ class TestInit:
     def test_no_population(self, tea_no_pop):
         assert tea_no_pop.population_grid is None
 
+    def test_rejects_population_density_metadata(self, tea):
+        density = tea.population_grid.copy()
+        density.attrs['units'] = 'person km-2'
+        with pytest.raises(ValueError, match='counts of persons'):
+            TEAIndicators(input_data=tea.input_data, threshold=tea.threshold_grid,
+                          population_grid=density, unit='K')
+
+    def test_requires_unit_for_input_data(self, tea):
+        with pytest.raises(ValueError, match='non-empty input-data unit'):
+            TEAIndicators(input_data=tea.input_data, threshold=tea.threshold_grid)
+
     def test_daily_results_initialized(self, tea):
         assert tea.daily_results is not None
         assert isinstance(tea.daily_results, xr.Dataset)
@@ -101,7 +112,7 @@ class TestAreaGrid:
     def test_supplied_area_grid_is_preferred(self, tea):
         supplied = xr.full_like(tea.area_grid, 42.0).rename('area_grid')
         result = TEAIndicators(input_data=tea.input_data, threshold=tea.threshold_grid,
-                               area_grid=supplied)
+                               area_grid=supplied, unit='K')
 
         xr.testing.assert_equal(result.area_grid, supplied)
 

@@ -150,7 +150,9 @@ class TestSelectSubGr:
         )
         xr.testing.assert_allclose(
             tea_sub.daily_results.DTEMP_GR,
-            tea_sub.daily_results.DTEM_GR * tea_sub.daily_results.DTEP_GR,
+            tea_sub.daily_results.DTEMP.sum(
+                dim=(tea_sub.xdim, tea_sub.ydim), skipna=True
+            ),
         )
         assert not np.allclose(
             tea_sub.daily_results.DTEMA_GR.values,

@@ -1,5 +1,8 @@
 import numpy as np
+import pandas as pd
 import xarray as xr
+
+from teametrics.common.var_attrs import get_attrs
 from teametrics.TEA import TEAIndicators
 
 
@@ -22,6 +25,16 @@ class TestCalcEventFrequency:
         tea_constant.calc_annual_ctp_indicators(ctp="annual")
         assert np.all(tea_constant.ctp_results.EF.values >= 0)
         assert np.all(tea_constant.ctp_results.EF_GR.values >= 0)
+
+    def test_event_crossing_ctp_boundary_is_counted_in_each_ctp(self, tea_constant):
+        tea_constant._set_ctp('annual')
+        dtec = xr.DataArray(
+            [1, 1], dims='time', coords={'time': pd.to_datetime(['2001-12-31', '2002-01-01'])}
+        )
+
+        event_count = tea_constant._count_events_within_ctp(dtec)
+
+        np.testing.assert_array_equal(event_count.values, [1, 1])
 
 
 class TestCalcSupplementaryEventVars:
@@ -99,6 +112,16 @@ class TestCalcTEX:
         assert tea_constant.ctp_results.TEX_GR.attrs["long_name"] == \
             "total events extremity (GR)"
 
+    def test_EA_avg_grid_uses_TEX_over_EM(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        expected = (tea_constant.ctp_results.TEX / tea_constant.ctp_results.EM).where(
+            tea_constant.ctp_results.EM > 0, 0
+        )
+        xr.testing.assert_allclose(tea_constant.ctp_results.EA_avg, expected)
+        assert tea_constant.ctp_results.EA_avg.attrs['metric_type'] == 'basic'
+
 
 class TestCalcPTEX:
     def test_pTEX_exists(self, tea_constant):
@@ -117,6 +140,16 @@ class TestCalcPTEX:
             tea_constant.ctp_results["pTEX_GR"].values,
             tea_constant._CTP_resample_sum.DTEMP_GR.values)
 
+    def test_pTEX_GR_is_spatial_sum_of_pTEX(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        xr.testing.assert_allclose(
+            tea_constant.ctp_results["pTEX_GR"],
+            tea_constant.ctp_results["pTEX"].sum(
+                dim=(tea_constant.xdim, tea_constant.ydim), skipna=True
+            ),
+        )
+
     def test_pTEX_attrs(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant.calc_annual_ctp_indicators(ctp="annual")
@@ -126,6 +159,144 @@ class TestCalcPTEX:
             "10^4 person K d"
         assert tea_constant.ctp_results["pTEX_GR"].attrs["long_name"] == \
             "total events population-extremity (GR)"
+
+class TestCalcExceedancePopulation:
+    def test_population_grid_is_retained_in_ctp_results(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        np.testing.assert_array_equal(
+            tea_constant.ctp_results['population_grid'].values,
+            tea_constant.population_grid.values,
+        )
+        assert tea_constant.ctp_results['population_grid'].dims == tea_constant.population_grid.dims
+        assert tea_constant.ctp_results.population_grid.attrs['population_time_basis'] == 'static'
+        assert tea_constant.ctp_results.population_grid.attrs['metric_type'] == 'metadata'
+
+    def test_population_grid_is_skipped_without_population(self, tea_constant_no_pop):
+        tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
+
+        assert 'population_grid' not in tea_constant_no_pop.ctp_results
+
+    def test_EP_is_temporal_sum_of_DTEP(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        xr.testing.assert_allclose(
+            tea_constant.ctp_results['EP'],
+            tea_constant._CTP_resample_sum['DTEP'],
+        )
+        assert tea_constant.ctp_results['EP'].attrs['units'] == '10^4 person d'
+
+    def test_EP_is_skipped_without_population(self, tea_constant_no_pop):
+        tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
+
+        assert 'EP' not in tea_constant_no_pop.ctp_results
+
+    def test_EP_avg_GR_uses_population_weighted_magnitude(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        pem_gr = tea_constant.ctp_results['pEM_GR']
+        expected = (tea_constant.ctp_results['pTEX_GR'] / pem_gr).where(
+            pem_gr > 0, 0
+        )
+        xr.testing.assert_allclose(tea_constant.ctp_results['EP_avg_GR'], expected)
+        assert tea_constant.ctp_results['EP_avg_GR'].attrs['units'] == '10^4 person'
+        assert tea_constant.ctp_results['EP_avg_GR'].attrs['metric_type'] == 'basic'
+
+    def test_population_weighted_magnitude_family(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        xr.testing.assert_allclose(
+            tea_constant.ctp_results['pEM_GR'],
+            tea_constant._CTP_resample_sum['DTEM_PW_GR'],
+        )
+        xr.testing.assert_allclose(
+            tea_constant.ctp_results['pEM_avg_GR'],
+            (tea_constant.ctp_results['pEM_GR'] / tea_constant.ctp_results['ED_GR']).where(
+                tea_constant.ctp_results['ED_GR'] > 0, 0
+            ),
+        )
+        xr.testing.assert_allclose(
+            tea_constant.ctp_results['pEM_avg_GR_Md'],
+            tea_constant._CTP_resample_median['DTEM_PW_GR'],
+        )
+        xr.testing.assert_allclose(
+            tea_constant.ctp_results['pEM_GR_Md'],
+            tea_constant.ctp_results['ED_GR'] * tea_constant.ctp_results['pEM_avg_GR_Md'],
+        )
+
+    def test_gridded_population_metric_family(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        ctp = tea_constant.ctp_results
+        for variable in ('EP_avg', 'pEM', 'pEM_avg', 'pEM_avg_Md', 'pEM_Md', 'pES_avg'):
+            assert variable in ctp
+            assert ctp[variable].attrs['population_time_basis'] == 'static'
+        xr.testing.assert_allclose(ctp['pEM'], tea_constant._CTP_resample_sum['DTEM'])
+        xr.testing.assert_allclose(ctp['pEM'], ctp['ED'] * ctp['pEM_avg'])
+        xr.testing.assert_allclose(ctp['pEM_Md'], ctp['ED'] * ctp['pEM_avg_Md'])
+        xr.testing.assert_allclose(ctp['EP_avg'], (ctp['pTEX'] / ctp['pEM']).where(ctp['pEM'] > 0, 0))
+        xr.testing.assert_allclose(
+            ctp['pES_avg'], ctp['ED_avg'] * ctp['pEM_avg'] * ctp['EP_avg']
+        )
+        xr.testing.assert_allclose(ctp['pTEX'], ctp['EF'] * ctp['pES_avg'])
+
+    def test_population_extremity_identities(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        ctp = tea_constant.ctp_results
+        xr.testing.assert_allclose(
+            ctp['pES_avg_GR'],
+            ctp['ED_avg_GR'] * ctp['pEM_avg_GR'] * ctp['EP_avg_GR'],
+        )
+        xr.testing.assert_allclose(ctp['pTEX_GR'], ctp['pEM_GR'] * ctp['EP_avg_GR'])
+        xr.testing.assert_allclose(
+            ctp['pTEX_GR'],
+            ctp['EF_GR'] * ctp['ED_avg_GR'] * ctp['pEM_avg_GR'] * ctp['EP_avg_GR'],
+        )
+        xr.testing.assert_allclose(ctp['pTEX_GR'], ctp['EF_GR'] * ctp['pES_avg_GR'])
+        assert ctp['pES_avg_GR'].attrs['units'] == '10^4 person K d'
+        assert ctp['pES_avg_GR'].attrs['population_time_basis'] == 'static'
+
+    def test_EP_avg_GR_is_skipped_without_population(self, tea_constant_no_pop):
+        tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
+
+        assert 'EP_avg_GR' not in tea_constant_no_pop.ctp_results
+
+    def test_population_weighted_magnitudes_are_skipped_without_population(self, tea_constant_no_pop):
+        tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
+
+        for variable in ('pEM_GR', 'pEM_avg_GR', 'pEM_avg_GR_Md', 'pEM_GR_Md', 'pES_avg_GR'):
+            assert variable not in tea_constant_no_pop.ctp_results
+
+
+class TestPopulationAndAreaExtremityUnits:
+    def test_population_and_area_extremity_units(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        assert tea_constant.daily_results.DTEMA.attrs['units'] == '100 km^2 K'
+        assert tea_constant.daily_results.DTEMP.attrs['units'] == '10^4 person K'
+        assert tea_constant.daily_results.DTEMP_GR.attrs['units'] == '10^4 person K'
+        assert tea_constant.ctp_results.TEX.attrs['units'] == '100 km^2 K d'
+        assert tea_constant.ctp_results.TEX_GR.attrs['units'] == '100 km^2 K d'
+        assert tea_constant.ctp_results.pTEX.attrs['units'] == '10^4 person K d'
+        assert tea_constant.ctp_results.pTEX_GR.attrs['units'] == '10^4 person K d'
+
+
+def test_cumulative_area_and_event_count_units():
+    assert get_attrs('EA')['units'] == '100 km^2 d'
+    assert get_attrs('EA')['long_name'] == 'cumulative exceedance area'
+    assert get_attrs('EF')['units'] == '1'
+    assert get_attrs('EF')['long_name'] == 'event count in climatic time period'
 
     def test_pTEX_idempotent(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
@@ -152,6 +323,14 @@ class TestCalcExceedanceArea:
         tea_constant.calc_annual_ctp_indicators(ctp="annual")
         assert "EA" in tea_constant.ctp_results
         assert "EA_avg_GR" in tea_constant.ctp_results
+
+    def test_returns_when_required_ctp_variables_cannot_be_created(self, tea_constant, monkeypatch):
+        tea_constant.ctp_results = xr.Dataset()
+        monkeypatch.setattr(tea_constant, '_calc_annual_total_events_extremity', lambda: None)
+
+        tea_constant._calc_annual_exceedance_area()
+
+        assert not tea_constant.ctp_results.data_vars
 
 
 class TestCalcEventSeverity:
