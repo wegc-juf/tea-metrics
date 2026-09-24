@@ -338,6 +338,26 @@ class TEAIndicators:
         population = self.population_grid.sel(year=indexer)
         return population.drop_vars('year')
 
+    def _population_grid_for_time_extent(self, time):
+        """Return the configured population grid restricted to the data years.
+
+        Static population grids are returned unchanged. Annual grids are
+        restricted to the unique calendar years represented by ``time`` so
+        embedded CTP population data has the same temporal extent as the
+        calculated climate data.
+        """
+        if self.population_grid is None:
+            return None
+        if self._population_time_basis() == 'static':
+            return self.population_grid
+
+        years = np.unique(np.asarray(time.dt.year.values))
+        available = set(np.asarray(self.population_grid.year.values).tolist())
+        missing = sorted(set(years.tolist()).difference(available))
+        if missing:
+            raise ValueError(f"Annual population grid is missing calendar years: {missing}")
+        return self.population_grid.sel(year=years)
+
     def _population_provenance_attrs(self):
         """Build serializable population source and calendar-basis metadata.
 
@@ -2177,6 +2197,17 @@ class TEAIndicators:
         if 'threshold_avg_GR' in self.daily_results:
             self.ctp_results['threshold_avg_GR'] = self.daily_results.threshold_avg_GR.copy()
             self.ctp_results['threshold_avg_GR'].attrs = get_attrs(vname='threshold_avg', data_unit=self.unit)
+
+        if self.population_grid is not None:
+            population_grid = self._population_grid_for_time_extent(self.daily_results.time)
+            population_grid = population_grid.copy(deep=False)
+            population_grid.attrs.update(
+                metric_type='metadata', **self._population_provenance_attrs()
+            )
+            if self._population_time_basis() == 'calendar_year':
+                population_grid.attrs['population_year_start'] = int(population_grid.year.min())
+                population_grid.attrs['population_year_end'] = int(population_grid.year.max())
+            self.ctp_results['population_grid'] = population_grid
 
         if drop_daily_results:
             self.daily_results.close()

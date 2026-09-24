@@ -140,6 +140,24 @@ class TestCalcPTEX:
             "total events population-extremity (GR)"
 
 class TestCalcExceedancePopulation:
+    def test_population_grid_is_retained_in_ctp_results(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        np.testing.assert_array_equal(
+            tea_constant.ctp_results['population_grid'].values,
+            tea_constant.population_grid.values,
+        )
+        assert tea_constant.ctp_results['population_grid'].dims == tea_constant.population_grid.dims
+        assert tea_constant.ctp_results.population_grid.attrs['population_time_basis'] == 'static'
+        assert tea_constant.ctp_results.population_grid.attrs['metric_type'] == 'metadata'
+
+    def test_population_grid_is_skipped_without_population(self, tea_constant_no_pop):
+        tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
+
+        assert 'population_grid' not in tea_constant_no_pop.ctp_results
+
     def test_EP_is_temporal_sum_of_DTEP(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant.calc_annual_ctp_indicators(ctp="annual")

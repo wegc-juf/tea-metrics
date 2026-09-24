@@ -132,6 +132,11 @@ class TestSaveLoadCTP:
         for var in ('EP', 'EP_avg_GR', 'pEM_GR', 'pEM_avg_GR',
                     'pEM_avg_GR_Md', 'pEM_GR_Md'):
             assert tea2.ctp_results[var].attrs['population_time_basis'] == 'static'
+        np.testing.assert_array_equal(
+            tea2.ctp_results['population_grid'].values,
+            tea_constant.population_grid.values,
+        )
+        assert tea2.ctp_results['population_grid'].dims == tea_constant.population_grid.dims
         xr.testing.assert_allclose(
             tea2.ctp_results['pTEX_GR'],
             tea2.ctp_results['pTEX'].sum(

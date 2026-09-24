@@ -52,6 +52,22 @@ def test_annual_population_is_used_by_ctp_ptex():
     assert tea.ctp_results.pTEX_GR.attrs['population_year_end'] == 2002
 
 
+def test_annual_population_grid_is_retained_in_ctp_results():
+    population = _annual_population()
+    tea = _annual_tea(population)
+    tea.calc_daily_basis_vars(grid=True, gr=True)
+    tea.calc_annual_ctp_indicators(ctp='annual')
+
+    xr.testing.assert_equal(
+        tea.ctp_results.population_grid,
+        population.sel(year=[2001, 2002]),
+    )
+    assert tea.ctp_results.population_grid.dims == ('year', 'lat', 'lon')
+    assert tea.ctp_results.population_grid.attrs['population_time_basis'] == 'calendar_year'
+    assert tea.ctp_results.population_grid.attrs['population_year_start'] == 2001
+    assert tea.ctp_results.population_grid.attrs['population_year_end'] == 2002
+
+
 def test_annual_population_is_used_by_ctp_population_exposure():
     tea = _annual_tea(_annual_population())
     tea.calc_daily_basis_vars(grid=True, gr=True)
