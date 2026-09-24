@@ -339,24 +339,17 @@ class TEAIndicators:
         return population.drop_vars('year')
 
     def _population_grid_for_time_extent(self, time):
-        """Return the configured population grid restricted to the data years.
+        """Return the configured population grid aligned to CTP timestamps.
 
         Static population grids are returned unchanged. Annual grids are
-        restricted to the unique calendar years represented by ``time`` so
-        embedded CTP population data has the same temporal extent as the
-        calculated climate data.
+        selected by each CTP timestamp's calendar year, producing a ``time``
+        dimension that aligns exactly with the CTP indicator variables.
         """
         if self.population_grid is None:
             return None
         if self._population_time_basis() == 'static':
             return self.population_grid
-
-        years = np.unique(np.asarray(time.dt.year.values))
-        available = set(np.asarray(self.population_grid.year.values).tolist())
-        missing = sorted(set(years.tolist()).difference(available))
-        if missing:
-            raise ValueError(f"Annual population grid is missing calendar years: {missing}")
-        return self.population_grid.sel(year=years)
+        return self._population_for_time(time)
 
     def _population_provenance_attrs(self):
         """Build serializable population source and calendar-basis metadata.
@@ -375,6 +368,14 @@ class TEAIndicators:
             attrs['population_year_start'] = int(self.population_grid.year.min())
             attrs['population_year_end'] = int(self.population_grid.year.max())
         return attrs
+
+    @staticmethod
+    def _population_provenance_from_attrs(attrs):
+        """Extract population provenance attributes from an existing variable."""
+        return {
+            key: value for key, value in attrs.items()
+            if key.startswith('population_') or key == 'allocation_grid'
+        }
         
     @staticmethod
     def find_dim_names(data):
@@ -1484,7 +1485,7 @@ class TEAIndicators:
 
         if 'DTEEC' in self._CTP_resample_sum:
             # # process grid data
-            ef = self._CTP_resample_sum.DTEEC
+            ef = self._count_events_within_ctp(self._daily_results_filtered.DTEC)
             event_count = self._CTP_resample_sum.DTEC
             ef = ef.where(ef.notnull(), 0)
             # filter out nan values (masked cells)
@@ -1495,11 +1496,24 @@ class TEAIndicators:
 
         if 'DTEEC_GR' in self._CTP_resample_sum:
             # # process GR data
-            ef_gr = self._CTP_resample_sum.DTEEC_GR
+            ef_gr = self._count_events_within_ctp(self._daily_results_filtered.DTEC_GR)
             ef_gr = ef_gr.where(ef_gr.notnull(), 0)
 
             ef_gr.attrs = get_attrs(vname='EF_GR')
             self.ctp_results['EF_GR'] = ef_gr
+
+    def _count_events_within_ctp(self, dtec):
+        """Count exceedance runs independently within each CTP.
+
+        A run crossing a CTP boundary starts a new CTP-local event so event
+        frequency, average duration, and cumulative magnitude use the same
+        temporal support.
+        """
+        def count_starts(ctp_data):
+            starts = (ctp_data == 1) & (ctp_data.shift(time=1, fill_value=0) != 1)
+            return starts.sum('time')
+
+        return dtec.resample(time=self.CTP_freqs[self.CTP]).map(count_starts)
 
     def _calc_annual_supplementary_event_vars(self):
         """
@@ -2040,6 +2054,22 @@ class TEAIndicators:
                                            self.ctp_results.EA_avg_GR)
         self.ctp_results['ES_avg_GR'] = es_avg
 
+    def _calc_annual_population_event_severity(self):
+        """Calculate population event severity derived from equation 21_2."""
+        required = ('ED_avg_GR', 'pEM_avg_GR', 'EP_avg_GR')
+        if not all(variable in self.ctp_results for variable in required):
+            return
+
+        # Derived from equation 21_2 - change when defined in SN.
+        pes_avg_gr = self._calc_event_severity(
+            self.ctp_results.ED_avg_GR,
+            self.ctp_results.pEM_avg_GR,
+            self.ctp_results.EP_avg_GR,
+        )
+        pes_avg_gr.attrs = get_attrs(vname='pES_avg_GR', data_unit=self.unit)
+        pes_avg_gr.attrs.update(self._population_provenance_attrs())
+        self.ctp_results['pES_avg_GR'] = pes_avg_gr
+
     def _calc_hourly_event_severity(self, es, h_avg):
         """
         calculate event severity (equation TBD)
@@ -2185,6 +2215,7 @@ class TEAIndicators:
         self._calc_annual_total_events_extremity()
         self._calc_annual_ptex()
         self._calc_annual_exceedance_population()
+        self._calc_annual_population_event_severity()
         self._calc_annual_hourly_total_events_extremity()
         self._calc_annual_exceedance_area()
         self._calc_annual_event_severity()
@@ -2199,14 +2230,15 @@ class TEAIndicators:
             self.ctp_results['threshold_avg_GR'].attrs = get_attrs(vname='threshold_avg', data_unit=self.unit)
 
         if self.population_grid is not None:
-            population_grid = self._population_grid_for_time_extent(self.daily_results.time)
+            population_grid = self._population_grid_for_time_extent(self.ctp_results.time)
             population_grid = population_grid.copy(deep=False)
             population_grid.attrs.update(
                 metric_type='metadata', **self._population_provenance_attrs()
             )
             if self._population_time_basis() == 'calendar_year':
-                population_grid.attrs['population_year_start'] = int(population_grid.year.min())
-                population_grid.attrs['population_year_end'] = int(population_grid.year.max())
+                years = self.ctp_results.time.dt.year
+                population_grid.attrs['population_year_start'] = int(years.min())
+                population_grid.attrs['population_year_end'] = int(years.max())
             self.ctp_results['population_grid'] = population_grid
 
         if drop_daily_results:
@@ -2457,8 +2489,9 @@ class TEAIndicators:
                 self.decadal_results[var][-decadal_window[2]:] = np.nan
             else:
                 self.decadal_results[var] = var_data
-            self.decadal_results[var].attrs = get_attrs(vname=var, dec=True,
-                                                       data_unit=self.unit)
+            attrs = get_attrs(vname=var, dec=True, data_unit=self.unit)
+            attrs.update(self._population_provenance_from_attrs(var_data.attrs))
+            self.decadal_results[var].attrs = attrs
 
     def _calc_decadal_compound_vars(self):
         """
@@ -2536,6 +2569,43 @@ class TEAIndicators:
                 htEX = data[f'EM_GR'] * h_avg
                 htEX.attrs = get_attrs(vname=f'htEX_GR', dec=True, data_unit=self.unit)
                 data[f'htEX_GR'] = htEX
+
+            if {'pEM_avg_GR', 'pEM_avg_GR_Md', 'EP_avg_GR'} <= set(data.data_vars):
+                population_attrs = self._population_provenance_from_attrs(
+                    data['pEM_avg_GR'].attrs
+                )
+
+                # Derived from equation 18_2 and equation 23_2 - change when defined in SN.
+                pem_gr = self._calc_temporal_events_extremity(
+                    ed=data['ED_GR'], m=data['pEM_avg_GR']
+                )
+                pem_gr.attrs = get_attrs(vname='pEM_GR', dec=True, data_unit=self.unit)
+                pem_gr.attrs.update(population_attrs)
+                data['pEM_GR'] = pem_gr
+
+                # Derived from equation 19_4 and equation 23_2 - change when defined in SN.
+                pem_gr_med = self._calc_temporal_events_extremity(
+                    ed=data['ED_GR'], m=data['pEM_avg_GR_Md']
+                )
+                pem_gr_med.attrs = get_attrs(vname='pEM_GR_Md', dec=True, data_unit=self.unit)
+                pem_gr_med.attrs.update(population_attrs)
+                data['pEM_GR_Md'] = pem_gr_med
+
+                # Derived from equation 21_2 and equation 23_2 - change when defined in SN.
+                pes_avg_gr = self._calc_event_severity(
+                    d=data['ED_avg_GR'], m=data['pEM_avg_GR'], a=data['EP_avg_GR']
+                )
+                pes_avg_gr.attrs = get_attrs(vname='pES_avg_GR', dec=True, data_unit=self.unit)
+                pes_avg_gr.attrs.update(population_attrs)
+                data['pES_avg_GR'] = pes_avg_gr
+
+                # Derived from equation 21_4 and equation 23_2 - change when defined in SN.
+                ptex_gr = self._calc_total_events_extremity(
+                    f=data['EF_GR'], s=pes_avg_gr
+                )
+                ptex_gr.attrs = get_attrs(vname='pTEX_GR', dec=True, data_unit=self.unit)
+                ptex_gr.attrs.update(population_attrs)
+                data['pTEX_GR'] = ptex_gr
 
         if 'EM_avg_Max_GR' in data:
             gvar = '_GR'

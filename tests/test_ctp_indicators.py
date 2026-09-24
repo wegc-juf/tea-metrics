@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import xarray as xr
 
 from teametrics.common.var_attrs import get_attrs
@@ -24,6 +25,16 @@ class TestCalcEventFrequency:
         tea_constant.calc_annual_ctp_indicators(ctp="annual")
         assert np.all(tea_constant.ctp_results.EF.values >= 0)
         assert np.all(tea_constant.ctp_results.EF_GR.values >= 0)
+
+    def test_event_crossing_ctp_boundary_is_counted_in_each_ctp(self, tea_constant):
+        tea_constant._set_ctp('annual')
+        dtec = xr.DataArray(
+            [1, 1], dims='time', coords={'time': pd.to_datetime(['2001-12-31', '2002-01-01'])}
+        )
+
+        event_count = tea_constant._count_events_within_ctp(dtec)
+
+        np.testing.assert_array_equal(event_count.values, [1, 1])
 
 
 class TestCalcSupplementaryEventVars:
@@ -209,6 +220,24 @@ class TestCalcExceedancePopulation:
             tea_constant.ctp_results['ED_GR'] * tea_constant.ctp_results['pEM_avg_GR_Md'],
         )
 
+    def test_population_extremity_identities(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        ctp = tea_constant.ctp_results
+        xr.testing.assert_allclose(
+            ctp['pES_avg_GR'],
+            ctp['ED_avg_GR'] * ctp['pEM_avg_GR'] * ctp['EP_avg_GR'],
+        )
+        xr.testing.assert_allclose(ctp['pTEX_GR'], ctp['pEM_GR'] * ctp['EP_avg_GR'])
+        xr.testing.assert_allclose(
+            ctp['pTEX_GR'],
+            ctp['EF_GR'] * ctp['ED_avg_GR'] * ctp['pEM_avg_GR'] * ctp['EP_avg_GR'],
+        )
+        xr.testing.assert_allclose(ctp['pTEX_GR'], ctp['EF_GR'] * ctp['pES_avg_GR'])
+        assert ctp['pES_avg_GR'].attrs['units'] == '10^4 person K d'
+        assert ctp['pES_avg_GR'].attrs['population_time_basis'] == 'static'
+
     def test_EP_avg_GR_is_skipped_without_population(self, tea_constant_no_pop):
         tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
@@ -219,7 +248,7 @@ class TestCalcExceedancePopulation:
         tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
 
-        for variable in ('pEM_GR', 'pEM_avg_GR', 'pEM_avg_GR_Md', 'pEM_GR_Md'):
+        for variable in ('pEM_GR', 'pEM_avg_GR', 'pEM_avg_GR_Md', 'pEM_GR_Md', 'pES_avg_GR'):
             assert variable not in tea_constant_no_pop.ctp_results
 
 

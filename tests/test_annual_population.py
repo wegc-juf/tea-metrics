@@ -60,12 +60,32 @@ def test_annual_population_grid_is_retained_in_ctp_results():
 
     xr.testing.assert_equal(
         tea.ctp_results.population_grid,
-        population.sel(year=[2001, 2002]),
+        population.sel(year=xr.DataArray(
+            [2001, 2002], dims='time', coords={'time': tea.ctp_results.time}
+        )).drop_vars('year'),
     )
-    assert tea.ctp_results.population_grid.dims == ('year', 'lat', 'lon')
+    assert tea.ctp_results.population_grid.dims == ('time', 'lat', 'lon')
     assert tea.ctp_results.population_grid.attrs['population_time_basis'] == 'calendar_year'
     assert tea.ctp_results.population_grid.attrs['population_year_start'] == 2001
     assert tea.ctp_results.population_grid.attrs['population_year_end'] == 2002
+
+
+def test_annual_population_ctp_chunks_combine_by_time(tmp_path):
+    tea = _annual_tea(_annual_population())
+    tea.calc_daily_basis_vars(grid=True, gr=True)
+    tea.calc_annual_ctp_indicators(ctp='annual')
+    first = tmp_path / 'ctp_2001.nc'
+    second = tmp_path / 'ctp_2002.nc'
+    ctp = tea.ctp_results[['EM_avg', 'pTEX_GR', 'population_grid']]
+    ctp.isel(time=[0]).to_netcdf(first)
+    ctp.isel(time=[1]).to_netcdf(second)
+
+    loaded = TEAIndicators(unit='K')
+    loaded.load_ctp_results([first, second], use_dask=False)
+
+    assert loaded.ctp_results.sizes['time'] == 2
+    assert loaded.ctp_results.population_grid.dims == ('time', 'lat', 'lon')
+    np.testing.assert_array_equal(loaded.ctp_results.population_grid.time, tea.ctp_results.time)
 
 
 def test_annual_population_is_used_by_ctp_population_exposure():

@@ -90,6 +90,8 @@ def get_attrs(vname=None, dec=False, spread=None, period='', data_unit=''):
                        'units': data_unit, 'metric_type': 'basic'},
         'pEM_Md': {'long_name': 'cumulative daily-median population-weighted exceedance magnitude',
                    'units': f'{data_unit} d', 'metric_type': 'compound'},
+        'pES_avg': {'long_name': 'average population event severity',
+                    'units': f'10^4 person {data_unit} d', 'metric_type': 'compound'},
         'DM_avg': {'long_name': 'average duration-magnitude indicator', 'units': f'{data_unit} d',
                    'metric_type': 'compound'},
         'TEX': {'long_name': 'total events extremity',

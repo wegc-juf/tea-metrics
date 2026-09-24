@@ -32,6 +32,40 @@ class TestCalcDecadalIndicators:
         for v in ["TEX_GR", "ES_avg_GR", "EM_GR"]:
             assert v in tea_constant.decadal_results
 
+    def test_population_decadal_compound_identities(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        tea_constant.calc_decadal_indicators(
+            decadal_window=(10, 5, 4), drop_annual_results=False,
+            calc_annual_ref=False)
+
+        dec = tea_constant.decadal_results
+        for variable in ('pEM_GR', 'pEM_GR_Md', 'pES_avg_GR', 'pTEX_GR'):
+            assert variable in dec
+            assert dec[variable].attrs['population_time_basis'] == 'static'
+        xr.testing.assert_allclose(dec['pEM_GR'], dec['ED_GR'] * dec['pEM_avg_GR'])
+        xr.testing.assert_allclose(dec['pEM_GR_Md'], dec['ED_GR'] * dec['pEM_avg_GR_Md'])
+        xr.testing.assert_allclose(
+            dec['pES_avg_GR'],
+            dec['ED_avg_GR'] * dec['pEM_avg_GR'] * dec['EP_avg_GR'],
+        )
+        xr.testing.assert_allclose(dec['pTEX_GR'], dec['pEM_GR'] * dec['EP_avg_GR'])
+        xr.testing.assert_allclose(
+            dec['pTEX_GR'],
+            dec['EF_GR'] * dec['ED_avg_GR'] * dec['pEM_avg_GR'] * dec['EP_avg_GR'],
+        )
+        xr.testing.assert_allclose(dec['pTEX_GR'], dec['EF_GR'] * dec['pES_avg_GR'])
+
+    def test_population_decadal_variables_are_skipped_without_population(self, tea_constant_no_pop):
+        tea_constant_no_pop.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant_no_pop.calc_annual_ctp_indicators(ctp="annual")
+        tea_constant_no_pop.calc_decadal_indicators(
+            decadal_window=(10, 5, 4), drop_annual_results=False,
+            calc_annual_ref=False)
+
+        for variable in ('pEM_GR', 'pEM_GR_Md', 'pES_avg_GR', 'pTEX_GR'):
+            assert variable not in tea_constant_no_pop.decadal_results
+
     def test_decadal_spread_estimators(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant.calc_annual_ctp_indicators(ctp="annual")
