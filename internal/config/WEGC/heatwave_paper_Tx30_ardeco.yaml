@@ -32,16 +32,17 @@ calc_TEA:
   <<: *TIME
   <<: *DATA
   <<: *PATHS
-  outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/
+  outpath: /tank/local/TEA/heatwave_paper_ardeco/
   recalc_threshold: false
-  recalc_daily: true
-  decadal: false
+  recalc_daily: false
+  decadal: true
   spreads: true
   decadal_only: false
-  recalc_decadal: false
+  recalc_decadal: true
   use_dask: true
   dask_workers: 4
-  compression_level: 1
+  compression_level: 0
+  zlib_compression: false
   parallel_workers: 1
 
 create_region_masks:
