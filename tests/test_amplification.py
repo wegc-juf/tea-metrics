@@ -25,6 +25,7 @@ class TestCalcAmplificationFactors:
         af_vars = tea_constant.amplification_factors.data_vars
         af_names = [v for v in af_vars if v.endswith("_AF")]
         assert len(af_names) > 0
+        assert 'TEX_AF' in af_vars
 
     def test_AF_CC_vars_exist(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)

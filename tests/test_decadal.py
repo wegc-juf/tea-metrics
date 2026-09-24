@@ -29,8 +29,19 @@ class TestCalcDecadalIndicators:
         tea_constant.calc_decadal_indicators(
             decadal_window=(10, 5, 4), drop_annual_results=False,
             calc_annual_ref=False)
-        for v in ["TEX_GR", "ES_avg_GR", "EM_GR"]:
+        for v in ["TEX", "ES_avg", "TEX_GR", "ES_avg_GR", "EM_GR"]:
             assert v in tea_constant.decadal_results
+
+    def test_gridded_area_decadal_compound_identities(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        tea_constant.calc_decadal_indicators(
+            decadal_window=(10, 5, 4), drop_annual_results=False,
+            calc_annual_ref=False)
+
+        dec = tea_constant.decadal_results
+        xr.testing.assert_allclose(dec['ES_avg'], dec['ED_avg'] * dec['EM_avg'] * dec['EA_avg'])
+        xr.testing.assert_allclose(dec['TEX'], dec['EF'] * dec['ES_avg'])
 
     def test_population_decadal_compound_identities(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)

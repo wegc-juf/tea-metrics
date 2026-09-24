@@ -2058,6 +2058,13 @@ class TEAIndicators:
             ea.attrs = get_attrs(vname='EA')
             self.ctp_results['EA'] = ea
 
+        if 'TEX' in self.ctp_results and 'EM' in self.ctp_results:
+            # equation 21_1
+            ea_avg = self.ctp_results.TEX / self.ctp_results.EM
+            ea_avg = xr.where(self.ctp_results.EM == 0, 0, ea_avg)
+            ea_avg.attrs = get_attrs(vname='EA_avg')
+            self.ctp_results['EA_avg'] = ea_avg
+
         # equation 21_1
         ea_avg_gr = self.ctp_results.TEX_GR / self.ctp_results.EM_GR
         ea_avg_gr = xr.where(self.ctp_results.EM_GR == 0, 0, ea_avg_gr)
@@ -2695,6 +2702,19 @@ class TEAIndicators:
             ptex.attrs = get_attrs(vname='pTEX', dec=True, data_unit=self.unit)
             ptex.attrs.update(population_attrs)
             data['pTEX'] = ptex
+
+        if {'EF', 'ED_avg', 'EM_avg', 'EA_avg'} <= set(data.data_vars):
+            # Derived from equation 21_2 and equation 23_2 - change when defined in SN.
+            es_avg = self._calc_event_severity(
+                d=data['ED_avg'], m=data['EM_avg'], a=data['EA_avg']
+            )
+            es_avg.attrs = get_attrs(vname='ES_avg', dec=True, data_unit=self.unit)
+            data['ES_avg'] = es_avg
+
+            # Derived from equation 21_3 and equation 23_2 - change when defined in SN.
+            tex = self._calc_total_events_extremity(f=data['EF'], s=es_avg)
+            tex.attrs = get_attrs(vname='TEX', dec=True, data_unit=self.unit)
+            data['TEX'] = tex
 
         if 'EM_avg_Max_GR' in data:
             gvar = '_GR'

@@ -112,6 +112,16 @@ class TestCalcTEX:
         assert tea_constant.ctp_results.TEX_GR.attrs["long_name"] == \
             "total events extremity (GR)"
 
+    def test_EA_avg_grid_uses_TEX_over_EM(self, tea_constant):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+
+        expected = (tea_constant.ctp_results.TEX / tea_constant.ctp_results.EM).where(
+            tea_constant.ctp_results.EM > 0, 0
+        )
+        xr.testing.assert_allclose(tea_constant.ctp_results.EA_avg, expected)
+        assert tea_constant.ctp_results.EA_avg.attrs['metric_type'] == 'basic'
+
 
 class TestCalcPTEX:
     def test_pTEX_exists(self, tea_constant):
