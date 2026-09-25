@@ -1047,16 +1047,6 @@ class TEAIndicators:
                                        f"{digits} decimal places over its value range")
                 rounded_data_vars[name] = output_data
             output_dataset = dataset.assign(rounded_data_vars)
-            if ({'pTEX', 'pTEX_GR'} <= set(output_dataset.data_vars)
-                    and self.xdim in output_dataset.pTEX.dims
-                    and self.ydim in output_dataset.pTEX.dims):
-                # Preserve the regional population extremity invariant after
-                # independently rounding the gridded values for output.
-                ptex_gr = output_dataset.pTEX.sum(
-                    dim=(self.xdim, self.ydim), skipna=True
-                )
-                ptex_gr.attrs = output_dataset.pTEX_GR.attrs
-                output_dataset['pTEX_GR'] = ptex_gr
         else:
             output_dataset = dataset
 

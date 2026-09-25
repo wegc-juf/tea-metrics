@@ -235,6 +235,22 @@ class TestSaveLoadDecadal:
         for var in tea_constant.decadal_results.data_vars:
             assert var in tea2.decadal_results
 
+    def test_decadal_ptex_gr_keeps_formula_and_edge_nans(self, tea_constant, tmp_path):
+        tea_constant.calc_daily_basis_vars(grid=True, gr=True)
+        tea_constant.calc_annual_ctp_indicators(ctp="annual")
+        tea_constant.calc_decadal_indicators(
+            decadal_window=(10, 5, 4), drop_annual_results=False,
+            calc_annual_ref=False)
+        path = tmp_path / "decadal_ptex_gr.nc"
+        tea_constant.save_decadal_results(path)
+
+        loaded = TEAIndicators(unit="K")
+        loaded.load_decadal_results(path)
+        expected = loaded.decadal_results.EF_GR * loaded.decadal_results.pES_avg_GR
+        xr.testing.assert_allclose(loaded.decadal_results.pTEX_GR, expected)
+        assert np.isnan(loaded.decadal_results.pTEX_GR.isel(time=slice(0, 5))).all()
+        assert np.isnan(loaded.decadal_results.pTEX_GR.isel(time=slice(-4, None))).all()
+
 
 class TestSaveLoadAmplification:
     def test_save_and_load_amplification_roundtrip(
