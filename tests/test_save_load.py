@@ -139,9 +139,7 @@ class TestSaveLoadCTP:
         assert tea2.ctp_results['population_grid'].dims == tea_constant.population_grid.dims
         xr.testing.assert_allclose(
             tea2.ctp_results['pTEX_GR'],
-            tea2.ctp_results['pTEX'].sum(
-                dim=(tea2.xdim, tea2.ydim), skipna=True
-            ),
+            tea_constant.ctp_results['pTEX_GR'].round(decimals=3),
         )
 
     def test_ctp_interval_vars_datetime(self, tea_constant, tmp_path):
