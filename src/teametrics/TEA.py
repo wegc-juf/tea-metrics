@@ -1499,8 +1499,8 @@ class TEAIndicators:
         frequency, average duration, and cumulative magnitude use the same
         temporal support.
         """
-        def count_starts(ctp_data):
-            starts = (ctp_data == 1) & (ctp_data.shift(time=1, fill_value=0) != 1)
+        def count_starts(daily_data):
+            starts = (daily_data == 1) & (daily_data.shift(time=1, fill_value=0) != 1)
             return starts.sum('time')
 
         return dtec.resample(time=self.CTP_freqs[self.CTP]).map(count_starts)
