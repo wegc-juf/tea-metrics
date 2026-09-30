@@ -7,11 +7,15 @@ from pathlib import Path
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import rioxarray  # noqa: F401 - imported to enable the rio accessor
 import xarray as xr
+from pyproj import CRS
+from rasterio.enums import Resampling
 from shapely import box as shapely_box
 
 
 GRID_CRS = "EPSG:3035"
+GRID_RESOLUTION_METRES = 1000.0
 
 
 def _cell_size(coordinates):
@@ -19,6 +23,56 @@ def _cell_size(coordinates):
     if len(differences) == 0 or not np.allclose(differences, differences[0]):
         raise ValueError("The population allocation grid must have regular coordinates.")
     return differences[0]
+
+
+def _validate_destination_crs(destination_crs):
+    """Validate and normalize a projected destination CRS."""
+    try:
+        crs = CRS.from_user_input(destination_crs)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"Invalid destination CRS: {destination_crs}") from error
+    if not crs.is_projected:
+        raise ValueError("destination-crs must be a projected CRS with linear units.")
+    if len(crs.axis_info) < 2 or any(axis.unit_conversion_factor is None for axis in crs.axis_info[:2]):
+        raise ValueError("destination-crs must define linear units for both spatial axes.")
+    return crs
+
+
+def _reproject_dataset(dataset, destination_crs):
+    """Reproject population counts onto a 1 km projected destination grid."""
+    destination_crs = _validate_destination_crs(destination_crs)
+    population = dataset.population
+    ydim, xdim = population.dims[-2:]
+    x_unit = destination_crs.axis_info[0].unit_conversion_factor
+    y_unit = destination_crs.axis_info[1].unit_conversion_factor
+    resolution = (GRID_RESOLUTION_METRES / x_unit, GRID_RESOLUTION_METRES / y_unit)
+
+    arrays = []
+    for year in population.year.values:
+        array = population.sel(year=year, drop=True)
+        array = array.rio.set_spatial_dims(x_dim=xdim, y_dim=ydim, inplace=False)
+        array = array.rio.write_crs(GRID_CRS, inplace=False)
+        array = array.rio.write_nodata(np.nan, inplace=False)
+        array = array.rio.reproject(
+            destination_crs,
+            resolution=resolution,
+            resampling=Resampling.sum,
+        )
+        arrays.append(array.expand_dims(year=[year]))
+
+    result = xr.concat(arrays, dim="year").to_dataset(name="population")
+    result.attrs = dict(dataset.attrs)
+    result.attrs.update({
+        "source_grid_crs": GRID_CRS,
+        "grid_crs": destination_crs.to_string(),
+        "grid_resolution_m": GRID_RESOLUTION_METRES,
+        "reprojection_resampling": "sum",
+    })
+    result.population.attrs.update({
+        "coordinate_sys": destination_crs.to_string(),
+        "grid_resolution_m": GRID_RESOLUTION_METRES,
+    })
+    return result
 
 
 def load_allocation_grid(path):
@@ -222,6 +276,10 @@ def run(args=None):
     parser.add_argument("--municipality-boundary-template", required=True,
                         help="Boundary path or URL; use {year} only with same-vintage totals")
     parser.add_argument("--output-directory", required=True)
+    parser.add_argument(
+        "--destination-crs",
+        help="Optional projected CRS for the output population grid; output cells remain 1 km.",
+    )
     parser.add_argument("--start-year", type=int, default=2002,
                         help="First Statistics Austria municipality and joint-product year")
     parser.add_argument("--end-year", type=int, default=2026)
@@ -233,6 +291,13 @@ def run(args=None):
 
     if parsed.nuts3_start_year > parsed.start_year:
         parser.error("nuts3-start-year must not follow start-year")
+
+    destination_crs = None
+    if parsed.destination_crs is not None:
+        try:
+            destination_crs = _validate_destination_crs(parsed.destination_crs)
+        except ValueError as error:
+            parser.error(str(error))
 
     population, cells, cell_area = load_allocation_grid(parsed.grid)
     municipality_years = range(parsed.start_year, parsed.end_year + 1)
@@ -265,6 +330,11 @@ def run(args=None):
     joint_series = create_joint_series(
         nuts_factors, ardeco, municipality_factors, statat, population
     )
+
+    if destination_crs is not None:
+        nuts_series = _reproject_dataset(nuts_series, destination_crs)
+        municipality_series = _reproject_dataset(municipality_series, destination_crs)
+        joint_series = _reproject_dataset(joint_series, destination_crs)
 
     add_provenance(nuts_series, parsed.grid, parsed.ardeco, parsed.nuts3_boundaries)
     add_provenance(municipality_series, parsed.grid, parsed.statat_directory, boundary_template)

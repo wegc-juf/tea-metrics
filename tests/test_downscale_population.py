@@ -1,11 +1,13 @@
 import geopandas as gpd
 import numpy as np
 import pandas as pd
+import pytest
 import xarray as xr
 from shapely.geometry import box
 
 from teametrics.utils.downscale_population import (
-    allocation_factors, create_joint_series, downscale_year,
+    _reproject_dataset, _validate_destination_crs, allocation_factors,
+    create_joint_series, downscale_year,
 )
 
 
@@ -68,3 +70,32 @@ def test_joint_series_records_the_source_transition():
     assert result.population.sel(year=2002).item() == 30
     assert result.source_region_level.values.tolist() == ["NUTS3", "municipality"]
     assert "Do not use" in result.attrs["trend_use_warning"]
+
+
+def test_destination_crs_reprojects_to_one_kilometre_grid_and_conserves_counts():
+    population = xr.Dataset(
+        {
+            "population": (
+                ("year", "northing", "easting"),
+                [[[1.0, np.nan], [3.0, 4.0]]],
+            )
+        },
+        coords={
+            "year": [2020],
+            "northing": [2_500_500.0, 2_499_500.0],
+            "easting": [4_500_500.0, 4_499_500.0],
+        },
+    )
+
+    result = _reproject_dataset(population, "EPSG:32633")
+
+    assert result.attrs["grid_crs"] == "EPSG:32633"
+    assert result.attrs["grid_resolution_m"] == 1000.0
+    np.testing.assert_allclose(np.abs(np.diff(result.x)), 1000.0)
+    np.testing.assert_allclose(np.abs(np.diff(result.y)), 1000.0)
+    assert np.nansum(result.population.values) == 8.0
+
+
+def test_destination_crs_rejects_geographic_crs():
+    with pytest.raises(ValueError, match="projected CRS"):
+        _validate_destination_crs("EPSG:4326")
