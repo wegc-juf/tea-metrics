@@ -24,7 +24,7 @@ common_params:
     statpath: &statpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/
     maskpath: *statpath
     mask_sub: masks/
-    population_grid_path: /data/users/alm/StatAT_data/OGDEXT_RASTER_1_STATISTIK_AUSTRIA_L001000_LAEA/Austria_population_1km_2019.nc
+    population_grid_path: /data/arsclisys/normal/population_data/downscaled/nuts3_ardeco/population_1km_1960-2026_ardeco_nuts3.nc
 
 calc_TEA:
   <<: *GR
@@ -32,15 +32,17 @@ calc_TEA:
   <<: *TIME
   <<: *DATA
   <<: *PATHS
-  outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/SPARTACUS_detrended/JJA/
+  outpath: /tank/local/TEA/heatwave_paper_ardeco/SPARTACUS_detrended/JJA/
   recalc_threshold: false
   recalc_daily: true
   decadal: true
   spreads: true
   decadal_only: false
   recalc_decadal: true
-  use_dask: auto
-  compression_level: 1
+  use_dask: true
+  dask_workers: 4
+  compression_level: 0
+  zlib_compression: false
   parallel_workers: 1
 
 create_region_masks:
