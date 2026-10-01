@@ -2773,4 +2773,4 @@ grib = ["cfgrib", "eccodes"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.13, <3.15"
-content-hash = "254732881319b8af6f39f774af3927346d2d0e1f6b5ffec444c36fdd017936d9"
+content-hash = "5b502cc61752269d7122b0cc82809f9a9dfc5a67283e5fb59e650d2e16b79b0a"
