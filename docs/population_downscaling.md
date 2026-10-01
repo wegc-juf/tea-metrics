@@ -5,8 +5,9 @@
 The optional `--destination-grid` argument reprojects the generated population products after allocation. The NetCDF
 file defines the exact destination CRS, extent, coordinates, dimensions, and resolution. Its CRS must be projected;
 geographic CRSs such as EPSG:4326 are rejected. The grid values are ignored, and population counts are reprojected
-with sum resampling. The destination file must contain `population` or exactly one data variable and must expose its
-CRS through standard rioxarray metadata or a `coordinate_sys`, `grid_crs`, or `crs` attribute.
+with sum resampling. The destination file may contain a `mask` variable, which is used as the grid template. Otherwise,
+it must contain `population` or exactly one data variable. It must expose its CRS through standard rioxarray metadata
+or a `coordinate_sys`, `grid_crs`, or `crs` attribute.
 
 For each source region `r`, cell `i`, and year `y`:
 

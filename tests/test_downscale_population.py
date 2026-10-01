@@ -107,6 +107,24 @@ def test_destination_grid_defines_exact_output_grid_and_conserves_counts(tmp_pat
     assert np.nansum(result.population.values) == 10.0
 
 
+def test_destination_grid_prefers_mask_variable_with_auxiliary_variables(tmp_path):
+    destination_path = tmp_path / "mask.nc"
+    xr.Dataset(
+        {
+            "mask": (("y", "x"), np.ones((2, 2))),
+            "area_grid": (("y", "x"), np.full((2, 2), 100.0)),
+            "area": ((), 400.0),
+        },
+        coords={"x": [4_500_500.0, 4_501_500.0], "y": [2_500_500.0, 2_499_500.0]},
+        attrs={"coordinate_sys": "EPSG:3035"},
+    ).to_netcdf(destination_path)
+
+    destination_grid = _load_destination_grid(destination_path)
+
+    assert destination_grid.name == "mask"
+    assert destination_grid.dims == ("y", "x")
+
+
 def test_destination_grid_rejects_geographic_crs(tmp_path):
     destination_path = tmp_path / "geographic.nc"
     xr.Dataset(

@@ -4,6 +4,7 @@
 
 import argparse
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 
 import geopandas as gpd
@@ -17,6 +18,7 @@ from shapely import box as shapely_box
 
 
 GRID_CRS = "EPSG:3035"
+LOGGER = logging.getLogger(__name__)
 
 
 def _cell_size(coordinates):
@@ -41,13 +43,16 @@ def _validate_projected_crs(destination_crs):
 
 def _load_destination_grid(path):
     """Load and validate a destination grid template."""
+    LOGGER.info("Loading destination grid: %s", path)
     dataset = xr.open_dataset(path)
-    if "population" in dataset:
+    if "mask" in dataset:
+        grid = dataset.mask
+    elif "population" in dataset:
         grid = dataset.population
     elif len(dataset.data_vars) == 1:
         grid = dataset[next(iter(dataset.data_vars))]
     else:
-        raise ValueError("Destination grid must contain 'population' or exactly one data variable.")
+        raise ValueError("Destination grid must contain 'mask', 'population', or exactly one data variable.")
     if grid.ndim != 2:
         raise ValueError("The destination grid must have exactly two dimensions.")
 
@@ -65,6 +70,7 @@ def _load_destination_grid(path):
     if destination_crs is None:
         raise ValueError("Destination grid must define a CRS.")
     destination_crs = _validate_projected_crs(destination_crs)
+    LOGGER.info("Destination grid loaded: variable=%s, shape=%s, CRS=%s", grid.name, grid.shape, destination_crs)
     return grid.rio.write_crs(destination_crs, inplace=False)
 
 
@@ -72,6 +78,10 @@ def _reproject_dataset(dataset, destination_grid, destination_grid_path):
     """Reproject population counts onto an exact destination grid template."""
     destination_crs = _validate_projected_crs(destination_grid.rio.crs)
     population = dataset.population
+    LOGGER.info(
+        "Reprojecting %d population years to %s using destination grid %s",
+        population.sizes["year"], destination_crs, destination_grid_path,
+    )
     ydim, xdim = population.dims[-2:]
     target = xr.zeros_like(destination_grid, dtype=float)
     target = target.rio.set_spatial_dims(
@@ -84,6 +94,7 @@ def _reproject_dataset(dataset, destination_grid, destination_grid_path):
 
     arrays = []
     for year in population.year.values:
+        LOGGER.info("Reprojecting population year %s", year)
         array = population.sel(year=year, drop=True)
         array = array.rio.set_spatial_dims(x_dim=xdim, y_dim=ydim, inplace=False)
         array = array.rio.write_crs(GRID_CRS, inplace=False)
@@ -107,6 +118,7 @@ def _reproject_dataset(dataset, destination_grid, destination_grid_path):
 
 def load_allocation_grid(path):
     """Load a count grid and convert its valid cells to allocation weights."""
+    LOGGER.info("Loading allocation grid: %s", path)
     dataset = xr.open_dataset(path)
     if "population" in dataset:
         population = dataset.population
@@ -135,11 +147,13 @@ def load_allocation_grid(path):
         ),
         crs=GRID_CRS,
     )
+    LOGGER.info("Allocation grid loaded: shape=%s, valid cells=%d, CRS=%s", values.shape, len(cells), GRID_CRS)
     return population, cells, xsize * ysize
 
 
 def allocation_factors(cells, cell_area, regions, region_id):
     """Return population-weighted allocation fractions for each region and cell."""
+    LOGGER.info("Calculating allocation factors for %d regions using %s", len(regions), region_id)
     if region_id not in regions:
         raise ValueError(f"Boundary data has no '{region_id}' column.")
     regions = regions[[region_id, "geometry"]].dropna(subset=[region_id, "geometry"]).copy()
@@ -161,6 +175,7 @@ def allocation_factors(cells, cell_area, regions, region_id):
     if len(zero_weight):
         raise ValueError(f"Regions have no positive allocation weight: {', '.join(zero_weight)}")
     factors["fraction"] = factors["weight"] / normalizer
+    LOGGER.info("Calculated %d region-cell allocation factors", len(factors))
     return factors[[region_id, "cell", "fraction"]]
 
 
@@ -194,8 +209,13 @@ def downscale_year(factors, totals, region_id, population, year):
 
 def downscale_series(factors_by_year, totals_by_year, region_id, population, source_name):
     """Create a year-indexed downscaled population dataset."""
+    LOGGER.info(
+        "Downscaling %s for %d years (%s-%s)",
+        source_name, len(totals_by_year), min(totals_by_year), max(totals_by_year),
+    )
     arrays = []
     for year in sorted(totals_by_year):
+        LOGGER.info("Downscaling %s year %s", source_name, year)
         array = downscale_year(factors_by_year[year], totals_by_year[year], region_id, population, year)
         arrays.append(array.expand_dims(year=[year]))
     result = xr.concat(arrays, dim="year").to_dataset()
@@ -211,10 +231,12 @@ def downscale_series(factors_by_year, totals_by_year, region_id, population, sou
 
 def create_joint_series(nuts_factors, ardeco_totals, municipality_factors, statat_totals, population):
     """Use ARDECO before municipal stocks become available, then StatAT stocks."""
+    LOGGER.info("Creating joint population series for %d years", len(ardeco_totals))
     arrays = []
     sources = []
     levels = []
     for year in sorted(ardeco_totals):
+        LOGGER.info("Downscaling joint population year %s", year)
         if year in statat_totals:
             array = downscale_year(
                 municipality_factors[year], statat_totals[year], "g_id", population, year
@@ -260,6 +282,7 @@ def add_provenance(dataset, allocation_grid, population_source, boundaries):
 
 def load_ardeco_totals(path, start_year, end_year):
     """Load Austrian NUTS-3 total population stocks from the ARDECO CSV."""
+    LOGGER.info("Loading ARDECO totals: %s", path)
     data = pd.read_csv(path)
     data = data[
         (data["TERRITORY_ID"].astype(str).str.startswith("AT"))
@@ -271,11 +294,14 @@ def load_ardeco_totals(path, start_year, end_year):
     data["VALUE"] = pd.to_numeric(data["VALUE"], errors="raise")
     if data.duplicated(["YEAR", "TERRITORY_ID"]).any():
         raise ValueError("ARDECO input has duplicate total-population records.")
-    return {int(year): group.set_index("TERRITORY_ID")["VALUE"] for year, group in data.groupby("YEAR")}
+    totals = {int(year): group.set_index("TERRITORY_ID")["VALUE"] for year, group in data.groupby("YEAR")}
+    LOGGER.info("Loaded ARDECO totals for %d years", len(totals))
+    return totals
 
 
 def load_statat_totals(directory, start_year, end_year):
     """Load annual Statistics Austria municipality population stocks."""
+    LOGGER.info("Loading Statistics Austria totals from %s", directory)
     totals = {}
     for year in range(start_year, end_year + 1):
         path = Path(directory) / f"OGD_bevstandjbab2002_BevStand_{year}.csv"
@@ -284,20 +310,24 @@ def load_statat_totals(directory, start_year, end_year):
         data = pd.read_csv(path, sep=";", usecols=["C-GRGEMAKT-0", "F-ISIS-1"])
         codes = data["C-GRGEMAKT-0"].astype(str).str.replace("GRGEMAKT-", "", regex=False)
         totals[year] = data.assign(code=codes).groupby("code")["F-ISIS-1"].sum()
+    LOGGER.info("Loaded Statistics Austria totals for %d years", len(totals))
     return totals
 
 
 def _write(dataset, path):
+    LOGGER.info("Writing output: %s", path)
     path.parent.mkdir(parents=True, exist_ok=True)
     dataset.to_netcdf(path)
 
 
 def _read_boundaries(path):
     """Read supplied shapefiles whose DBF attributes commonly use Latin-1."""
+    LOGGER.info("Loading boundaries: %s", path)
     return gpd.read_file(path, encoding="latin1")
 
 
 def run(args=None):
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--grid", required=True, help="2019 1 km population allocation grid NetCDF")
     parser.add_argument("--ardeco", required=True, help="ARDECO NUTS-3 population CSV")
@@ -316,6 +346,7 @@ def run(args=None):
     parser.add_argument("--nuts3-start-year", type=int, default=1960,
                         help="First ARDECO NUTS-3 and joint-product year")
     parsed = parser.parse_args(args)
+    LOGGER.info("Starting population downscaling")
     if parsed.end_year < parsed.start_year:
         parser.error("end-year must not precede start-year")
 
@@ -371,6 +402,7 @@ def run(args=None):
                    f"{parsed.nuts3_boundaries}; {boundary_template}")
 
     output = Path(parsed.output_directory)
+    LOGGER.info("Population downscaling complete")
     _write(nuts_series, output / "nuts3_ardeco" /
            f"population_1km_{min(ardeco)}-{max(ardeco)}_ardeco_nuts3.nc")
     _write(municipality_series, output / "municipality_statat" /
