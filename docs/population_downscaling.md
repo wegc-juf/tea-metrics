@@ -2,9 +2,11 @@
 
 `downscale_population` converts annual regional population stocks to the 1 km Statistics Austria grid. The reference grid is only an allocation-weight surface; its total is never used as a population total.
 
-The optional `--destination-crs` argument reprojects the generated population products after allocation. The
-destination CRS must be projected and use linear units; geographic CRSs such as EPSG:4326 are rejected. Destination
-cells are 1 km by 1 km, and population counts are reprojected with sum resampling.
+The optional `--destination-grid` argument reprojects the generated population products after allocation. The NetCDF
+file defines the exact destination CRS, extent, coordinates, dimensions, and resolution. Its CRS must be projected;
+geographic CRSs such as EPSG:4326 are rejected. The grid values are ignored, and population counts are reprojected
+with sum resampling. The destination file must contain `population` or exactly one data variable and must expose its
+CRS through standard rioxarray metadata or a `coordinate_sys`, `grid_crs`, or `crs` attribute.
 
 For each source region `r`, cell `i`, and year `y`:
 

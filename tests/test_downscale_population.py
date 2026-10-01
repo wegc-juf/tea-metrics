@@ -6,7 +6,7 @@ import xarray as xr
 from shapely.geometry import box
 
 from teametrics.utils.downscale_population import (
-    _reproject_dataset, _validate_destination_crs, allocation_factors,
+    _load_destination_grid, _reproject_dataset, allocation_factors,
     create_joint_series, downscale_year,
 )
 
@@ -72,12 +72,12 @@ def test_joint_series_records_the_source_transition():
     assert "Do not use" in result.attrs["trend_use_warning"]
 
 
-def test_destination_crs_reprojects_to_one_kilometre_grid_and_conserves_counts():
+def test_destination_grid_defines_exact_output_grid_and_conserves_counts(tmp_path):
     population = xr.Dataset(
         {
             "population": (
                 ("year", "northing", "easting"),
-                [[[1.0, np.nan], [3.0, 4.0]]],
+                [[[1.0, 2.0], [3.0, 4.0]]],
             )
         },
         coords={
@@ -87,15 +87,33 @@ def test_destination_crs_reprojects_to_one_kilometre_grid_and_conserves_counts()
         },
     )
 
-    result = _reproject_dataset(population, "EPSG:32633")
+    destination_path = tmp_path / "destination.nc"
+    xr.Dataset(
+        {"grid": (("y", "x"), np.zeros((3, 3)))},
+        coords={
+            "x": [288117.02154377, 289117.02154377, 290117.02154377],
+            "y": [5052377.66497606, 5051377.66497606, 5050377.66497606],
+        },
+        attrs={"coordinate_sys": "EPSG:32633"},
+    ).to_netcdf(destination_path)
+    destination_grid = _load_destination_grid(destination_path)
+
+    result = _reproject_dataset(population, destination_grid, destination_path)
 
     assert result.attrs["grid_crs"] == "EPSG:32633"
-    assert result.attrs["grid_resolution_m"] == 1000.0
-    np.testing.assert_allclose(np.abs(np.diff(result.x)), 1000.0)
-    np.testing.assert_allclose(np.abs(np.diff(result.y)), 1000.0)
-    assert np.nansum(result.population.values) == 8.0
+    assert result.attrs["destination_grid"] == str(destination_path)
+    np.testing.assert_array_equal(result.x, destination_grid.x)
+    np.testing.assert_array_equal(result.y, destination_grid.y)
+    assert np.nansum(result.population.values) == 10.0
 
 
-def test_destination_crs_rejects_geographic_crs():
+def test_destination_grid_rejects_geographic_crs(tmp_path):
+    destination_path = tmp_path / "geographic.nc"
+    xr.Dataset(
+        {"grid": (("lat", "lon"), np.zeros((2, 2)))},
+        coords={"lon": [15.0, 15.01], "lat": [47.0, 47.01]},
+        attrs={"coordinate_sys": "EPSG:4326"},
+    ).to_netcdf(destination_path)
+
     with pytest.raises(ValueError, match="projected CRS"):
-        _validate_destination_crs("EPSG:4326")
+        _load_destination_grid(destination_path)
