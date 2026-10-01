@@ -14,6 +14,7 @@ import numpy as np
 from scipy.stats import gmean
 import xarray as xr
 
+from teametrics.common.config import load_opts
 from teametrics.common.general_functions import ref_cc_params
 
 INPUT_DATA_PATH = Path('/home/wegnet/results/TEA_indicators_test/')
@@ -21,6 +22,7 @@ MASK_PATH = Path('/data/arsclisys/normal/clim-hydro/TEA-Indicators/masks/')
 
 PARAMS = ref_cc_params()
 
+START_YEAR = 1961
 END_YEAR = 2026
 LOGGER = logging.getLogger(__name__)
 TEXT_BOX_CLEARANCE = 0.80
@@ -39,14 +41,15 @@ def nice_tick_step(max_value):
 
 
 def get_data(varname='Tx30.0degC', ctp='june', region='AUT',
-             input_data_path=INPUT_DATA_PATH):
+             input_data_path=INPUT_DATA_PATH, dataset='SPARTACUS',
+             start_year=START_YEAR, end_year=END_YEAR):
     """Load CTP, decadal and amplification data for one TEA region."""
     dec_path = (input_data_path / 'dec_indicator_variables' /
-                f'DEC_{varname}_{region}_{ctp}_SPARTACUS_1961to{END_YEAR}.nc')
+                f'DEC_{varname}_{region}_{ctp}_{dataset}_{start_year}to{end_year}.nc')
     ctp_paths = sorted((input_data_path / 'ctp_indicator_variables').glob(
-        f'CTP_{varname}_{region}_{ctp}_SPARTACUS_*.nc'))
+        f'CTP_{varname}_{region}_{ctp}_{dataset}_*.nc'))
     af_path = (input_data_path / 'dec_indicator_variables' /
-               f'amplification/AF_{varname}_{region}_{ctp}_SPARTACUS_1961to{END_YEAR}.nc')
+               f'amplification/AF_{varname}_{region}_{ctp}_{dataset}_{start_year}to{end_year}.nc')
 
     for label, path in [('decadal indicators', dec_path),
                         ('amplification factors', af_path)]:
@@ -220,7 +223,7 @@ def plot_gr_data(ax, adata, ddata, afdata, su, sl):
         LOGGER.warning('%s contains no finite plotted values; using fallback y-axis upper limit %.1f',
                        ddata.name, ymax)
 
-    xticks = np.arange(1961, END_YEAR + 1)
+    xticks = np.arange(START_YEAR, END_YEAR + 1)
 
     ref = gmean(ddata.sel(time=slice(PARAMS['REF']['start_cy'], PARAMS['REF']['end_cy'])))
     cc = gmean(ddata.sel(time=slice(PARAMS['CC']['start_cy'], PARAMS['CC']['end_cy'])))
@@ -252,8 +255,8 @@ def plot_gr_data(ax, adata, ddata, afdata, su, sl):
         ax.yaxis.set_major_formatter(FormatStrFormatter('%.0f'))
     else:
         ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
-    ax.set_xlim(1960, END_YEAR + 1)
-    ax.xaxis.set_minor_locator(FixedLocator(np.arange(1960, END_YEAR + 1)))
+    ax.set_xlim(START_YEAR - 1, END_YEAR + 1)
+    ax.xaxis.set_minor_locator(FixedLocator(np.arange(START_YEAR - 1, END_YEAR + 1)))
     ax.set_title(props['title'], fontsize=14)
     ax.set_ylim(0, ymax)
     ax.yaxis.set_major_locator(FixedLocator(np.arange(0, ymax + dy, dy)))
@@ -345,10 +348,28 @@ def plot_map(fig, ax, data, region, mask_path=None):
             fontsize=9)
 
 
-def run(run_name, region='AUT', tex_variable='TEX_HW_max_GR',
+def run(run_name=None, config_file=None, region=None, tex_variable='TEX_HW_max_GR',
         output_dir=Path('.'), show=True, csv=False):
     global TEXT_BOX_CLEARANCE
-    
+    global START_YEAR, END_YEAR
+
+    if config_file is not None:
+        opts = load_opts(fname=__file__, config_file=config_file)
+        run_name = Path(config_file).stem
+        region = opts.region if region is None else region
+        input_data_path = Path(opts.outpath)
+        ctp = opts.period
+        varname = opts.param_str
+        dataset = opts.dataset
+        START_YEAR = opts.start
+        END_YEAR = opts.end
+    else:
+        region = 'AUT' if region is None else region
+        varname = 'Tx30.0degC'
+        dataset = 'SPARTACUS'
+        START_YEAR = 1961
+        END_YEAR = 2026
+
     run_name = run_name.replace('-', '_')
     LOGGER.info('Starting Figure 5: run=%s, region=%s, extremity=%s',
                 run_name, region, tex_variable)
@@ -375,12 +396,13 @@ def run(run_name, region='AUT', tex_variable='TEX_HW_max_GR',
     elif run_name == 'current':
         input_data_path = Path('/data/arsclisys/normal/clim-hydro/TEA-Indicators/results/heatwave_paper/')
         ctp = 'annual'
-    else:
+    elif config_file is None:
         raise ValueError(f'Unknown run name: {run_name}')
 
     LOGGER.info('Input data directory: %s; CTP: %s', input_data_path, ctp)
-    dec, ann, af = get_data(varname='Tx30.0degC', ctp=ctp, region=region,
-                            input_data_path=input_data_path)
+    dec, ann, af = get_data(varname=varname, ctp=ctp, region=region,
+                            input_data_path=input_data_path, dataset=dataset,
+                            start_year=START_YEAR, end_year=END_YEAR)
 
     LOGGER.info('Creating Figure 5 canvas')
     fig, axs = plt.subplots(4, 2, figsize=(14, 16))
@@ -450,12 +472,15 @@ def run(run_name, region='AUT', tex_variable='TEX_HW_max_GR',
 
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--run-name', default='current',
-                        choices=['RW1', 'RW2', 'CW1', 'CW2', 'CW3',
-                                 'current_detrended', 'current-detrended', 'current'],
-                        help='Configured data run to plot (default: current).')
-    parser.add_argument('--region', default='AUT',
-                        help='calc_TEA region name, e.g. AUT, SEA, FBR, EUR or an Austrian state (default: AUT).')
+    source_group = parser.add_mutually_exclusive_group(required=True)
+    source_group.add_argument('--run-name',
+                              choices=['RW1', 'RW2', 'CW1', 'CW2', 'CW3',
+                                       'current_detrended', 'current-detrended', 'current'],
+                              help='Configured data run to plot.')
+    source_group.add_argument('--config-file', '-cf', dest='config_file', type=Path,
+                              help='TEA configuration file.')
+    parser.add_argument('--region', default=None,
+                        help='calc_TEA region name, e.g. AUT, SEA, FBR, EUR or an Austrian state.')
     parser.add_argument('--tex-variable', default='TEX_GR',
                         choices=['TEX_GR', 'TEX_max_GR', 'TEX_HW_max_GR'],
                         help='Extremity series for the final panel (default: TEX_GR).')
@@ -476,6 +501,7 @@ if __name__ == '__main__':
     logging.basicConfig(level=getattr(logging, args.log_level),
                         format='%(asctime)s %(levelname)s %(message)s')
     logging.getLogger('matplotlib').setLevel(logging.WARNING)
-    run(args.run_name, region=args.region, tex_variable=args.tex_variable,
+    run(run_name=args.run_name, config_file=args.config_file, region=args.region,
+        tex_variable=args.tex_variable,
         output_dir=args.output_dir, csv=args.csv,
         show=not args.no_show)
