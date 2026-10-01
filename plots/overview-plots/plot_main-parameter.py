@@ -3,6 +3,7 @@
 Plot main parameter (GR and CC map)
 """
 import argparse
+import logging
 import matplotlib.pyplot as plt
 import pandas as pd
 from matplotlib.ticker import FormatStrFormatter, FixedLocator
@@ -14,6 +15,8 @@ import xarray as xr
 
 from teametrics.common.config import load_opts
 from teametrics.utils.calc_decadal_indicators import get_amplification_outpath, get_decadal_outpath
+
+logging.getLogger('matplotlib').setLevel(logging.WARNING)
 
 
 def _getopts():
@@ -319,10 +322,17 @@ def plot_map(opts, fig, ax, data):
     val_min, val_max = gt0_data.min().values, gt0_data.max().values
     range_vals = [val_min, val_max]
 
-    if 'lat' in data.dims and data.lat[0] > data.lat[1]:
-        data = data.sortby('lat')
+    if 'lat' in data.dims:
+        ydim = 'lat'
+        xdim = 'lon'
+    elif 'y' in data.dims and 'x' in data.dims:
+        ydim, xdim = 'y', 'x'
+    else:
+        raise ValueError(f'Could not determine map coordinates for dimensions {data.dims}')
 
-    map_vals = ax.contourf(data, cmap=props['cmap'], extend=ext, levels=lvls, vmin=cn, vmax=cx)
+    data = data.sortby(ydim)
+    map_vals = ax.contourf(data[xdim], data[ydim], data.values,
+                           cmap=props['cmap'], extend=ext, levels=lvls, vmin=cn, vmax=cx)
 
     ax.axis('off')
     divider = make_axes_locatable(ax)
