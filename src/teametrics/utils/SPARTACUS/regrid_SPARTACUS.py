@@ -437,6 +437,15 @@ def target_to_epsg3416_grid(x, y, target_crs):
     return _transform_grid(transformer, x, y)
 
 
+def interpolate_with_nearest_fallback(ds_in, x, y, method='linear'):
+    """Interpolate linearly, then preserve valid edge pixels with nearest values."""
+    interpolated = ds_in.interp(x=x, y=y, method=method)
+    if method == 'linear':
+        nearest = ds_in.interp(x=x, y=y, method='nearest')
+        interpolated = interpolated.fillna(nearest)
+    return interpolated
+
+
 def regrid_spartacus(opts, ds_in, method="linear"):
     """
     regrid SPARTACUS data (projection EPSG3416) to the extended FBR region (projection UTM33N)
@@ -473,7 +482,7 @@ def regrid_spartacus(opts, ds_in, method="linear"):
     y = xr.DataArray(y_new_epsg3416, dims=["y", "x"], coords={"x": x_new, "y": y_new})
 
     # Interpolation
-    ds_regridded = ds_in.interp(x=x, y=y, method=method)
+    ds_regridded = interpolate_with_nearest_fallback(ds_in, x, y, method=method)
     if 'grid_resolution' in grid.attrs:
         ds_regridded.attrs['grid_resolution'] = grid.attrs['grid_resolution']
 
@@ -496,7 +505,7 @@ def regrid_orog(opts):
     oro_new = oro_new.to_dataset(name=oro_new.name or 'orog')
     oro_new = assign_target_crs(oro_new, target_grid)
     create_history_from_cfg(cfg_params=opts, ds=oro_new)
-    oro_new = oro_new.drop_vars(['lat', 'lon'])
+    oro_new = oro_new.drop_vars(['lat', 'lon'], errors='ignore')
 
     path = Path(opts.regridded_data_path)
     path.mkdir(parents=True, exist_ok=True)
@@ -608,7 +617,7 @@ def run():
                 opts.parameter = 'Tn'
 
             # drop unnecessary coords
-            ds_new = ds_new.drop_vars(['lat', 'lon'])
+            ds_new = ds_new.drop_vars(['lat', 'lon'], errors='ignore')
 
             # Save output
             encoding = {opts.parameter: {'dtype': 'int16', 'scale_factor': 0.1,

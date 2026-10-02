@@ -26,6 +26,7 @@ from teametrics.utils.SPARTACUS.regrid_SPARTACUS import (
     epsg3416_to_epsg3035_grid,
     epsg3416_to_utm_grid,
     get_crs_from_dataset,
+    interpolate_with_nearest_fallback,
     utm_to_epsg3416_grid,
 )
 
@@ -148,6 +149,27 @@ def test_assign_target_crs_replaces_source_mapping():
     assert result.ETRS89_LAEA.attrs['geotransform'] == '4285000 1000 0 2892000 0 -1000'
     assert result.x.attrs['standard_name'] == 'projection_x_coordinate'
     assert result.y.attrs['standard_name'] == 'projection_y_coordinate'
+
+
+def test_linear_interpolation_falls_back_at_nan_boundary():
+    """A valid neighbor must not be lost because linear interpolation sees NaN."""
+    source = xr.DataArray(
+        [[1.0, np.nan, 1.0], [1.0, np.nan, 1.0], [1.0, np.nan, 1.0]],
+        dims=('y', 'x'),
+        coords={'x': [0.0, 1.0, 2.0], 'y': [0.0, 1.0, 2.0]},
+    )
+    target_x = xr.DataArray(
+        [[0.25]], dims=('y', 'x'), coords={'x': [0.25], 'y': [1.0]}
+    )
+    target_y = xr.DataArray(
+        [[1.0]], dims=('y', 'x'), coords={'x': [0.25], 'y': [1.0]}
+    )
+
+    linear = source.interp(x=target_x, y=target_y, method='linear')
+    result = interpolate_with_nearest_fallback(source, target_x, target_y)
+
+    assert np.isnan(linear.values).all()
+    assert result.values.item() == 1.0
 
 
 if __name__ == '__main__':
