@@ -42,12 +42,15 @@ def aggregate_monthly(input_dir: Path, output: Path, overwrite: bool = False) ->
     if output.exists() and not overwrite:
         raise FileExistsError(f"Output exists; use --overwrite to replace it: {output}")
 
+    print(f"Found {len(files)} daily RR files in {input_dir}")
+    print("Opening daily files...")
     ds = xr.open_mfdataset(
         files,
         combine="by_coords",
         data_vars="minimal",
         coords="minimal",
         compat="equals",
+        join="outer",
         chunks={"time": 31},
     )
     try:
@@ -57,10 +60,15 @@ def aggregate_monthly(input_dir: Path, output: Path, overwrite: bool = False) ->
         times = pd.DatetimeIndex(ds.time.values)
         last_complete = _last_complete_month(times)
         cutoff = last_complete.end_time.normalize()
+        print(
+            f"Loaded {len(times)} daily timestamps from {times.min():%Y-%m-%d} "
+            f"through {times.max():%Y-%m-%d}; aggregating through {last_complete}"
+        )
         ds = ds.sel(time=slice(None, cutoff.to_datetime64()))
 
         # Materialize the reduced array before writing. This avoids leaving a
         # large multi-file dask graph for the NetCDF backend to evaluate.
+        print("Calculating monthly precipitation sums...")
         monthly_rr = (
             ds["RR"].resample(time="MS").sum(dim="time", min_count=1).compute()
         )
@@ -93,6 +101,7 @@ def aggregate_monthly(input_dir: Path, output: Path, overwrite: bool = False) ->
                 "_FillValue": -9999.0,
             }
         }
+        print(f"Writing {result.sizes['time']} monthly fields to {output}...")
         result.to_netcdf(output, format="NETCDF4", encoding=encoding)
         print(f"Aggregated {len(files)} files through {last_complete}: {output}")
     finally:
