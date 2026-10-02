@@ -39,10 +39,103 @@ def get_target_grid_definition(opts):
     """
     target_grid = getattr(opts, 'target_grid', 'wegn').lower()
     if target_grid == 'wegn':
-        return {'name': 'wegn', 'epsg': '32633', 'grid_mapping': 'UTM33N'}
+        return {
+            'name': 'wegn',
+            'epsg': '32633',
+            'grid_mapping': 'UTM33N',
+            'crs': pyproj.CRS.from_epsg(32633),
+        }
     if target_grid == 'statat':
-        return {'name': 'statat', 'epsg': '3035', 'grid_mapping': 'ETRS89_LAEA'}
+        crs = pyproj.CRS.from_epsg(3035)
+        statat_file = getattr(opts, 'statat_file', None)
+        if statat_file is not None:
+            crs = get_crs_from_dataset(statat_file)
+            epsg = crs.to_epsg()
+            if epsg is None:
+                raise ValueError(f'Could not determine an EPSG code from {statat_file}.')
+        else:
+            epsg = 3035
+        return {
+            'name': 'statat',
+            'epsg': str(epsg),
+            'grid_mapping': 'ETRS89_LAEA',
+            'crs': crs,
+        }
     raise ValueError(f'Unknown target_grid "{target_grid}". Use "wegn" or "statat".')
+
+
+def get_crs_from_dataset(filename):
+    """Read a CRS from a NetCDF dataset's CF or WKT metadata."""
+    with xr.open_dataset(filename) as ds:
+        candidates = list(ds.variables.values()) + [ds]
+        for variable in candidates:
+            attrs = variable.attrs
+            if 'crs_wkt' in attrs:
+                return pyproj.CRS.from_wkt(attrs['crs_wkt'])
+            if 'spatial_ref' in attrs:
+                return pyproj.CRS.from_wkt(attrs['spatial_ref'])
+            if 'grid_mapping_name' in attrs:
+                try:
+                    return pyproj.CRS.from_cf(attrs)
+                except pyproj.exceptions.CRSError:
+                    pass
+    raise ValueError(f'No readable CRS metadata found in {filename}.')
+
+
+def _target_geotransform(x, y):
+    """Return a GDAL geotransform for regularly spaced cell-center coords."""
+    if len(x) < 2 or len(y) < 2:
+        return None
+    dx = float(np.diff(x).mean())
+    dy = float(np.diff(y).mean())
+    return f'{x[0] - dx / 2:.0f} {dx:g} 0 {y[0] - dy / 2:.0f} 0 {dy:g}'
+
+
+def assign_target_crs(ds, target_grid):
+    """Attach target CRS metadata and remove stale source-grid metadata."""
+    mapping_name = target_grid['grid_mapping']
+    crs = target_grid['crs']
+    mapping_attrs = crs.to_cf()
+    mapping_attrs.update({
+        'crs_wkt': crs.to_wkt(),
+        'spatial_ref': crs.to_wkt(),
+        'code': f"EPSG:{target_grid['epsg']}",
+    })
+    geotransform = _target_geotransform(ds.x.values, ds.y.values)
+    if geotransform is not None:
+        mapping_attrs['geotransform'] = geotransform
+
+    stale_mappings = [
+        name for name, variable in ds.variables.items()
+        if name != mapping_name and 'grid_mapping_name' in variable.attrs
+    ]
+    if stale_mappings:
+        ds = ds.drop_vars(stale_mappings)
+
+    ds[mapping_name] = xr.DataArray(0, attrs=mapping_attrs)
+    ds.x.attrs = {
+        'standard_name': 'projection_x_coordinate',
+        'long_name': 'easting',
+        'units': 'm',
+        'axis': 'X',
+    }
+    ds.y.attrs = {
+        'standard_name': 'projection_y_coordinate',
+        'long_name': 'northing',
+        'units': 'm',
+        'axis': 'Y',
+    }
+
+    for name, variable in ds.data_vars.items():
+        if name == mapping_name:
+            continue
+        variable.attrs['grid_mapping'] = mapping_name
+        if variable.attrs.get('coordinates') in stale_mappings:
+            variable.attrs.pop('coordinates')
+        variable.attrs.pop('esri_pe_string', None)
+    ds.attrs['grid_mapping'] = mapping_name
+    ds.attrs['crs'] = f"EPSG:{target_grid['epsg']}"
+    return ds
 
 
 def define_wegn_grid_1000x1000(opts):
@@ -338,6 +431,12 @@ def epsg3416_to_epsg3035_grid(x, y):
     return _transform_grid(transformer, x, y)
 
 
+def target_to_epsg3416_grid(x, y, target_crs):
+    """Transform target-grid coordinates to the SPARTACUS source CRS."""
+    transformer = pyproj.Transformer.from_crs(target_crs, 'EPSG:3416', always_xy=True)
+    return _transform_grid(transformer, x, y)
+
+
 def regrid_spartacus(opts, ds_in, method="linear"):
     """
     regrid SPARTACUS data (projection EPSG3416) to the extended FBR region (projection UTM33N)
@@ -364,8 +463,10 @@ def regrid_spartacus(opts, ds_in, method="linear"):
         # UTM to EPSG because input dataset is SPARTACUS, which is in EPSG3416
         x_new_epsg3416, y_new_epsg3416 = utm_to_epsg3416_grid(x_new, y_new)
     else:
-        # EPSG:3035 to EPSG:3416 for interpolation from SPARTACUS source grid
-        x_new_epsg3416, y_new_epsg3416 = epsg3035_to_epsg3416_grid(x_new, y_new)
+        # Transform the configured target CRS to EPSG:3416 for interpolation.
+        x_new_epsg3416, y_new_epsg3416 = target_to_epsg3416_grid(
+            x_new, y_new, target_grid['crs']
+        )
 
     # Get remapping arrays in SPARTACUS CRS, but keep target grid coords
     x = xr.DataArray(x_new_epsg3416, dims=["y", "x"], coords={"x": x_new, "y": y_new})
@@ -392,9 +493,9 @@ def regrid_orog(opts):
     orog_file = xr.open_dataset(opts.orog_file)
     target_grid = get_target_grid_definition(opts)
     oro_new = regrid_spartacus(opts=opts, ds_in=orog_file.orog, method='linear')
-    oro_new = oro_new.assign_attrs(grid_mapping=target_grid['grid_mapping'])
+    oro_new = oro_new.to_dataset(name=oro_new.name or 'orog')
+    oro_new = assign_target_crs(oro_new, target_grid)
     create_history_from_cfg(cfg_params=opts, ds=oro_new)
-    oro_new.attrs['crs'] = f"EPSG:{target_grid['epsg']}"
     oro_new = oro_new.drop_vars(['lat', 'lon'])
 
     path = Path(opts.regridded_data_path)
@@ -493,11 +594,10 @@ def run():
 
             # Regrid to extended WEGN grid
             ds_new = regrid_spartacus(opts=opts, ds_in=ds, method='linear')
-            ds_new = ds_new.assign_attrs(grid_mapping=target_grid['grid_mapping'])
+            ds_new = assign_target_crs(ds_new, target_grid)
 
             # Add history to attributes and set output CRS to target grid CRS
             create_history_from_cfg(cfg_params=opts, ds=ds_new)
-            ds_new.attrs['crs'] = f"EPSG:{target_grid['epsg']}"
 
             # Rename variables if necessary
             if opts.parameter in ['TX', 'Tx']:
