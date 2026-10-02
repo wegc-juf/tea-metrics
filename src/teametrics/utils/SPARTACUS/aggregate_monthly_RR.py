@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import re
 
 import pandas as pd
 import xarray as xr
@@ -16,6 +17,7 @@ DEFAULT_OUTPUT = Path(
     "SPARTACUS_RR_monthly/SPARTACUS2-MONTHLY_RR_1961-2026.nc"
 )
 FILE_PATTERN = "SPARTACUS2-DAILY_RR_*.nc"
+CANONICAL_FILE_RE = re.compile(r"SPARTACUS2-DAILY_RR_\d{4}\.nc$")
 
 
 def _last_complete_month(times: pd.DatetimeIndex) -> pd.Period:
@@ -36,13 +38,19 @@ def _last_complete_month(times: pd.DatetimeIndex) -> pd.Period:
 
 def aggregate_monthly(input_dir: Path, output: Path, overwrite: bool = False) -> None:
     """Aggregate all matching daily RR files in *input_dir* into *output*."""
-    files = sorted(input_dir.glob(FILE_PATTERN))
+    candidates = sorted(input_dir.glob(FILE_PATTERN))
+    files = [path for path in candidates if CANONICAL_FILE_RE.fullmatch(path.name)]
+    ignored = [path for path in candidates if path not in files]
     if not files:
         raise FileNotFoundError(f"No files matching {FILE_PATTERN!r} in {input_dir}")
     if output.exists() and not overwrite:
         raise FileExistsError(f"Output exists; use --overwrite to replace it: {output}")
 
-    print(f"Found {len(files)} daily RR files in {input_dir}")
+    print(f"Found {len(files)} canonical daily RR files in {input_dir}")
+    if ignored:
+        print(f"Ignoring {len(ignored)} noncanonical file(s):")
+        for path in ignored:
+            print(f"  {path.name}")
     print("Opening daily files...")
     ds = xr.open_mfdataset(
         files,
