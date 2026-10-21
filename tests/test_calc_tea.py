@@ -100,7 +100,7 @@ class TestCalcXYRange:
 class TestReduceRegion:
     def test_reduce_region_no_crop(self):
         from types import SimpleNamespace
-        opts = SimpleNamespace(region="test", agr_cell_size=0.5, threshold_type="perc")
+        opts = SimpleNamespace(region="test", grg_cell_size=0.5, threshold_type="perc")
         data = xr.DataArray(
             np.ones((5, 4, 3)),
             dims=("time", "y", "x"),
@@ -175,7 +175,7 @@ class TestLoadPopulationGrid:
 class TestReduceRegionPopulation:
     def test_population_grid_is_reduced_with_region(self):
         from types import SimpleNamespace
-        opts = SimpleNamespace(region="test", agr_cell_size=0.5, threshold_type="perc")
+        opts = SimpleNamespace(region="test", grg_cell_size=0.5, threshold_type="perc")
         coords = {"y": [47.0, 47.5, 48.0, 48.5], "x": [15.0, 15.5, 16.0]}
         mask = xr.DataArray(
             np.array([[0, 0, 0], [0, 1, 0], [0, 1, 0], [0, 0, 0]]),

@@ -10,7 +10,7 @@ common_params:
 
     # agr: "EUR"
     # land_frac_min: 0.5
-    # agr_cell_size: 2
+    # grg_cell_size: 2
     # grg_grid_spacing: 0.5
   parameter: &PARAM
     parameter: Tx

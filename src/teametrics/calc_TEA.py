@@ -230,7 +230,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
                                 use_dask=opts.use_dask,
                                 compression_level=opts.compression_level,
-                                cell_size_y=opts.agr_cell_size,
+                                cell_size_y=opts.grg_cell_size,
                                 rounding_decimal_places=opts.rounding_decimal_places, agr_frac_min=opts.agr_frac_min,
                                 land_frac_min=opts.land_frac_min, min_duration=opts.min_duration,
                                 zlib_compression=opts.zlib_compression)
@@ -277,7 +277,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
                                 low_extreme=opts.low_extreme,
                                  population_grid=population_grid,
                                  unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
-                                 cell_size_y=opts.agr_cell_size,
+                                  cell_size_y=opts.grg_cell_size,
                                  rounding_decimal_places=opts.rounding_decimal_places, agr_frac_min=opts.agr_frac_min,
                                  compression_level=opts.compression_level,
                                  zlib_compression=opts.zlib_compression)
@@ -587,7 +587,7 @@ def _load_or_generate_gr_grid_static(opts, tea):
         tea.gr_grid_areas = gr_grid_areas
     
     # set cell_size
-    tea.cell_size_y = opts.agr_cell_size
+    tea.cell_size_y = opts.grg_cell_size
 
 
 def _calc_x_y_range(cell_size_y, mask):
@@ -646,7 +646,7 @@ def _reduce_region(opts, data, mask, threshold=None, full_region=False, populati
         mask: reduced mask grid
         threshold: reduced threshold grid
     """
-    cell_size_y = opts.agr_cell_size
+    cell_size_y = opts.grg_cell_size
     xdim, ydim = TEAIndicators.find_dim_names(mask)
     
     # preselect region to reduce computation time (incl. some margins to avoid boundary effects)
