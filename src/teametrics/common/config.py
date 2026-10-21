@@ -65,6 +65,16 @@ def _get_default_opts(fname, opts):
         opts: options with default values set
 
     """
+    # Keep the old AGR spelling as an input alias while exposing only the
+    # canonical GRG name to the rest of the application.
+    if 'agr_grid_spacing' in opts:
+        if ('grg_grid_spacing' in opts
+                and opts.grg_grid_spacing != opts.agr_grid_spacing):
+            raise ValueError('Set only one grid spacing value; '
+                             'grg_grid_spacing and agr_grid_spacing differ.')
+        opts.grg_grid_spacing = opts.agr_grid_spacing
+        delattr(opts, 'agr_grid_spacing')
+
     if 'precip' not in opts:
         opts.precip = False
 
@@ -276,6 +286,7 @@ def check_type(key, value):
         'agr_cell_size': float,
         'agr_range': str,  # comma-separated string of floats
         'grg_grid_spacing': float,
+        'agr_grid_spacing': float,  # deprecated alias for grg_grid_spacing
         'land_frac_min': float,
         'agr_frac_min': float,
 
