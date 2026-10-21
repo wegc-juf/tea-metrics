@@ -112,6 +112,35 @@ class TestCalcAreaWeightedMean:
 
 
 class TestSelectSubGr:
+    def test_sub_gr_selection_uses_daily_grid_coordinates(self):
+        lat = np.arange(4.0, 0.0, -0.5)
+        lon = np.arange(0.0, 4.0, 0.5)
+        times = pd.date_range("2000-01-01", periods=2, freq="D")
+        data = xr.DataArray(
+            np.full((len(times), len(lat), len(lon)), 10.0),
+            coords={"time": times, "lat": lat, "lon": lon},
+            dims=("time", "lat", "lon"),
+            attrs={"coordinate_sys": EXPECTED_CRS},
+        )
+        threshold = xr.zeros_like(data.isel(time=0))
+        tea = TEAAgr(input_data=data, threshold=threshold, unit="K", cell_size_y=0.25,
+                     land_frac_min=0)
+        tea.calc_daily_basis_vars(grid=True, gr=True)
+
+        # Model an area grid with a wider extent than this cached data chunk.
+        wider_lon = np.arange(-0.5, 4.5, 0.5)
+        tea.area_grid = xr.DataArray(
+            np.ones((len(lat), len(wider_lon))),
+            coords={"lat": lat, "lon": wider_lon},
+            dims=("lat", "lon"),
+            attrs={"coordinate_sys": EXPECTED_CRS},
+        )
+
+        tea_sub = tea.select_sub_gr(ycoord=2.0, xcoord=3.5)
+
+        assert tea_sub is not None
+        assert tea_sub.area_grid.sizes == {"lat": 1, "lon": 1}
+
     def test_land_mask_is_aligned_by_coordinates_before_indexing(self):
         full_mask = xr.DataArray(
             np.zeros((4, 4)),

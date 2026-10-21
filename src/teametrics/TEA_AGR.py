@@ -125,21 +125,22 @@ class TEAAgr(TEAIndicators):
             cell_static: static data of cell
         """
 
+        daily_grid = self.get_daily_results(grid=True, gr=False)
         y_indices, y_weights = self._get_axis_overlap(
-            self.area_grid[self.ydim].values, ycoord, self.cell_size_y,
+            daily_grid[self.ydim].values, ycoord, self.cell_size_y,
             latitude=self.ydim == 'lat')
         if self.xdim == 'lon':
             cell_size_x = self.cell_size_y / np.cos(np.deg2rad(ycoord))
         else:
             cell_size_x = self.cell_size_y
         x_indices, x_weights = self._get_axis_overlap(
-            self.area_grid[self.xdim].values, xcoord, cell_size_x)
+            daily_grid[self.xdim].values, xcoord, cell_size_x)
 
         if len(y_indices) == 0 or len(x_indices) == 0:
             return None
 
-        y_coords = self.area_grid[self.ydim].isel({self.ydim: y_indices})
-        x_coords = self.area_grid[self.xdim].isel({self.xdim: x_indices})
+        y_coords = daily_grid[self.ydim].isel({self.ydim: y_indices})
+        x_coords = daily_grid[self.xdim].isel({self.xdim: x_indices})
         overlap_weights = xr.DataArray(
             np.outer(y_weights, x_weights),
             coords={self.ydim: y_coords, self.xdim: x_coords},
@@ -147,10 +148,11 @@ class TEAAgr(TEAIndicators):
         )
         indexers = {self.ydim: y_indices, self.xdim: x_indices}
 
-        cell_area_grid = self.area_grid.isel(indexers) * overlap_weights
+        aligned_area_grid = self._align_spatial_grid(self.area_grid, daily_grid)
+        cell_area_grid = aligned_area_grid.isel(indexers) * overlap_weights
 
         if self.land_frac_min > 0:
-            aligned_lsm = self._align_spatial_grid(self.land_sea_mask, self.area_grid)
+            aligned_lsm = self._align_spatial_grid(self.land_sea_mask, daily_grid)
             cell_lsm = aligned_lsm.isel(indexers)
             # Weight the land fraction by the part of each pixel covered by
             # this GRG cell and by the pixel's physical area.
@@ -161,12 +163,17 @@ class TEAAgr(TEAIndicators):
 
         # A GR variable is already reduced over the parent domain and cannot be
         # reused for this cell. The child recalculates all GR variables below.
-        cell_data = self.get_daily_results(grid=True, gr=False).isel(indexers)
+        cell_data = daily_grid.isel(indexers)
         
         # select threshold grid for cell
-        cell_threshold_grid = self.threshold_grid.isel(indexers)
+        if isinstance(self.threshold_grid, xr.DataArray):
+            aligned_threshold_grid = self._align_spatial_grid(self.threshold_grid, daily_grid)
+            cell_threshold_grid = aligned_threshold_grid.isel(indexers)
+        else:
+            cell_threshold_grid = self.threshold_grid
         if self.population_grid is not None:
-            cell_population_grid = self.population_grid.isel(indexers) * overlap_weights
+            aligned_population_grid = self._align_spatial_grid(self.population_grid, daily_grid)
+            cell_population_grid = aligned_population_grid.isel(indexers) * overlap_weights
         else:
             cell_population_grid = None
         
