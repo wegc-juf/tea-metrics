@@ -9,6 +9,7 @@
 - [x] Adapt workflow script to run only on current data
 
 ## Older Issues
+- [ ] Load/regenerate AGR static grids before saving amplification factors, avoiding the intermediate AF write – calc_TEA.py:102-109
 - [ ] Optimize TEA calculations for x y grids (xarray method) – TEA_AGR.py:153
 - [ ] Optimize code performance – TEA_AGR.py:612
 - [ ] Take values directly from file - overview-plots/plot_main-parameter.py:173,268

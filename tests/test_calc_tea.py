@@ -7,7 +7,7 @@ _import_error = None
 try:
     from teametrics.calc_TEA import (
         _getopts, _get_ctp_filepath, _calc_x_y_range, _reduce_region,
-        _daily_cache_covers_grid, _gr_grid_static_is_usable,
+        _daily_cache_covers_grid, _gr_grid_static_is_usable, _gr_grid_static_covers_reference,
         _get_threshold, _load_mask_file, _load_gr_grid_static,
         _compare_to_ctp_ref, _load_population_grid, _get_chunk_workers, calc_dbv_indicators,
     )
@@ -260,6 +260,26 @@ class TestLoadGrGridStatic:
         areas = xr.DataArray(np.ones((2, 2)), dims=("y", "x"))
 
         assert _gr_grid_static_is_usable(mask, areas)
+
+    def test_static_grid_cache_with_larger_axes_covers_reference(self):
+        cached = xr.DataArray(
+            np.ones((4, 4)), coords={"lat": [3, 2, 1, 0], "lon": [0, 1, 2, 3]},
+            dims=("lat", "lon"), name="mask")
+        reference = xr.DataArray(
+            np.ones((2, 2)), coords={"lat": [2, 1], "lon": [1, 2]},
+            dims=("lat", "lon"), name="EM_avg")
+
+        assert _gr_grid_static_covers_reference(cached, reference)
+
+    def test_static_grid_cache_with_shifted_lattice_does_not_cover_reference(self):
+        cached = xr.DataArray(
+            np.ones((2, 2)), coords={"lat": [2.1, 1.1], "lon": [1.1, 2.1]},
+            dims=("lat", "lon"), name="mask")
+        reference = xr.DataArray(
+            np.ones((2, 2)), coords={"lat": [2.0, 1.0], "lon": [1.0, 2.0]},
+            dims=("lat", "lon"), name="EM_avg")
+
+        assert not _gr_grid_static_covers_reference(cached, reference)
 
     def test_load_gr_grid_static_not_found(self, tmp_path):
         from types import SimpleNamespace

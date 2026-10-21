@@ -595,11 +595,21 @@ def _load_or_generate_gr_grid_static(opts, tea):
         if hasattr(opts, 'recalc_decadal'):
             opts.recalc_decadal = True
 
-    # generate GR grid mask and area if necessary
-    mismatch = False
-    if tea._ref_mean is not None and gr_grid_mask is not None:
-        mismatch = gr_grid_mask[tea.xdim][0].values not in tea._ref_mean[tea.xdim].values
-    if gr_grid_mask is None or gr_grid_areas is None or mismatch:
+    reference_grid = tea._ref_mean
+    cache_covers_reference = True
+    if reference_grid is not None and gr_grid_mask is not None and gr_grid_areas is not None:
+        cache_covers_reference = _gr_grid_static_covers_reference(gr_grid_mask, reference_grid)
+        if cache_covers_reference:
+            gr_grid_mask = tea._align_spatial_grid(gr_grid_mask, reference_grid)
+            gr_grid_areas = tea._align_spatial_grid(gr_grid_areas, reference_grid)
+
+    if gr_grid_mask is None or gr_grid_areas is None or not cache_covers_reference:
+        if reference_grid is not None:
+            # Static region masks may cover a much broader domain than the
+            # CTP reference data. Generate the cached GRG grid on the reference
+            # coordinates so later runs can reuse it without extent mismatch.
+            tea.mask = tea._align_spatial_grid(tea.mask, reference_grid)
+            tea.area_grid = tea._align_spatial_grid(tea.area_grid, reference_grid)
         tea.generate_gr_grid_mask()
         _save_grg_mask(opts, tea.gr_grid_mask, tea.gr_grid_areas)
     else:
@@ -616,6 +626,16 @@ def _gr_grid_static_is_usable(gr_grid_mask, gr_grid_areas):
     mask_has_cells = bool((gr_grid_mask > 0).any().compute().item())
     area_has_cells = bool((np.isfinite(gr_grid_areas) & (gr_grid_areas > 0)).any().compute().item())
     return mask_has_cells and area_has_cells
+
+
+def _gr_grid_static_covers_reference(gr_grid_mask, reference_grid):
+    """Check if cached GRG axes contain every coordinate used by CTP data."""
+    xdim, ydim = TEAIndicators.find_dim_names(reference_grid)
+    return all(
+        dim in gr_grid_mask.coords
+        and _coordinates_are_covered(gr_grid_mask[dim].values, reference_grid[dim].values)
+        for dim in (xdim, ydim)
+    )
 
 
 def _coordinates_are_covered(available_coords, required_coords):
