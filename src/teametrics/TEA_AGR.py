@@ -128,7 +128,7 @@ class TEAAgr(TEAIndicators):
         daily_grid = self.get_daily_results(grid=True, gr=False)
         y_indices, y_weights = self._get_axis_overlap(
             daily_grid[self.ydim].values, ycoord, self.cell_size_y,
-            latitude=self.ydim == 'lat')
+            latitude=self.ydim.lower() in {'lat', 'latitude'})
         if self.xdim == 'lon':
             cell_size_x = self.cell_size_y / np.cos(np.deg2rad(ycoord))
         else:
@@ -871,10 +871,46 @@ class TEAAgr(TEAIndicators):
             data[f'{var}_p05'].attrs = get_attrs(vname=f'{var}', spread='5th percentile')
             data[f'{var}_p95'].attrs = get_attrs(vname=f'{var}', spread='95th percentile')
 
-    def _get_xy(self, margin=None):
-        """
-        get x and y coords for GeoRegion grid
-        """
+    @staticmethod
+    def _grid_centers_from_source_axis(coordinates, grid_spacing):
+        """Build a GR lattice anchored to the native source-coordinate phase."""
+        coordinates = np.asarray(coordinates, dtype=float)
+        if coordinates.size < 2:
+            raise ValueError('At least two source coordinates are required to build the GR grid.')
+        if grid_spacing <= 0:
+            raise ValueError('GR grid spacing must be positive.')
+
+        steps = np.abs(np.diff(coordinates))
+        source_spacing = float(np.median(steps))
+        tolerance = max(source_spacing, grid_spacing) * 1e-8
+        if not np.allclose(steps, source_spacing, rtol=1e-5, atol=tolerance):
+            raise ValueError('GR grid generation requires regular source coordinates.')
+
+        phase = float(np.remainder(coordinates[0], source_spacing))
+        if np.isclose(phase, 0.0, atol=tolerance) or np.isclose(phase, source_spacing, atol=tolerance):
+            phase = 0.0
+        lower, upper = float(coordinates.min()), float(coordinates.max())
+        first_index = int(np.ceil((lower - phase - tolerance) / grid_spacing))
+        last_index = int(np.floor((upper - phase + tolerance) / grid_spacing))
+        if first_index > last_index:
+            return np.array([], dtype=float)
+
+        centers = phase + np.arange(first_index, last_index + 1) * grid_spacing
+        centers[np.isclose(centers, lower, atol=tolerance)] = lower
+        centers[np.isclose(centers, upper, atol=tolerance)] = upper
+        source_order = np.argsort(coordinates)
+        source_sorted = coordinates[source_order]
+        nearest = np.clip(np.searchsorted(source_sorted, centers), 0, source_sorted.size - 1)
+        previous = np.clip(nearest - 1, 0, source_sorted.size - 1)
+        choose_previous = (np.abs(source_sorted[previous] - centers)
+                           < np.abs(source_sorted[nearest] - centers))
+        nearest[choose_previous] = previous[choose_previous]
+        snap = np.abs(source_sorted[nearest] - centers) <= tolerance
+        centers[snap] = source_sorted[nearest[snap]]
+        return centers
+
+    def _get_xy(self):
+        """Get GR center coordinates from a cell-size-independent lattice."""
         if self.gr_grid_mask is not None:
             xcoords = self.gr_grid_mask[self.xdim].values
             ycoords = self.gr_grid_mask[self.ydim].values
@@ -884,9 +920,6 @@ class TEAAgr(TEAIndicators):
             raise ValueError('GR grid file not available for x/y grid - cannot get x and y coordinates for GR grid. '
                              'Please generate GR grid first.')
         
-        if margin is None:
-            margin = self.cell_size_y / 2
-
         if self.input_data is not None:
             ref_grid = self.input_data
         elif self.area_grid is not None:
@@ -895,30 +928,17 @@ class TEAAgr(TEAIndicators):
             raise ValueError('No input data or area grid provided. Please provide a valid input data grid or area '
                              'grid.')
 
-        xcoord = ref_grid[self.xdim]
-        ycoord = ref_grid[self.ydim]
-
+        xcoord = np.asarray(ref_grid[self.xdim].values, dtype=float)
+        ycoord = np.asarray(ref_grid[self.ydim].values, dtype=float)
+        xcoords = self._grid_centers_from_source_axis(xcoord, self.gr_grid_res)
+        ycoords = self._grid_centers_from_source_axis(ycoord, self.gr_grid_res)
+        if xcoord[0] > xcoord[-1]:
+            xcoords = xcoords[::-1]
         if ycoord[0] > ycoord[-1]:
-            ycoords = np.arange(ycoord.max().values - margin,
-                                ycoord.min().values - self.gr_grid_res + margin,
-                                -self.gr_grid_res)
-        else:
-            ycoords = np.arange(ycoord.min().values + margin,
-                                ycoord.max().values + self.gr_grid_res - margin,
-                                self.gr_grid_res)
-
-        # compute x margin taking y coord of first grid row
-        y_0 = ycoords[0] if len(ycoords) > 0 else ycoord.max().values
-        margin_lon = 1 / np.cos(np.deg2rad(y_0)) * margin
-        # round margin_lon to resolution of gr grid
-        margin_lon = np.round(np.round(margin_lon / self.gr_grid_res, 0) * self.gr_grid_res, 2)
-        
-        xcoords = np.arange(xcoord.min().values + margin_lon,
-                            xcoord.max().values + self.gr_grid_res - margin_lon,
-                            self.gr_grid_res)
+            ycoords = ycoords[::-1]
         if len(ycoords) == 0 or len(xcoords) == 0:
-            raise ValueError(f'Not enough valid cells found for margin {margin} - check size of input data grid and '
-                             f'static files')
+            raise ValueError('Not enough valid cells found for the configured GR grid spacing; check the input '
+                             'data grid and static files.')
         
         return xcoords, ycoords
 
@@ -929,9 +949,8 @@ class TEAAgr(TEAIndicators):
         logger.info(f'Generating GR grid mask with resolution {self.gr_grid_res} degrees')
         grg_res = self.gr_grid_res
         mask_orig = self.mask
-        area_orig = self.area_grid
+        area_orig = self._align_spatial_grid(self.area_grid, mask_orig)
         res_orig = self._y_resolution_in
-
         if self.xdim == 'x':
             # try to aggregate using coarsen (vectorized)
             factor = int(round(grg_res / res_orig)) if res_orig is not None else None
@@ -951,27 +970,44 @@ class TEAAgr(TEAIndicators):
         else:
             xcoords, ycoords = self._get_xy()
             gr_grid_mask = xr.DataArray(data=np.ones((len(ycoords), len(xcoords))) * np.nan,
-                                        coords={self.ydim: ([self.ydim], ycoords), self.xdim: ([self.xdim], xcoords)},
-                                        dims={self.ydim: ([self.ydim], ycoords), self.xdim: ([self.xdim], xcoords)})
-            gr_grid_mask = gr_grid_mask.rename('mask')
+                                        coords={self.ydim: ycoords, self.xdim: xcoords},
+                                        dims=(self.ydim, self.xdim), name='mask')
 
             gr_grid_areas = xr.DataArray(data=np.ones((len(ycoords), len(xcoords))) * np.nan,
-                                         coords={self.ydim: ([self.ydim], ycoords), self.xdim: ([self.xdim], xcoords)},
-                                         dims={self.ydim: ([self.ydim], ycoords), self.xdim: ([self.xdim], xcoords)})
-            gr_grid_areas = gr_grid_areas.rename('area_grid')
+                                         coords={self.ydim: ycoords, self.xdim: xcoords},
+                                         dims=(self.ydim, self.xdim), name='area_grid')
 
-            for llat in gr_grid_mask.lat:
-                for llon in gr_grid_mask.lon:
-                    cell_orig = mask_orig.sel(lat=slice(llat, llat - grg_res + res_orig),
-                                              lon=slice(llon, llon + grg_res - res_orig))
-                    cell_area = area_orig.sel(lat=slice(llat, llat - grg_res + res_orig),
-                                              lon=slice(llon, llon + grg_res - res_orig))
-                    valid_cells = cell_orig.sum()
-                    if valid_cells == 0:
+            for ycoord in ycoords:
+                y_indices, y_weights = self._get_axis_overlap(
+                    mask_orig[self.ydim].values, ycoord, grg_res,
+                    latitude=self.ydim.lower() in {'lat', 'latitude'})
+                if len(y_indices) == 0:
+                    continue
+                for xcoord in xcoords:
+                    x_indices, x_weights = self._get_axis_overlap(
+                        mask_orig[self.xdim].values, xcoord, grg_res)
+                    if len(x_indices) == 0:
                         continue
-                    vcell_frac = valid_cells / cell_orig.size
-                    gr_grid_mask.loc[llat, llon] = vcell_frac.values
-                    gr_grid_areas.loc[llat, llon] = cell_area.sum().values
+
+                    indexers = {self.ydim: y_indices, self.xdim: x_indices}
+                    overlap_weights = xr.DataArray(
+                        np.outer(y_weights, x_weights),
+                        coords={
+                            self.ydim: mask_orig[self.ydim].isel({self.ydim: y_indices}),
+                            self.xdim: mask_orig[self.xdim].isel({self.xdim: x_indices}),
+                        },
+                        dims=(self.ydim, self.xdim),
+                    )
+                    cell_mask = mask_orig.isel(indexers)
+                    cell_area = area_orig.isel(indexers) * overlap_weights
+                    total_area = cell_area.sum(skipna=True)
+                    valid_area = (cell_area * cell_mask).sum(skipna=True)
+                    if (not np.isfinite(total_area).item() or total_area <= 0
+                            or not np.isfinite(valid_area).item() or valid_area <= 0):
+                        continue
+
+                    gr_grid_mask.loc[{self.ydim: ycoord, self.xdim: xcoord}] = (valid_area / total_area).item()
+                    gr_grid_areas.loc[{self.ydim: ycoord, self.xdim: xcoord}] = total_area.item()
 
         self.gr_grid_mask = gr_grid_mask
         self.gr_grid_areas = gr_grid_areas

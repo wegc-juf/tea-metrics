@@ -585,6 +585,16 @@ def _load_or_generate_gr_grid_static(opts, tea):
     """
     # load static GR grid files
     gr_grid_mask, gr_grid_areas = _load_gr_grid_static(opts)
+    if (gr_grid_mask is not None and gr_grid_areas is not None
+            and not _gr_grid_static_is_usable(gr_grid_mask, gr_grid_areas)):
+        logger.warning('Cached GR grid mask/area contain no valid cells; regenerating the static grid.')
+        gr_grid_mask.close()
+        gr_grid_areas.close()
+        gr_grid_mask = None
+        gr_grid_areas = None
+        if hasattr(opts, 'recalc_decadal'):
+            opts.recalc_decadal = True
+
     # generate GR grid mask and area if necessary
     mismatch = False
     if tea._ref_mean is not None and gr_grid_mask is not None:
@@ -599,6 +609,13 @@ def _load_or_generate_gr_grid_static(opts, tea):
     
     # set cell_size
     tea.cell_size_y = opts.grg_cell_size
+
+
+def _gr_grid_static_is_usable(gr_grid_mask, gr_grid_areas):
+    """Return whether cached GRG masks and areas contain any valid grid cells."""
+    mask_has_cells = bool((gr_grid_mask > 0).any().compute().item())
+    area_has_cells = bool((np.isfinite(gr_grid_areas) & (gr_grid_areas > 0)).any().compute().item())
+    return mask_has_cells and area_has_cells
 
 
 def _coordinates_are_covered(available_coords, required_coords):

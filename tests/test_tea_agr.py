@@ -40,6 +40,50 @@ class TestTEAAgrInit:
         assert tea.land_sea_mask is not None
 
 
+class TestGRGridGeneration:
+    def test_center_lattice_does_not_shift_with_cell_size(self):
+        lat = np.arange(51.0, 49.75, -0.25)
+        lon = np.arange(7.25, 8.5, 0.25)
+        mask = xr.DataArray(
+            np.ones((len(lat), len(lon))),
+            coords={"lat": lat, "lon": lon},
+            dims=("lat", "lon"),
+        )
+        generated = []
+
+        for cell_size in (0.2, 0.5):
+            tea = TEAAgr(mask=mask, gr_grid_res=0.25, cell_size_y=cell_size, land_frac_min=0)
+            xcoords, ycoords = tea._get_xy()
+            tea.generate_gr_grid_mask()
+            generated.append((xcoords, ycoords, tea.gr_grid_mask, tea.gr_grid_areas))
+
+        for xcoords, ycoords, grid_mask, grid_areas in generated:
+            assert np.allclose(xcoords, lon)
+            assert np.allclose(ycoords, lat)
+            assert np.isfinite(grid_mask).all()
+            assert np.isfinite(grid_areas).all()
+            assert (grid_mask > 0).all()
+
+        assert np.array_equal(generated[0][0], generated[1][0])
+        assert np.array_equal(generated[0][1], generated[1][1])
+
+    def test_sub_native_cell_size_still_generates_finite_grg_mask(self):
+        lat = np.arange(51.0, 49.75, -0.25)
+        lon = np.arange(7.25, 8.5, 0.25)
+        mask = xr.DataArray(
+            np.ones((len(lat), len(lon))),
+            coords={"lat": lat, "lon": lon},
+            dims=("lat", "lon"),
+        )
+        tea = TEAAgr(mask=mask, gr_grid_res=0.25, cell_size_y=0.2, land_frac_min=0)
+
+        tea.generate_gr_grid_mask()
+
+        assert np.isfinite(tea.gr_grid_mask).all()
+        assert (tea.gr_grid_mask > 0).all()
+        assert np.isfinite(tea.gr_grid_areas).all()
+
+
 class TestCalcAreaWeightedMean:
     @pytest.fixture
     def tea_agr_basic(self):

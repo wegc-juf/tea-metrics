@@ -7,7 +7,7 @@ _import_error = None
 try:
     from teametrics.calc_TEA import (
         _getopts, _get_ctp_filepath, _calc_x_y_range, _reduce_region,
-        _daily_cache_covers_grid,
+        _daily_cache_covers_grid, _gr_grid_static_is_usable,
         _get_threshold, _load_mask_file, _load_gr_grid_static,
         _compare_to_ctp_ref, _load_population_grid, _get_chunk_workers, calc_dbv_indicators,
     )
@@ -249,6 +249,18 @@ class TestReduceRegionPopulation:
 
 
 class TestLoadGrGridStatic:
+    def test_static_grid_cache_rejects_all_nan_data(self):
+        mask = xr.DataArray(np.full((2, 2), np.nan), dims=("y", "x"))
+        areas = xr.DataArray(np.full((2, 2), np.nan), dims=("y", "x"))
+
+        assert not _gr_grid_static_is_usable(mask, areas)
+
+    def test_static_grid_cache_accepts_valid_cells(self):
+        mask = xr.DataArray(np.ones((2, 2)), dims=("y", "x"))
+        areas = xr.DataArray(np.ones((2, 2)), dims=("y", "x"))
+
+        assert _gr_grid_static_is_usable(mask, areas)
+
     def test_load_gr_grid_static_not_found(self, tmp_path):
         from types import SimpleNamespace
         statpath = str(tmp_path / "stats")
