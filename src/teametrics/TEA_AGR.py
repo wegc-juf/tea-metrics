@@ -85,7 +85,27 @@ class TEAAgr(TEAIndicators):
 
         # filter input data to valid cells
         if self.land_sea_mask is not None and self.input_data is not None:
+            self.land_sea_mask = self._align_spatial_grid(self.land_sea_mask, self.input_data)
             self.input_data = self.input_data.where(self.land_sea_mask > 0)
+
+    @staticmethod
+    def _align_spatial_grid(source, target):
+        """Align a spatial grid to target coordinates, using nearest centers if needed."""
+        aligned = source
+        for dim in (TEAIndicators.find_dim_names(target)):
+            if dim not in aligned.dims:
+                raise ValueError(f'Cannot align spatial grid: dimension {dim!r} is missing.')
+            target_coords = target[dim].values
+            source_coords = np.asarray(aligned[dim].values, dtype=float)
+            if np.isin(target_coords, source_coords).all():
+                aligned = aligned.sel({dim: target_coords})
+                continue
+
+            if source_coords.size < 2:
+                raise ValueError(f'Cannot align spatial grid along {dim!r}: fewer than two source coordinates.')
+            tolerance = np.max(np.abs(np.diff(source_coords))) / 2 + np.finfo(float).eps
+            aligned = aligned.reindex({dim: target_coords}, method='nearest', tolerance=tolerance)
+        return aligned
 
     def calc_daily_basis_vars(self, grid=True, gr=False):
         """
@@ -105,51 +125,48 @@ class TEAAgr(TEAIndicators):
             cell_static: static data of cell
         """
 
-        y_res = self._y_resolution_in
-        y_off = self.cell_size_y / 2
-        
-        if self.ydim == 'lat':
-            lon_off_exact = 1 / np.cos(np.deg2rad(ycoord)) * y_off
-            size_exact = lon_off_exact * y_off
+        y_indices, y_weights = self._get_axis_overlap(
+            self.area_grid[self.ydim].values, ycoord, self.cell_size_y,
+            latitude=self.ydim == 'lat')
+        if self.xdim == 'lon':
+            cell_size_x = self.cell_size_y / np.cos(np.deg2rad(ycoord))
+        else:
+            cell_size_x = self.cell_size_y
+        x_indices, x_weights = self._get_axis_overlap(
+            self.area_grid[self.xdim].values, xcoord, cell_size_x)
 
-            x_off = np.round(lon_off_exact * 4, 0) / 4.
-            size_real = x_off * y_off
-            area_frac = size_real / size_exact
-        else:
-            x_off = y_off
-            area_frac = 1
-            
-        # take care of y coordinate order (different for lat/lon and y/x grids)
-        if self.daily_results[self.ydim][0] > self.daily_results[self.ydim][-1]:
-            slice_y = slice(ycoord + y_off, ycoord - y_off + y_res)
-        else:
-            slice_y = slice(ycoord - y_off + y_res, ycoord + y_off)
-        slice_x = slice(xcoord - x_off, xcoord + x_off - y_res)
-        
+        if len(y_indices) == 0 or len(x_indices) == 0:
+            return None
+
+        y_coords = self.area_grid[self.ydim].isel({self.ydim: y_indices})
+        x_coords = self.area_grid[self.xdim].isel({self.xdim: x_indices})
+        overlap_weights = xr.DataArray(
+            np.outer(y_weights, x_weights),
+            coords={self.ydim: y_coords, self.xdim: x_coords},
+            dims=(self.ydim, self.xdim),
+        )
+        indexers = {self.ydim: y_indices, self.xdim: x_indices}
+
+        cell_area_grid = self.area_grid.isel(indexers) * overlap_weights
+
         if self.land_frac_min > 0:
-            # get land-sea mask
-            cell_lsm = self.land_sea_mask.sel({self.ydim: slice_y, self.xdim: slice_x})
-
-            # calculate fraction covered by valid cells (land below 1500 m)
-            land_frac = cell_lsm.sum().values / np.size(cell_lsm)
+            aligned_lsm = self._align_spatial_grid(self.land_sea_mask, self.area_grid)
+            cell_lsm = aligned_lsm.isel(indexers)
+            # Weight the land fraction by the part of each pixel covered by
+            # this GRG cell and by the pixel's physical area.
+            land_area = cell_area_grid * cell_lsm
+            land_frac = land_area.sum(skipna=True) / cell_area_grid.sum(skipna=True)
             if land_frac < self.land_frac_min:
                 return None
 
         # A GR variable is already reduced over the parent domain and cannot be
         # reused for this cell. The child recalculates all GR variables below.
-        cell_data = self.get_daily_results(grid=True, gr=False).sel(
-            {self.ydim: slice_y, self.xdim: slice_x})
-        # select static data for cell
-        cell_area_grid = self.area_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
-
-        # compensate rounding errors
-        cell_data['DTEA'] = cell_data['DTEA'] / area_frac
-        cell_area_grid = cell_area_grid / area_frac
+        cell_data = self.get_daily_results(grid=True, gr=False).isel(indexers)
         
         # select threshold grid for cell
-        cell_threshold_grid = self.threshold_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
+        cell_threshold_grid = self.threshold_grid.isel(indexers)
         if self.population_grid is not None:
-            cell_population_grid = self.population_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
+            cell_population_grid = self.population_grid.isel(indexers) * overlap_weights
         else:
             cell_population_grid = None
         
@@ -162,6 +179,41 @@ class TEAAgr(TEAIndicators):
                                    threshold=cell_threshold_grid, population_grid=cell_population_grid)
         tea_sub_gr.set_daily_results(cell_data)
         return tea_sub_gr
+
+    @staticmethod
+    def _get_axis_overlap(coordinates, center, cell_size, latitude=False):
+        """Return source pixel indices and fractional overlap with a cell axis."""
+        coordinates = np.asarray(coordinates, dtype=float)
+        if coordinates.size == 0:
+            return np.array([], dtype=int), np.array([], dtype=float)
+
+        # Pixel edges are halfway between neighboring coordinate centers.
+        edges = np.empty(coordinates.size + 1, dtype=float)
+        if coordinates.size == 1:
+            edges[:] = [coordinates[0] - cell_size / 2, coordinates[0] + cell_size / 2]
+        else:
+            edges[1:-1] = (coordinates[:-1] + coordinates[1:]) / 2
+            edges[0] = coordinates[0] + (coordinates[0] - edges[1])
+            edges[-1] = coordinates[-1] + (coordinates[-1] - edges[-2])
+
+        pixel_low = np.minimum(edges[:-1], edges[1:])
+        pixel_high = np.maximum(edges[:-1], edges[1:])
+        cell_low, cell_high = center - cell_size / 2, center + cell_size / 2
+        overlap_low = np.maximum(pixel_low, cell_low)
+        overlap_high = np.minimum(pixel_high, cell_high)
+        has_overlap = overlap_high > overlap_low
+
+        if latitude:
+            pixel_span = np.sin(np.deg2rad(pixel_high)) - np.sin(np.deg2rad(pixel_low))
+            overlap_span = (np.sin(np.deg2rad(overlap_high))
+                            - np.sin(np.deg2rad(overlap_low)))
+        else:
+            pixel_span = pixel_high - pixel_low
+            overlap_span = overlap_high - overlap_low
+        fractions = np.divide(overlap_span, pixel_span, out=np.zeros_like(overlap_span),
+                              where=pixel_span > 0)
+        indices = np.flatnonzero(has_overlap)
+        return indices, fractions[indices]
 
     def set_ctp_results(self, xcoord, ycoord, ctp_results):
         """

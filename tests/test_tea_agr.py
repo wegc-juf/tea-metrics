@@ -112,6 +112,63 @@ class TestCalcAreaWeightedMean:
 
 
 class TestSelectSubGr:
+    def test_land_mask_is_aligned_by_coordinates_before_indexing(self):
+        full_mask = xr.DataArray(
+            np.zeros((4, 4)),
+            coords={"lat": [3.0, 2.0, 1.0, 0.0], "lon": [0.0, 1.0, 2.0, 3.0]},
+            dims=("lat", "lon"),
+        )
+        full_mask.loc[dict(lat=[2.0, 1.0], lon=[1.0, 2.0])] = 1
+        source_grid = xr.DataArray(
+            np.ones((2, 2)),
+            coords={"lat": [2.0, 1.0], "lon": [1.0, 2.0]},
+            dims=("lat", "lon"),
+        )
+
+        aligned = TEAAgr._align_spatial_grid(full_mask, source_grid)
+
+        xr.testing.assert_equal(aligned, source_grid)
+
+    def test_small_cell_uses_fractional_pixel_overlap(self):
+        lat = np.arange(4.0, 0.0, -0.5)
+        lon = np.arange(0.0, 4.0, 0.5)
+        times = pd.date_range("2000-01-01", periods=2, freq="D")
+        data = xr.DataArray(
+            np.full((len(times), len(lat), len(lon)), 10.0),
+            coords={"time": times, "lat": lat, "lon": lon},
+            dims=("time", "lat", "lon"),
+            attrs={"coordinate_sys": EXPECTED_CRS},
+        )
+        threshold = xr.zeros_like(data.isel(time=0))
+        population = xr.full_like(threshold, 100.0)
+        tea = TEAAgr(
+            input_data=data,
+            threshold=threshold,
+            population_grid=population,
+            unit="K",
+            gr_grid_res=1.0,
+            cell_size_y=0.25,
+            land_frac_min=0,
+        )
+        tea.calc_daily_basis_vars(grid=True, gr=True)
+
+        tea_sub = tea.select_sub_gr(ycoord=3.0, xcoord=1.0)
+
+        assert tea_sub is not None
+        assert tea_sub.area_grid.sizes == {"lat": 1, "lon": 1}
+        original_area = tea.area_grid.sel(lat=3.0, lon=1.0)
+        area_fraction = (tea_sub.area_grid / original_area).item()
+        assert 0 < area_fraction < 1
+        assert np.isclose(area_fraction, 0.25, atol=0.002)
+        assert np.isclose(tea_sub.population_grid.item(), 100 * area_fraction)
+
+    def test_axis_overlap_is_independent_of_coordinate_direction(self):
+        ascending = TEAAgr._get_axis_overlap([0.0, 1.0, 2.0], 1.0, 0.5)
+        descending = TEAAgr._get_axis_overlap([2.0, 1.0, 0.0], 1.0, 0.5)
+
+        assert np.array_equal(ascending[1], descending[1])
+        assert np.array_equal(ascending[1], [0.5])
+
     def test_recalculates_aggregate_variables_for_selected_cell(self):
         lat = np.arange(4.0, 0.0, -0.5)
         lon = np.arange(0.0, 4.0, 0.5)
