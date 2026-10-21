@@ -1,0 +1,77 @@
+common_params:
+  GeoRegion: &GR
+    region: SEA
+    agr: SEA
+    # use full data without land, border, and altitude masks
+    gr_type: polygon
+    sw_corner: null
+    ne_corner: null
+    center: null
+    we_len: null
+    ns_len: null
+  parameter: &PARAM
+    parameter: Tx
+    precip: false
+    threshold: 25
+    threshold_type: abs
+    unit: degC
+    low_extreme: false
+  time_params: &TIME
+    start: 1961
+    end: 2025
+    period: WAS
+    # ref period from-to (inclusive)
+    ref_period: 1961-1990
+    # cc period from-to (inclusive)
+    cc_period: 2009-2025
+  dataset: &DATA
+    dataset: ERA5
+  paths: &PATHS
+    maskpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/masks/
+    # maskpath: /home/wegnet/results/TEA_indicators/static/masks/
+    statpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/static/
+    # statpath: /home/wegnet/results/TEA_indicators/static/
+    tmppath: /tmp
+
+regrid_SPARTACUS_to_WEGNext:
+  <<: *PARAM
+  inpath: /data/users/hst/TEA-clean/SPARTACUS/
+  orography: false
+  orofile: /data/reloclim/backup/ZAMG_INCA/data/original/INCA_orog_corrected_y_dim.nc
+  wegnfile: /data/users/hst/cdrDPS/wegnet/WN_L2_DD_v7_UTM_TF1_UTC_2020-08.nc
+  outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS/
+
+create_region_masks:
+  <<: *GR
+  <<: *DATA
+  subreg: custom
+  shpfile: /data/reloclim/backup/GEO/shapefiles/OEKS15/good/AUSTRIA.shp
+  testfile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/ERA5_1961.nc
+  orofile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/ERA5_orography.nc
+  lsmfile: /data/users/hst/cdrDPS/ERA5/ERA5_LSM.nc
+  outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/masks/
+
+create_static_files:
+  <<: *GR
+  <<: *TIME
+  <<: *PARAM
+  <<: *DATA
+  <<: *PATHS
+  season_length: 366
+  smoothing: 0
+  inpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/
+  outpath: /home/wegnet/results/TEA_indicators/static/
+
+calc_TEA:
+  <<: *GR
+  <<: *PARAM
+  <<: *TIME
+  <<: *DATA
+  <<: *PATHS
+  inpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/
+  outpath: /tank/local/TEA/test/
+  recalc_daily: true
+  decadal: true
+  spreads: false
+  decadal_only: false
+  recalc_decadal: true
