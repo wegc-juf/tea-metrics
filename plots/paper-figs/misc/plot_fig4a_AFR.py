@@ -99,7 +99,7 @@ def plot_props(vvar):
 
 def run():
     data = xr.open_dataset('/data/users/hst/TEA/TEA/africa_data/dec_indicator_variables/'
-                           'amplification/AF_Tx99.0p_AGR-AFR_annual_ERA5_1961to2024.nc')
+                           'amplification/AF_Tx99.0p_AGR_0p5_cell2-AFR_annual_ERA5_1961to2024.nc')
     # data = data.sel(lat=slice(72, 35), lon=slice(-11, 40))
     vkeep = ['EF_AF_CC', 'ED_avg_AF_CC', 'EM_avg_AF_CC', 'EA_avg_AF_CC', 'TEX_AF_CC']
     vdrop = [vvar for vvar in data.data_vars if vvar not in vkeep]

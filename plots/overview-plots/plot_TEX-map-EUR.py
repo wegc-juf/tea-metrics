@@ -15,6 +15,7 @@ import os
 import xarray as xr
 
 from teametrics.common.config import load_opts
+from teametrics.common.grid_naming import grg_grid_token
 
 
 def _getopts():
@@ -96,7 +97,7 @@ def plot_eur_tex(opts):
 
     """
     if opts.agr:
-        gr_str = f'AGR_{opts.grg_grid_spacing}-{opts.agr}'
+        gr_str = f'AGR_{grg_grid_token(opts)}-{opts.agr}'
     else:
         gr_str = opts.region
     data = xr.open_dataset(f'{opts.outpath}dec_indicator_variables/amplification/'

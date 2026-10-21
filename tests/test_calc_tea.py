@@ -7,6 +7,7 @@ _import_error = None
 try:
     from teametrics.calc_TEA import (
         _getopts, _get_ctp_filepath, _calc_x_y_range, _reduce_region,
+        _daily_cache_covers_grid,
         _get_threshold, _load_mask_file, _load_gr_grid_static,
         _compare_to_ctp_ref, _load_population_grid, _get_chunk_workers, calc_dbv_indicators,
     )
@@ -67,11 +68,49 @@ class TestGetCTPFilepath:
         from argparse import Namespace
         output_path = str(tmp_path / "output")
         opts = Namespace(outpath=output_path, region="AUT", agr="EUR",
-                         grg_grid_spacing=0.5, param_str="Tx99p", period="annual",
+                         grg_grid_spacing=0.5, grg_cell_size=2,
+                         param_str="Tx99p", period="annual",
                          dataset="ERA5")
         path = _get_ctp_filepath(1980, 1990, opts, annual_agr=True)
         assert path.endswith(".nc")
         assert "agr" in path.lower()
+        assert "AGR_0p5_cell2-EUR" in path
+
+    def test_get_ctp_filepath_grg_includes_spacing_and_cell_size(self, tmp_path):
+        from argparse import Namespace
+        opts = Namespace(outpath=str(tmp_path), region="AUT", agr="SEA",
+                         grg_grid_spacing=0.25, grg_cell_size=0.5,
+                         param_str="Tx25.0degC", period="annual", dataset="ERA5")
+
+        path = _get_ctp_filepath(1961, 1970, opts)
+
+        assert "GRG_0p25_cell0p5-AUT" in path
+
+
+class TestDailyCacheCoverage:
+    def test_daily_cache_with_larger_extent_is_reusable(self, tmp_path):
+        cached = xr.DataArray(
+            np.ones((5, 5)), coords={"lat": [3, 2, 1, 0, -1], "lon": [0, 1, 2, 3, 4]},
+            dims=("lat", "lon"), name="area_grid")
+        cache_path = tmp_path / "dbv.nc"
+        cached.to_dataset().to_netcdf(cache_path)
+        required = xr.DataArray(
+            np.ones((2, 2)), coords={"lat": [2, 1], "lon": [1, 2]},
+            dims=("lat", "lon"), name="mask")
+
+        assert _daily_cache_covers_grid(cache_path, required)
+
+    def test_daily_cache_missing_required_boundary_coordinate_is_rejected(self, tmp_path):
+        cached = xr.DataArray(
+            np.ones((3, 3)), coords={"lat": [2, 1, 0], "lon": [1, 2, 3]},
+            dims=("lat", "lon"), name="area_grid")
+        cache_path = tmp_path / "dbv.nc"
+        cached.to_dataset().to_netcdf(cache_path)
+        required = xr.DataArray(
+            np.ones((2, 2)), coords={"lat": [2, 1], "lon": [0, 1]},
+            dims=("lat", "lon"), name="mask")
+
+        assert not _daily_cache_covers_grid(cache_path, required)
 
 
 class TestCalcXYRange:
@@ -86,6 +125,26 @@ class TestCalcXYRange:
         x_min, y_min, x_max, y_max = _calc_x_y_range(cell_size_y, mask)
         assert x_min < x_max
         assert y_min < y_max
+
+    def test_lat_lon_crop_uses_two_degree_padding_per_side(self):
+        mask = xr.DataArray(
+            np.zeros((7, 9)), dims=("lat", "lon"),
+            coords={"lat": np.arange(45.0, 52.0), "lon": np.arange(10.0, 19.0)})
+        mask.loc[dict(lat=[47.0, 48.0], lon=[13.0, 14.0])] = 1
+
+        x_min, y_min, x_max, y_max = _calc_x_y_range(0.5, mask)
+
+        assert (x_min, y_min, x_max, y_max) == (11, 45, 16, 50)
+
+    def test_projected_crop_retains_half_cell_padding(self):
+        mask = xr.DataArray(
+            np.zeros((7, 7)), dims=("y", "x"),
+            coords={"y": np.arange(0.0, 700.0, 100.0), "x": np.arange(0.0, 700.0, 100.0)})
+        mask.loc[dict(y=[200.0, 300.0], x=[200.0, 300.0])] = 1
+
+        x_min, y_min, x_max, y_max = _calc_x_y_range(100.0, mask)
+
+        assert (x_min, y_min, x_max, y_max) == (150, 150, 350, 350)
 
     def test_calc_x_y_range_no_valid_cells(self):
         mask = xr.DataArray(
@@ -194,9 +253,31 @@ class TestLoadGrGridStatic:
         from types import SimpleNamespace
         statpath = str(tmp_path / "stats")
         opts = SimpleNamespace(statpath=statpath, maskpath=str(tmp_path / "masks"), mask_sub="masks",
-                               region="test", dataset="ERA5", grg_grid_spacing=0.5,
+                               region="test", dataset="ERA5", grg_grid_spacing=0.5, grg_cell_size=2,
                                altitude_threshold=1500, decadal_only=True)
         mask, areas = _load_gr_grid_static(opts)
+        assert mask is None
+        assert areas is None
+
+    def test_load_gr_grid_static_ignores_untagged_legacy_cache(self, tmp_path):
+        from argparse import Namespace
+
+        mask_dir = tmp_path / "masks" / "masks"
+        mask_dir.mkdir(parents=True)
+        statpath = tmp_path / "stats"
+        statpath.mkdir()
+        legacy_mask = xr.DataArray(
+            np.ones((2, 2)), coords={"lat": [2.0, 1.0], "lon": [3.0, 4.0]},
+            dims=("lat", "lon"), name="mask")
+        legacy_mask.to_dataset().to_netcdf(mask_dir / "test_mask_0p5_ERA5_1500.nc")
+        xr.ones_like(legacy_mask).rename("area_grid").to_dataset().to_netcdf(
+            statpath / "area_grid_0p5_test_ERA5.nc")
+        opts = Namespace(statpath=str(statpath), maskpath=str(tmp_path / "masks"), mask_sub="masks",
+                         region="test", dataset="ERA5", grg_grid_spacing=0.5, grg_cell_size=0.5,
+                         altitude_threshold=1500, decadal_only=True)
+
+        mask, areas = _load_gr_grid_static(opts)
+
         assert mask is None
         assert areas is None
 

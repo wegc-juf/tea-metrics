@@ -22,6 +22,7 @@ from .common.general_functions import (create_history_from_cfg, create_tea_histo
                                        get_gridded_data,
                                        get_csv_data, create_threshold_grid)
 from .common.config import load_opts
+from .common.grid_naming import grg_grid_token
 from .common.TEA_logger import logger, set_log_level
 from .utils.calc_decadal_indicators import (calc_decadal_indicators, calc_amplification_factors,
                                             get_decadal_outpath, get_amplification_outpath)
@@ -186,8 +187,20 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
                     f'DBV_{opts.param_str}_{agr_str}{name}_annual_{opts.dataset}'
                     f'_{start}to{end}.nc')
     
+    # Reuse AGR daily caches only when their coordinates cover the current
+    # crop. A cache with a larger spatial extent is valid for a smaller crop.
+    cached_crop = None
+    recalculate_daily = opts.recalc_daily or not os.path.exists(dbv_filename)
+    if not recalculate_daily and 'agr' in opts:
+        cached_crop = _reduce_region(opts, None, mask, threshold, population_grid=population_grid)
+        required_mask = cached_crop[1]
+        if not _daily_cache_covers_grid(dbv_filename, required_mask):
+            logger.info(f'Daily basis cache {dbv_filename} does not cover the crop for '
+                        f'grg_cell_size={opts.grg_cell_size}; recalculating daily data.')
+            recalculate_daily = True
+
     # recalculate daily basis variables if needed
-    if opts.recalc_daily or not os.path.exists(dbv_filename):
+    if recalculate_daily:
         
         # always calculate annual basis variables to later extract sub-annual values
         period = 'annual'
@@ -216,7 +229,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
         if not os.path.exists(dbv_filename):
             logger.info(f'Daily basis variable file {dbv_filename} not found. '
                         'Daily basis variables will be calculated.')
-        else:
+        elif opts.recalc_daily:
             logger.info('recalc_daily is set: Daily basis variables will be recalculated. Period set to annual.')
         
         # set min area to < 1 grid cell area so that all exceedance days are considered
@@ -267,8 +280,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
     else:
         # load existing results
         if 'agr' in opts:
-            # TODO: use this also for non-AGR and test
-            reduced = _reduce_region(opts, None, mask, threshold, population_grid=population_grid)
+            reduced = cached_crop
             if population_grid is None:
                 data, mask, threshold = reduced
             else:
@@ -514,10 +526,10 @@ def _get_ctp_filepath(start, end, opts, annual_agr=False) -> str:
     region = opts.region
     
     if annual_agr:
-        grg_str = f'AGR_{opts.grg_grid_spacing}-'
+        grg_str = f'AGR_{grg_grid_token(opts)}-'
         region = opts.agr
     elif 'agr' in opts:
-        grg_str = f'GRG_{opts.grg_grid_spacing}-'
+        grg_str = f'GRG_{grg_grid_token(opts)}-'
     else:
         grg_str = ''
     
@@ -538,10 +550,9 @@ def _save_grg_mask(opts, grg_mask, grg_areas):
         grg_mask: mask on grg grid
         grg_areas: area grid on grg grid
     """
-    res = str(opts.grg_grid_spacing)
-    res_str = res.replace('.', 'p')
+    grid_token = grg_grid_token(opts)
     create_history_from_cfg(cfg_params=opts, ds=grg_areas)
-    area_grid_file = Path(opts.statpath) / f'area_grid_{res_str}_{opts.region}_{opts.dataset}.nc'
+    area_grid_file = Path(opts.statpath) / f'area_grid_{grid_token}_{opts.region}_{opts.dataset}.nc'
     logger.info(f'Saving GR area grid to {area_grid_file}')
     try:
         grg_areas.to_netcdf(area_grid_file)
@@ -552,7 +563,7 @@ def _save_grg_mask(opts, grg_mask, grg_areas):
     # save GRG mask
     create_history_from_cfg(cfg_params=opts, ds=grg_mask)
     mask_file = (Path(opts.maskpath) / opts.mask_sub /
-                 f'{opts.region}_mask_{res_str}_{opts.dataset}_{opts.altitude_threshold}.nc')
+                 f'{opts.region}_mask_{grid_token}_{opts.dataset}_{opts.altitude_threshold}.nc')
     logger.info(f'Saving GR mask to {mask_file}')
     try:
         grg_mask.to_netcdf(mask_file)
@@ -590,6 +601,44 @@ def _load_or_generate_gr_grid_static(opts, tea):
     tea.cell_size_y = opts.grg_cell_size
 
 
+def _coordinates_are_covered(available_coords, required_coords):
+    """Return whether every required coordinate is represented in the cache."""
+    available = np.sort(np.asarray(available_coords, dtype=float))
+    required = np.asarray(required_coords, dtype=float)
+    if required.size == 0:
+        return True
+    if available.size == 0:
+        return False
+
+    steps = np.diff(available)
+    steps = steps[steps > 0]
+    if steps.size == 0:
+        tolerance = 1e-7
+    else:
+        tolerance = max(float(np.median(steps)) * 1e-5,
+                        np.finfo(np.float32).eps * float(np.max(np.abs(available))) * 2)
+
+    right_idx = np.clip(np.searchsorted(available, required), 0, available.size - 1)
+    left_idx = np.clip(right_idx - 1, 0, available.size - 1)
+    nearest_delta = np.minimum(np.abs(available[right_idx] - required),
+                               np.abs(available[left_idx] - required))
+    return bool(np.all(nearest_delta <= tolerance))
+
+
+def _daily_cache_covers_grid(dbv_filename, required_grid):
+    """Check that a cached daily-basis file includes every required grid coordinate."""
+    xdim, ydim = TEAIndicators.find_dim_names(required_grid)
+    try:
+        with xr.open_dataset(dbv_filename) as cached:
+            return all(
+                dim in cached.coords
+                and _coordinates_are_covered(cached[dim].values, required_grid[dim].values)
+                for dim in (xdim, ydim)
+            )
+    except (OSError, KeyError, ValueError):
+        return False
+
+
 def _calc_x_y_range(cell_size_y, mask):
     """
     calculate x and y coord range for selected region
@@ -606,25 +655,27 @@ def _calc_x_y_range(cell_size_y, mask):
     """
     x_dim, y_dim = TEAIndicators.find_dim_names(mask)
     valid_cells = mask.where(mask > 0, drop=True)
-    
-    y_min = math.floor(valid_cells[y_dim].min().values - cell_size_y / 2)
+
+    geographic = x_dim.lower() in {'lon', 'longitude'}
+    y_margin = max(2.0, cell_size_y / 2) if geographic else cell_size_y / 2
+    y_min = math.floor(valid_cells[y_dim].min().values - y_margin)
     if y_min < float(mask[y_dim].min().values):
         y_min = float(mask[y_dim].min().values)
-    y_max = math.ceil(valid_cells[y_dim].max().values + cell_size_y / 2)
+    y_max = math.ceil(valid_cells[y_dim].max().values + y_margin)
     if y_max > float(mask[y_dim].max().values):
         y_max = float(mask[y_dim].max().values)
     
-    if x_dim == 'x' and y_dim == 'y':
-        # if coordinates are named x and y, we assume they are in a projected coordinate system and use the same
-        # cell size for both dimensions
-        cell_size_x = cell_size_y
-    else:
+    if geographic:
         cell_size_x = 1 / np.cos(np.deg2rad(y_max)) * cell_size_y
-    
-    x_min = math.floor(valid_cells[x_dim].min().values - cell_size_x / 2)
+        x_margin = max(2.0, cell_size_x / 2)
+    else:
+        # Projected grids use the configured cell size in their coordinate units.
+        x_margin = cell_size_y / 2
+
+    x_min = math.floor(valid_cells[x_dim].min().values - x_margin)
     if x_min < float(mask[x_dim].min().values):
         x_min = float(mask[x_dim].min().values)
-    x_max = math.ceil(valid_cells[x_dim].max().values + cell_size_x / 2)
+    x_max = math.ceil(valid_cells[x_dim].max().values + x_margin)
     if x_max > float(mask[x_dim].max().values):
         x_max = float(mask[x_dim].max().values)
     
@@ -662,8 +713,12 @@ def _reduce_region(opts, data, mask, threshold=None, full_region=False, populati
         # hardcoded extent for EUR region
         lons = np.arange(-12, 40.5, opts.grg_grid_spacing)
         cell_size_lon = 1 / np.cos(np.deg2rad(y_max)) * cell_size_y
-        x_min = math.floor(lons[0] - cell_size_lon / 2)
-        x_max = math.ceil(lons[-1] + cell_size_lon / 2)
+        if xdim.lower() in {'lon', 'longitude'}:
+            lon_margin = max(2.0, cell_size_lon / 2)
+        else:
+            lon_margin = cell_size_lon / 2
+        x_min = math.floor(lons[0] - lon_margin)
+        x_max = math.ceil(lons[-1] + lon_margin)
     
     # get order of y coordinates
     y_ascending = mask[ydim][1] > mask[ydim][0]
@@ -830,10 +885,9 @@ def _load_gr_grid_static(opts):
         gr_grid_mask: mask grid (xarray DataArray)
 
     """
-    res = str(opts.grg_grid_spacing)
-    res_str = res.replace('.', 'p')
+    grid_token = grg_grid_token(opts)
     gr_grid_mask_file = (Path(opts.maskpath) / opts.mask_sub /
-                         f'{opts.region}_mask_{res_str}_{opts.dataset}_{opts.altitude_threshold}.nc')
+                         f'{opts.region}_mask_{grid_token}_{opts.dataset}_{opts.altitude_threshold}.nc')
     logger.info(f'Loading GR mask from {gr_grid_mask_file}')
     try:
         gr_grid_mask = xr.open_dataset(gr_grid_mask_file)
@@ -842,7 +896,7 @@ def _load_gr_grid_static(opts):
         if opts.decadal_only:
             logger.warning(f'No GR mask found at {gr_grid_mask_file}.')
         gr_grid_mask = None
-    gr_grid_areas_file = Path(opts.statpath) / f'area_grid_{res_str}_{opts.region}_{opts.dataset}.nc'
+    gr_grid_areas_file = Path(opts.statpath) / f'area_grid_{grid_token}_{opts.region}_{opts.dataset}.nc'
     logger.info(f'Loading GR area grid from {gr_grid_areas_file}')
     try:
         gr_grid_areas = xr.open_dataset(gr_grid_areas_file)

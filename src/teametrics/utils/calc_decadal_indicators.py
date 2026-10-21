@@ -10,6 +10,7 @@ import xarray as xr
 
 from ..common.var_attrs import get_attrs
 from ..common.general_functions import compare_to_ref, create_tea_history
+from ..common.grid_naming import grg_grid_token
 from ..common.TEA_logger import logger
 from ..TEA import TEAIndicators
 
@@ -41,7 +42,7 @@ def load_ctp_data(opts, tea):
             return False
 
     if 'Agr' in str(type(tea)):
-        grg_str = f'GRG_{opts.grg_grid_spacing}-'
+        grg_str = f'GRG_{grg_grid_token(opts)}-'
     else:
         grg_str = ''
     if 'station' in opts:
@@ -54,6 +55,14 @@ def load_ctp_data(opts, tea):
     files = sorted(file_path.glob(file_mask))
     files = [filename for filename in files if is_in_period(filename=str(filename), start=opts.start, end=opts.end)
              if 'ref' not in str(filename)]
+    if not files:
+        grid_params = ''
+        if grg_str:
+            grid_params = (f' at grg_grid_spacing={opts.grg_grid_spacing} '
+                           f'and grg_cell_size={opts.grg_cell_size}')
+        raise FileNotFoundError(
+            f'No CTP files found for {name}{grid_params} at {ctppath} matching {file_mask}. '
+            'Recalculate daily/CTP results.')
     logger.debug(f"Selected {len(files)} CTP files for {opts.start}-{opts.end}: {files}")
 
     start = time.perf_counter()
@@ -132,7 +141,7 @@ def calc_decadal_indicators(opts, tea, outpath=None):
 
 def get_decadal_outpath(opts, region):
     if 'agr' in opts:
-        agr_str = f'AGR_{opts.grg_grid_spacing}-'
+        agr_str = f'AGR_{grg_grid_token(opts)}-'
     else:
         agr_str = ''
     outpath = Path(f'{opts.outpath}/dec_indicator_variables/'
@@ -226,7 +235,7 @@ def get_amplification_outpath(opts, region):
 
     """
     if 'agr' in opts:
-        agr_str = f'AGR_{opts.grg_grid_spacing}-'
+        agr_str = f'AGR_{grg_grid_token(opts)}-'
     else:
         agr_str = ''
     outpath = Path(f'{opts.outpath}/dec_indicator_variables/amplification/'

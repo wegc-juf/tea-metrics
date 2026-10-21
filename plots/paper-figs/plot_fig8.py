@@ -75,9 +75,9 @@ def load_tea_data():
 
     for reg in ['EUR', 'C-EUR', 'S-EUR', 'N-EUR']:
         af_data = xr.open_dataset(INPUT_PATH / 'results' / 'dec_indicator_variables/amplification/' /
-                                  f'AF_Tx99.0p_AGR-{reg}_annual_ERA5_1961to2024.nc')
+                                  f'AF_Tx99.0p_AGR_0p5_cell2-{reg}_annual_ERA5_1961to2024.nc')
         dec_data = xr.open_dataset(INPUT_PATH / 'results' / 'dec_indicator_variables' /
-                                   f'DEC_Tx99.0p_AGR-{reg}_annual_ERA5_1961to2024.nc')
+                                   f'DEC_Tx99.0p_AGR_0p5_cell2-{reg}_annual_ERA5_1961to2024.nc')
         ref = dec_data.sel(time=slice('1966-01-01', '1985-12-31'))
         ref = gmean(ref['TEX_AGR'])
         reftr[reg] = ref

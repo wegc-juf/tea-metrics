@@ -13,6 +13,7 @@ import xarray as xr
 
 from teametrics.common.config import load_opts
 from teametrics.common.general_functions import ref_cc_params
+from teametrics.common.grid_naming import grg_grid_token
 
 PARAMS = ref_cc_params()
 
@@ -49,7 +50,7 @@ def load_data(opts):
     """
     agr_str, gr_str = '', 'GR'
     if 'agr' in opts:
-        agr_str, gr_str = f'AGR_{opts.grg_grid_spacing}-', 'GR'
+        agr_str, gr_str = f'AGR_{grg_grid_token(opts)}-', 'GR'
 
     ds = xr.open_dataset(f'{opts.outpath}/dec_indicator_variables/amplification/'
                          f'AF_{opts.param_str}_{agr_str}{opts.region}_{opts.period}_{opts.dataset}'
