@@ -15,12 +15,12 @@ mkvirtualenv <project_name>
 
 Then, install or upgrade the package using `pip`:
 ```bash
-pip install https://wegenernet.org/downloads/teametrics/teametrics-0.15.0-py3-none-any.whl
+pip install --extra-index-url https://wegcpypi.uni-graz.at/simple teametrics==0.15.0
 ```
 
-For ICON/GRIB processing, install the optional `grib` dependencies:
+The core package does not require GRIB support. If you process ICON/GRIB input, install the optional `grib` extra:
 ```bash
-pip install "teametrics[grib] @ https://wegenernet.org/downloads/teametrics/teametrics-0.15.0-py3-none-any.whl"
+pip install --extra-index-url https://wegcpypi.uni-graz.at/simple "teametrics[grib]==0.15.0"
 ```
 
 ## Usage
