@@ -2,11 +2,13 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import pytest
 import xarray as xr
 
 from teametrics.utils.SPARTACUS.aggregate_monthly_RR import aggregate_monthly
 
 
+@pytest.mark.filterwarnings("ignore:numpy.ndarray size changed:RuntimeWarning")
 def test_aggregate_monthly_uses_explicit_join_without_future_warning(tmp_path):
     """Two daily files combine and aggregate without xarray's join warning."""
     for year in (2025, 2026):

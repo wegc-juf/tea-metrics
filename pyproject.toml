@@ -16,7 +16,7 @@ dependencies = [
     "numpy (>=2.3.1,<2.4.0)",
     "pandas (>=2.3.0,<3.0.0)",
     "pathlib (>=1.0.1,<2.0.0)",
-    "xarray (>=2025.7.1,<2026.0.0)",
+    "xarray (>=2025.7.1,<2027.0.0)",
     "rioxarray (>=0.20.0,<1.0.0)",
     "matplotlib (>=3.10.3,<4.0.0)",
     "geopandas (>=1.1.1,<2.0.0)",
@@ -97,4 +97,10 @@ include = ["src/teametrics/config/*.yaml", "src/teametrics/data/examples/ERA5_Tx
 [dependency-groups]
 dev = [
     "pytest (>=9.1.1,<10.0.0)"
+]
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:The 'generic' unit for NumPy timedelta is deprecated:DeprecationWarning:xarray.core.dtypes",
+    "ignore:Setting the shape on a NumPy array has been deprecated in NumPy 2.5:DeprecationWarning:xarray.backends.netCDF4_",
 ]
