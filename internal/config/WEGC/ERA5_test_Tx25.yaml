@@ -6,8 +6,8 @@ common_params:
     region: AUT
     agr: SEA
     grg_grid_spacing: 0.25
-    # grg_cell_size: 0.2
-    grg_cell_size: .5
+    grg_cell_size: 0.2
+    # grg_cell_size: .5
   parameter: &PARAM
     parameter: Tx
     precip: false
@@ -17,7 +17,7 @@ common_params:
     low_extreme: false
   time_params: &TIME
     start: 1961
-    end: 1970
+    end: 2025
     period: annual
     ref_period: 1961-1990
     cc_period: 2011-2025
@@ -57,14 +57,14 @@ calc_TEA:
   <<: *DATA
   <<: *PATHS
   <<: *GENERAL
-  recalc_threshold: true
+  recalc_threshold: false
   recalc_daily: false
   hourly: false
-  decadal: false
+  decadal: true
   recalc_decadal: false
-  spreads: true
-  annual_spreads: true
-  decadal_only: false
+  spreads: false
+  annual_spreads: false
+  decadal_only: true
 
 regrid_SPARTACUS_to_WEGNext:
   <<: *GR
