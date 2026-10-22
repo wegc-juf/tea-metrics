@@ -30,7 +30,7 @@ def run():
     xv = -4
     for ireg, reg in enumerate(regs):
         data = xr.open_dataset(INPUT_PATH / 'results/dec_indicator_variables' /
-                               f'amplification/AF_Tx99.0p_AGR-{reg}_annual_ERA5_1961to2024.nc')
+                               f'amplification/AF_Tx99.0p_AGR_0p5_cell2-{reg}_annual_ERA5_1961to2024.nc')
         if reg == 'EUR':
             axs.fill_between(x=xticks[1:],
                              y1=data['TEX_AGR_AF_p05'],

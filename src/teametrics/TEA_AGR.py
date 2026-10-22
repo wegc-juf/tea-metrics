@@ -85,7 +85,27 @@ class TEAAgr(TEAIndicators):
 
         # filter input data to valid cells
         if self.land_sea_mask is not None and self.input_data is not None:
+            self.land_sea_mask = self._align_spatial_grid(self.land_sea_mask, self.input_data)
             self.input_data = self.input_data.where(self.land_sea_mask > 0)
+
+    @staticmethod
+    def _align_spatial_grid(source, target):
+        """Align a spatial grid to target coordinates, using nearest centers if needed."""
+        aligned = source
+        for dim in (TEAIndicators.find_dim_names(target)):
+            if dim not in aligned.dims:
+                raise ValueError(f'Cannot align spatial grid: dimension {dim!r} is missing.')
+            target_coords = target[dim].values
+            source_coords = np.asarray(aligned[dim].values, dtype=float)
+            if np.isin(target_coords, source_coords).all():
+                aligned = aligned.sel({dim: target_coords})
+                continue
+
+            if source_coords.size < 2:
+                raise ValueError(f'Cannot align spatial grid along {dim!r}: fewer than two source coordinates.')
+            tolerance = np.max(np.abs(np.diff(source_coords))) / 2 + np.finfo(float).eps
+            aligned = aligned.reindex({dim: target_coords}, method='nearest', tolerance=tolerance)
+        return aligned
 
     def calc_daily_basis_vars(self, grid=True, gr=False):
         """
@@ -105,51 +125,55 @@ class TEAAgr(TEAIndicators):
             cell_static: static data of cell
         """
 
-        y_res = self._y_resolution_in
-        y_off = self.cell_size_y / 2
-        
-        if self.ydim == 'lat':
-            lon_off_exact = 1 / np.cos(np.deg2rad(ycoord)) * y_off
-            size_exact = lon_off_exact * y_off
+        daily_grid = self.get_daily_results(grid=True, gr=False)
+        y_indices, y_weights = self._get_axis_overlap(
+            daily_grid[self.ydim].values, ycoord, self.cell_size_y,
+            latitude=self.ydim.lower() in {'lat', 'latitude'})
+        if self.xdim == 'lon':
+            cell_size_x = self.cell_size_y / np.cos(np.deg2rad(ycoord))
+        else:
+            cell_size_x = self.cell_size_y
+        x_indices, x_weights = self._get_axis_overlap(
+            daily_grid[self.xdim].values, xcoord, cell_size_x)
 
-            x_off = np.round(lon_off_exact * 4, 0) / 4.
-            size_real = x_off * y_off
-            area_frac = size_real / size_exact
-        else:
-            x_off = y_off
-            area_frac = 1
-            
-        # take care of y coordinate order (different for lat/lon and y/x grids)
-        if self.daily_results[self.ydim][0] > self.daily_results[self.ydim][-1]:
-            slice_y = slice(ycoord + y_off, ycoord - y_off + y_res)
-        else:
-            slice_y = slice(ycoord - y_off + y_res, ycoord + y_off)
-        slice_x = slice(xcoord - x_off, xcoord + x_off - y_res)
-        
+        if len(y_indices) == 0 or len(x_indices) == 0:
+            return None
+
+        y_coords = daily_grid[self.ydim].isel({self.ydim: y_indices})
+        x_coords = daily_grid[self.xdim].isel({self.xdim: x_indices})
+        overlap_weights = xr.DataArray(
+            np.outer(y_weights, x_weights),
+            coords={self.ydim: y_coords, self.xdim: x_coords},
+            dims=(self.ydim, self.xdim),
+        )
+        indexers = {self.ydim: y_indices, self.xdim: x_indices}
+
+        aligned_area_grid = self._align_spatial_grid(self.area_grid, daily_grid)
+        cell_area_grid = aligned_area_grid.isel(indexers) * overlap_weights
+
         if self.land_frac_min > 0:
-            # get land-sea mask
-            cell_lsm = self.land_sea_mask.sel({self.ydim: slice_y, self.xdim: slice_x})
-
-            # calculate fraction covered by valid cells (land below 1500 m)
-            land_frac = cell_lsm.sum().values / np.size(cell_lsm)
+            aligned_lsm = self._align_spatial_grid(self.land_sea_mask, daily_grid)
+            cell_lsm = aligned_lsm.isel(indexers)
+            # Weight the land fraction by the part of each pixel covered by
+            # this GRG cell and by the pixel's physical area.
+            land_area = cell_area_grid * cell_lsm
+            land_frac = land_area.sum(skipna=True) / cell_area_grid.sum(skipna=True)
             if land_frac < self.land_frac_min:
                 return None
 
         # A GR variable is already reduced over the parent domain and cannot be
         # reused for this cell. The child recalculates all GR variables below.
-        cell_data = self.get_daily_results(grid=True, gr=False).sel(
-            {self.ydim: slice_y, self.xdim: slice_x})
-        # select static data for cell
-        cell_area_grid = self.area_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
-
-        # compensate rounding errors
-        cell_data['DTEA'] = cell_data['DTEA'] / area_frac
-        cell_area_grid = cell_area_grid / area_frac
+        cell_data = daily_grid.isel(indexers)
         
         # select threshold grid for cell
-        cell_threshold_grid = self.threshold_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
+        if isinstance(self.threshold_grid, xr.DataArray):
+            aligned_threshold_grid = self._align_spatial_grid(self.threshold_grid, daily_grid)
+            cell_threshold_grid = aligned_threshold_grid.isel(indexers)
+        else:
+            cell_threshold_grid = self.threshold_grid
         if self.population_grid is not None:
-            cell_population_grid = self.population_grid.sel({self.ydim: slice_y, self.xdim: slice_x})
+            aligned_population_grid = self._align_spatial_grid(self.population_grid, daily_grid)
+            cell_population_grid = aligned_population_grid.isel(indexers) * overlap_weights
         else:
             cell_population_grid = None
         
@@ -162,6 +186,41 @@ class TEAAgr(TEAIndicators):
                                    threshold=cell_threshold_grid, population_grid=cell_population_grid)
         tea_sub_gr.set_daily_results(cell_data)
         return tea_sub_gr
+
+    @staticmethod
+    def _get_axis_overlap(coordinates, center, cell_size, latitude=False):
+        """Return source pixel indices and fractional overlap with a cell axis."""
+        coordinates = np.asarray(coordinates, dtype=float)
+        if coordinates.size == 0:
+            return np.array([], dtype=int), np.array([], dtype=float)
+
+        # Pixel edges are halfway between neighboring coordinate centers.
+        edges = np.empty(coordinates.size + 1, dtype=float)
+        if coordinates.size == 1:
+            edges[:] = [coordinates[0] - cell_size / 2, coordinates[0] + cell_size / 2]
+        else:
+            edges[1:-1] = (coordinates[:-1] + coordinates[1:]) / 2
+            edges[0] = coordinates[0] + (coordinates[0] - edges[1])
+            edges[-1] = coordinates[-1] + (coordinates[-1] - edges[-2])
+
+        pixel_low = np.minimum(edges[:-1], edges[1:])
+        pixel_high = np.maximum(edges[:-1], edges[1:])
+        cell_low, cell_high = center - cell_size / 2, center + cell_size / 2
+        overlap_low = np.maximum(pixel_low, cell_low)
+        overlap_high = np.minimum(pixel_high, cell_high)
+        has_overlap = overlap_high > overlap_low
+
+        if latitude:
+            pixel_span = np.sin(np.deg2rad(pixel_high)) - np.sin(np.deg2rad(pixel_low))
+            overlap_span = (np.sin(np.deg2rad(overlap_high))
+                            - np.sin(np.deg2rad(overlap_low)))
+        else:
+            pixel_span = pixel_high - pixel_low
+            overlap_span = overlap_high - overlap_low
+        fractions = np.divide(overlap_span, pixel_span, out=np.zeros_like(overlap_span),
+                              where=pixel_span > 0)
+        indices = np.flatnonzero(has_overlap)
+        return indices, fractions[indices]
 
     def set_ctp_results(self, xcoord, ycoord, ctp_results):
         """
@@ -812,10 +871,46 @@ class TEAAgr(TEAIndicators):
             data[f'{var}_p05'].attrs = get_attrs(vname=f'{var}', spread='5th percentile')
             data[f'{var}_p95'].attrs = get_attrs(vname=f'{var}', spread='95th percentile')
 
-    def _get_xy(self, margin=None):
-        """
-        get x and y coords for GeoRegion grid
-        """
+    @staticmethod
+    def _grid_centers_from_source_axis(coordinates, grid_spacing):
+        """Build a GR lattice anchored to the native source-coordinate phase."""
+        coordinates = np.asarray(coordinates, dtype=float)
+        if coordinates.size < 2:
+            raise ValueError('At least two source coordinates are required to build the GR grid.')
+        if grid_spacing <= 0:
+            raise ValueError('GR grid spacing must be positive.')
+
+        steps = np.abs(np.diff(coordinates))
+        source_spacing = float(np.median(steps))
+        tolerance = max(source_spacing, grid_spacing) * 1e-8
+        if not np.allclose(steps, source_spacing, rtol=1e-5, atol=tolerance):
+            raise ValueError('GR grid generation requires regular source coordinates.')
+
+        phase = float(np.remainder(coordinates[0], source_spacing))
+        if np.isclose(phase, 0.0, atol=tolerance) or np.isclose(phase, source_spacing, atol=tolerance):
+            phase = 0.0
+        lower, upper = float(coordinates.min()), float(coordinates.max())
+        first_index = int(np.ceil((lower - phase - tolerance) / grid_spacing))
+        last_index = int(np.floor((upper - phase + tolerance) / grid_spacing))
+        if first_index > last_index:
+            return np.array([], dtype=float)
+
+        centers = phase + np.arange(first_index, last_index + 1) * grid_spacing
+        centers[np.isclose(centers, lower, atol=tolerance)] = lower
+        centers[np.isclose(centers, upper, atol=tolerance)] = upper
+        source_order = np.argsort(coordinates)
+        source_sorted = coordinates[source_order]
+        nearest = np.clip(np.searchsorted(source_sorted, centers), 0, source_sorted.size - 1)
+        previous = np.clip(nearest - 1, 0, source_sorted.size - 1)
+        choose_previous = (np.abs(source_sorted[previous] - centers)
+                           < np.abs(source_sorted[nearest] - centers))
+        nearest[choose_previous] = previous[choose_previous]
+        snap = np.abs(source_sorted[nearest] - centers) <= tolerance
+        centers[snap] = source_sorted[nearest[snap]]
+        return centers
+
+    def _get_xy(self):
+        """Get GR center coordinates from a cell-size-independent lattice."""
         if self.gr_grid_mask is not None:
             xcoords = self.gr_grid_mask[self.xdim].values
             ycoords = self.gr_grid_mask[self.ydim].values
@@ -825,9 +920,6 @@ class TEAAgr(TEAIndicators):
             raise ValueError('GR grid file not available for x/y grid - cannot get x and y coordinates for GR grid. '
                              'Please generate GR grid first.')
         
-        if margin is None:
-            margin = self.cell_size_y / 2
-
         if self.input_data is not None:
             ref_grid = self.input_data
         elif self.area_grid is not None:
@@ -836,30 +928,17 @@ class TEAAgr(TEAIndicators):
             raise ValueError('No input data or area grid provided. Please provide a valid input data grid or area '
                              'grid.')
 
-        xcoord = ref_grid[self.xdim]
-        ycoord = ref_grid[self.ydim]
-
+        xcoord = np.asarray(ref_grid[self.xdim].values, dtype=float)
+        ycoord = np.asarray(ref_grid[self.ydim].values, dtype=float)
+        xcoords = self._grid_centers_from_source_axis(xcoord, self.gr_grid_res)
+        ycoords = self._grid_centers_from_source_axis(ycoord, self.gr_grid_res)
+        if xcoord[0] > xcoord[-1]:
+            xcoords = xcoords[::-1]
         if ycoord[0] > ycoord[-1]:
-            ycoords = np.arange(ycoord.max().values - margin,
-                                ycoord.min().values - self.gr_grid_res + margin,
-                                -self.gr_grid_res)
-        else:
-            ycoords = np.arange(ycoord.min().values + margin,
-                                ycoord.max().values + self.gr_grid_res - margin,
-                                self.gr_grid_res)
-
-        # compute x margin taking y coord of first grid row
-        y_0 = ycoords[0] if len(ycoords) > 0 else ycoord.max().values
-        margin_lon = 1 / np.cos(np.deg2rad(y_0)) * margin
-        # round margin_lon to resolution of gr grid
-        margin_lon = np.round(np.round(margin_lon / self.gr_grid_res, 0) * self.gr_grid_res, 2)
-        
-        xcoords = np.arange(xcoord.min().values + margin_lon,
-                            xcoord.max().values + self.gr_grid_res - margin_lon,
-                            self.gr_grid_res)
+            ycoords = ycoords[::-1]
         if len(ycoords) == 0 or len(xcoords) == 0:
-            raise ValueError(f'Not enough valid cells found for margin {margin} - check size of input data grid and '
-                             f'static files')
+            raise ValueError('Not enough valid cells found for the configured GR grid spacing; check the input '
+                             'data grid and static files.')
         
         return xcoords, ycoords
 
@@ -870,9 +949,8 @@ class TEAAgr(TEAIndicators):
         logger.info(f'Generating GR grid mask with resolution {self.gr_grid_res} degrees')
         grg_res = self.gr_grid_res
         mask_orig = self.mask
-        area_orig = self.area_grid
+        area_orig = self._align_spatial_grid(self.area_grid, mask_orig)
         res_orig = self._y_resolution_in
-
         if self.xdim == 'x':
             # try to aggregate using coarsen (vectorized)
             factor = int(round(grg_res / res_orig)) if res_orig is not None else None
@@ -892,27 +970,44 @@ class TEAAgr(TEAIndicators):
         else:
             xcoords, ycoords = self._get_xy()
             gr_grid_mask = xr.DataArray(data=np.ones((len(ycoords), len(xcoords))) * np.nan,
-                                        coords={self.ydim: ([self.ydim], ycoords), self.xdim: ([self.xdim], xcoords)},
-                                        dims={self.ydim: ([self.ydim], ycoords), self.xdim: ([self.xdim], xcoords)})
-            gr_grid_mask = gr_grid_mask.rename('mask')
+                                        coords={self.ydim: ycoords, self.xdim: xcoords},
+                                        dims=(self.ydim, self.xdim), name='mask')
 
             gr_grid_areas = xr.DataArray(data=np.ones((len(ycoords), len(xcoords))) * np.nan,
-                                         coords={self.ydim: ([self.ydim], ycoords), self.xdim: ([self.xdim], xcoords)},
-                                         dims={self.ydim: ([self.ydim], ycoords), self.xdim: ([self.xdim], xcoords)})
-            gr_grid_areas = gr_grid_areas.rename('area_grid')
+                                         coords={self.ydim: ycoords, self.xdim: xcoords},
+                                         dims=(self.ydim, self.xdim), name='area_grid')
 
-            for llat in gr_grid_mask.lat:
-                for llon in gr_grid_mask.lon:
-                    cell_orig = mask_orig.sel(lat=slice(llat, llat - grg_res + res_orig),
-                                              lon=slice(llon, llon + grg_res - res_orig))
-                    cell_area = area_orig.sel(lat=slice(llat, llat - grg_res + res_orig),
-                                              lon=slice(llon, llon + grg_res - res_orig))
-                    valid_cells = cell_orig.sum()
-                    if valid_cells == 0:
+            for ycoord in ycoords:
+                y_indices, y_weights = self._get_axis_overlap(
+                    mask_orig[self.ydim].values, ycoord, grg_res,
+                    latitude=self.ydim.lower() in {'lat', 'latitude'})
+                if len(y_indices) == 0:
+                    continue
+                for xcoord in xcoords:
+                    x_indices, x_weights = self._get_axis_overlap(
+                        mask_orig[self.xdim].values, xcoord, grg_res)
+                    if len(x_indices) == 0:
                         continue
-                    vcell_frac = valid_cells / cell_orig.size
-                    gr_grid_mask.loc[llat, llon] = vcell_frac.values
-                    gr_grid_areas.loc[llat, llon] = cell_area.sum().values
+
+                    indexers = {self.ydim: y_indices, self.xdim: x_indices}
+                    overlap_weights = xr.DataArray(
+                        np.outer(y_weights, x_weights),
+                        coords={
+                            self.ydim: mask_orig[self.ydim].isel({self.ydim: y_indices}),
+                            self.xdim: mask_orig[self.xdim].isel({self.xdim: x_indices}),
+                        },
+                        dims=(self.ydim, self.xdim),
+                    )
+                    cell_mask = mask_orig.isel(indexers)
+                    cell_area = area_orig.isel(indexers) * overlap_weights
+                    total_area = cell_area.sum(skipna=True)
+                    valid_area = (cell_area * cell_mask).sum(skipna=True)
+                    if (not np.isfinite(total_area).item() or total_area <= 0
+                            or not np.isfinite(valid_area).item() or valid_area <= 0):
+                        continue
+
+                    gr_grid_mask.loc[{self.ydim: ycoord, self.xdim: xcoord}] = (valid_area / total_area).item()
+                    gr_grid_areas.loc[{self.ydim: ycoord, self.xdim: xcoord}] = total_area.item()
 
         self.gr_grid_mask = gr_grid_mask
         self.gr_grid_areas = gr_grid_areas

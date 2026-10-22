@@ -11,6 +11,7 @@ import os
 import xarray as xr
 
 from common.config import load_opts
+from teametrics.common.grid_naming import grg_grid_token
 
 
 def _getopts():
@@ -50,8 +51,9 @@ def load_data(opts):
     stat['mask'] = xr.open_dataarray(f'{opts.maskpath}/masks/{opts.region}_mask_{opts.dataset}_'
                                      f'{opts.altitude_threshold}.nc')
     if opts.dataset == 'ERA5':
-        stat['mask_0p5'] = xr.open_dataarray(
-            f'{opts.maskpath}/masks/{opts.region}_mask_0p5_ERA5_{opts.altitude_threshold}.nc')
+        stat['mask_grg'] = xr.open_dataarray(
+            f'{opts.maskpath}/masks/{opts.region}_mask_{grg_grid_token(opts)}_ERA5_'
+            f'{opts.altitude_threshold}.nc')
 
     # load static data
     stat['thresh'] = xr.open_dataarray(f'{opts.maskpath}/'
@@ -59,7 +61,7 @@ def load_data(opts):
                                        f'_{opts.dataset}.nc')
     if opts.dataset == 'ERA5':
         stat['area'] = xr.open_dataarray(f'{opts.maskpath}/'
-                                         f'area_grid_0p5_{opts.region}_{opts.dataset}.nc')
+                                         f'area_grid_{grg_grid_token(opts)}_{opts.region}_{opts.dataset}.nc')
 
     return stat
 

@@ -186,7 +186,7 @@ def run():
     fig, axs = plt.subplots(1, 3, figsize=(fw, fh), dpi=dpi)
 
     data = xr.open_dataset(INPUT_PATH / 'results' / 'dec_indicator_variables' /
-                           'amplification/AF_Tx99.0p_AGR-EUR_annual_ERA5_1961to2024.nc')
+                           'amplification/AF_Tx99.0p_AGR_0p5_cell2-EUR_annual_ERA5_1961to2024.nc')
     thresh = xr.open_dataset(INPUT_PATH / 'static' / 'static_Tx99.0p_EUR_ERA5.nc')
     thresh = thresh.threshold
 

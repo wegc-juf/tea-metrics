@@ -6,7 +6,7 @@ common_params:
     region: AUT
     agr: Oberösterreich
     grg_grid_spacing: 10000
-    agr_cell_size: 100000
+    grg_cell_size: 100000
   parameter: &PARAM
     parameter: Tx
     precip: false

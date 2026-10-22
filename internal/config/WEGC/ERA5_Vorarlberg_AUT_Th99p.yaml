@@ -6,7 +6,7 @@ common_params:
     region: AUT
     agr: Vorarlberg
     grg_grid_spacing: 0.25
-    agr_cell_size: 2
+    grg_cell_size: 2
   parameter: &PARAM
     parameter: Tx
     precip: false

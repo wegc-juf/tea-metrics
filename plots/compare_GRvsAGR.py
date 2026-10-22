@@ -2,12 +2,16 @@ from matplotlib.ticker import FixedLocator
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
+from types import SimpleNamespace
+
+from teametrics.common.grid_naming import grg_grid_token
 
 
-def load_data(gr_type):
+def load_data(gr_type, cell_size=2):
     gr_str = ''
     if gr_type == 'AGR':
-        gr_str = 'AGR_0.5-'
+        grid_opts = SimpleNamespace(grg_grid_spacing=0.5, grg_cell_size=cell_size)
+        gr_str = f'AGR_{grg_grid_token(grid_opts)}-'
     ds = xr.open_dataset(f'/data/users/hst/TEA/TEA/testy_data/dec_indicator_variables/amplification/'
                          f'AF_Tx99.0p_{gr_str}AUT_annual_ERA5_1961to2025.nc')
 

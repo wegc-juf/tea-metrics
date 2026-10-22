@@ -17,11 +17,16 @@ this class of bug immediately.
 
 import numpy as np
 import pytest
+import pyproj
+import xarray as xr
 
 from teametrics.utils.SPARTACUS.regrid_SPARTACUS import (
+    assign_target_crs,
     epsg3035_to_epsg3416_grid,
     epsg3416_to_epsg3035_grid,
     epsg3416_to_utm_grid,
+    get_crs_from_dataset,
+    interpolate_with_nearest_fallback,
     utm_to_epsg3416_grid,
 )
 
@@ -93,6 +98,78 @@ def test_epsg3035_to_epsg3416_produces_positive_y():
     assert np.all(new_y > 0), 'EPSG:3416 y-values must be positive for Austria'
     assert new_x.min() > 100000 and new_x.max() < 900000
     assert new_y.min() > 100000 and new_y.max() < 600000
+
+
+def test_target_crs_is_read_from_statat_file(tmp_path):
+    """The configured target file supplies the target CRS metadata."""
+    crs = pyproj.CRS.from_epsg(3035)
+    statat_file = tmp_path / 'statat.nc'
+    xr.Dataset(
+        {
+            'crs': xr.DataArray(0, attrs={'crs_wkt': crs.to_wkt()}),
+        }
+    ).to_netcdf(statat_file)
+
+    assert get_crs_from_dataset(statat_file).to_epsg() == 3035
+
+
+def test_assign_target_crs_replaces_source_mapping():
+    """Output metadata must describe the target, not source EPSG:3416."""
+    target_crs = pyproj.CRS.from_epsg(3035)
+    ds = xr.Dataset(
+        {
+            'RR': (('y', 'x'), np.zeros((2, 2)), {
+                'grid_mapping': 'lambert_conformal_conic',
+                'coordinates': 'lambert_conformal_conic',
+                'esri_pe_string': 'source CRS',
+            }),
+            'lambert_conformal_conic': xr.DataArray(
+                0, attrs={
+                    'grid_mapping_name': 'lambert_conformal_conic',
+                    'crs_wkt': pyproj.CRS.from_epsg(3416).to_wkt(),
+                }
+            ),
+        },
+        coords={'x': [4285500.0, 4286500.0], 'y': [2891500.0, 2890500.0]},
+    )
+    target = {
+        'epsg': '3035',
+        'grid_mapping': 'ETRS89_LAEA',
+        'crs': target_crs,
+    }
+
+    result = assign_target_crs(ds, target)
+
+    assert 'lambert_conformal_conic' not in result
+    assert result.RR.attrs['grid_mapping'] == 'ETRS89_LAEA'
+    assert 'coordinates' not in result.RR.attrs
+    assert 'esri_pe_string' not in result.RR.attrs
+    assert result.ETRS89_LAEA.attrs['grid_mapping_name'] == 'lambert_azimuthal_equal_area'
+    assert result.ETRS89_LAEA.attrs['code'] == 'EPSG:3035'
+    assert result.ETRS89_LAEA.attrs['geotransform'] == '4285000 1000 0 2892000 0 -1000'
+    assert result.x.attrs['standard_name'] == 'projection_x_coordinate'
+    assert result.y.attrs['standard_name'] == 'projection_y_coordinate'
+
+
+def test_linear_interpolation_falls_back_at_nan_boundary():
+    """A valid neighbor must not be lost because linear interpolation sees NaN."""
+    source = xr.DataArray(
+        [[1.0, np.nan, 1.0], [1.0, np.nan, 1.0], [1.0, np.nan, 1.0]],
+        dims=('y', 'x'),
+        coords={'x': [0.0, 1.0, 2.0], 'y': [0.0, 1.0, 2.0]},
+    )
+    target_x = xr.DataArray(
+        [[0.25]], dims=('y', 'x'), coords={'x': [0.25], 'y': [1.0]}
+    )
+    target_y = xr.DataArray(
+        [[1.0]], dims=('y', 'x'), coords={'x': [0.25], 'y': [1.0]}
+    )
+
+    linear = source.interp(x=target_x, y=target_y, method='linear')
+    result = interpolate_with_nearest_fallback(source, target_x, target_y)
+
+    assert np.isnan(linear.values).all()
+    assert result.values.item() == 1.0
 
 
 if __name__ == '__main__':

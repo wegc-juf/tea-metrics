@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import re
 
 import pandas as pd
 import xarray as xr
@@ -16,6 +17,7 @@ DEFAULT_OUTPUT = Path(
     "SPARTACUS_RR_monthly/SPARTACUS2-MONTHLY_RR_1961-2026.nc"
 )
 FILE_PATTERN = "SPARTACUS2-DAILY_RR_*.nc"
+CANONICAL_FILE_RE = re.compile(r"SPARTACUS2-DAILY_RR_\d{4}\.nc$")
 
 
 def _last_complete_month(times: pd.DatetimeIndex) -> pd.Period:
@@ -36,18 +38,27 @@ def _last_complete_month(times: pd.DatetimeIndex) -> pd.Period:
 
 def aggregate_monthly(input_dir: Path, output: Path, overwrite: bool = False) -> None:
     """Aggregate all matching daily RR files in *input_dir* into *output*."""
-    files = sorted(input_dir.glob(FILE_PATTERN))
+    candidates = sorted(input_dir.glob(FILE_PATTERN))
+    files = [path for path in candidates if CANONICAL_FILE_RE.fullmatch(path.name)]
+    ignored = [path for path in candidates if path not in files]
     if not files:
         raise FileNotFoundError(f"No files matching {FILE_PATTERN!r} in {input_dir}")
     if output.exists() and not overwrite:
         raise FileExistsError(f"Output exists; use --overwrite to replace it: {output}")
 
+    print(f"Found {len(files)} canonical daily RR files in {input_dir}")
+    if ignored:
+        print(f"Ignoring {len(ignored)} noncanonical file(s):")
+        for path in ignored:
+            print(f"  {path.name}")
+    print("Opening daily files...")
     ds = xr.open_mfdataset(
         files,
         combine="by_coords",
         data_vars="minimal",
         coords="minimal",
         compat="equals",
+        join="outer",
         chunks={"time": 31},
     )
     try:
@@ -57,10 +68,15 @@ def aggregate_monthly(input_dir: Path, output: Path, overwrite: bool = False) ->
         times = pd.DatetimeIndex(ds.time.values)
         last_complete = _last_complete_month(times)
         cutoff = last_complete.end_time.normalize()
+        print(
+            f"Loaded {len(times)} daily timestamps from {times.min():%Y-%m-%d} "
+            f"through {times.max():%Y-%m-%d}; aggregating through {last_complete}"
+        )
         ds = ds.sel(time=slice(None, cutoff.to_datetime64()))
 
         # Materialize the reduced array before writing. This avoids leaving a
         # large multi-file dask graph for the NetCDF backend to evaluate.
+        print("Calculating monthly precipitation sums...")
         monthly_rr = (
             ds["RR"].resample(time="MS").sum(dim="time", min_count=1).compute()
         )
@@ -93,6 +109,7 @@ def aggregate_monthly(input_dir: Path, output: Path, overwrite: bool = False) ->
                 "_FillValue": -9999.0,
             }
         }
+        print(f"Writing {result.sizes['time']} monthly fields to {output}...")
         result.to_netcdf(output, format="NETCDF4", encoding=encoding)
         print(f"Aggregated {len(files)} files through {last_complete}: {output}")
     finally:

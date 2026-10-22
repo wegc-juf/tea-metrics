@@ -65,6 +65,28 @@ def _get_default_opts(fname, opts):
         opts: options with default values set
 
     """
+    # Keep the old AGR spellings as input aliases while exposing only the
+    # canonical GRG names to the rest of the application.
+    if 'agr_grid_spacing' in opts:
+        if ('grg_grid_spacing' in opts
+                and opts.grg_grid_spacing != opts.agr_grid_spacing):
+            raise ValueError('Set only one grid spacing value; '
+                             'grg_grid_spacing and agr_grid_spacing differ.')
+        opts.grg_grid_spacing = opts.agr_grid_spacing
+        delattr(opts, 'agr_grid_spacing')
+        warnings.warn('agr_grid_spacing is deprecated; use grg_grid_spacing instead.',
+                      DeprecationWarning, stacklevel=2)
+
+    if 'agr_cell_size' in opts:
+        if ('grg_cell_size' in opts
+                and opts.grg_cell_size != opts.agr_cell_size):
+            raise ValueError('Set only one cell size value; '
+                             'grg_cell_size and agr_cell_size differ.')
+        opts.grg_cell_size = opts.agr_cell_size
+        delattr(opts, 'agr_cell_size')
+        warnings.warn('agr_cell_size is deprecated; use grg_cell_size instead.',
+                      DeprecationWarning, stacklevel=2)
+
     if 'precip' not in opts:
         opts.precip = False
 
@@ -72,11 +94,11 @@ def _get_default_opts(fname, opts):
     if 'region' not in opts:
         opts.region = 'AUT'
     if 'agr' in opts:
-        if 'agr_cell_size' not in opts:
+        if 'grg_cell_size' not in opts:
             if opts.precip:
-                opts.agr_cell_size = 1
+                opts.grg_cell_size = 1
             else:
-                opts.agr_cell_size = 2
+                opts.grg_cell_size = 2
         if 'grg_grid_spacing' not in opts:
             opts.grg_grid_spacing = 0.5
         if 'land_frac_min' not in opts:
@@ -274,8 +296,10 @@ def check_type(key, value):
         'station': str,
         'agr': str,
         'agr_cell_size': float,
+        'grg_cell_size': float,
         'agr_range': str,  # comma-separated string of floats
         'grg_grid_spacing': float,
+        'agr_grid_spacing': float,  # deprecated alias for grg_grid_spacing
         'land_frac_min': float,
         'agr_frac_min': float,
 
