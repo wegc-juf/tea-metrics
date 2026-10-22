@@ -15,12 +15,12 @@ mkvirtualenv <project_name>
 
 Then, install or upgrade the package using `pip`:
 ```bash
-pip install https://wegcpypi.uni-graz.at/packages/teametrics-0.15.0.tar.gz
+pip install https://wegcpypi.uni-graz.at/packages/teametrics-0.15.0-py3-none-any.whl
 ```
 
 The core package does not require GRIB support. If you process ICON/GRIB input, install the optional `grib` extra:
 ```bash
-pip install "teametrics[grib] @ https://wegcpypi.uni-graz.at/packages/teametrics-0.15.0.tar.gz"
+pip install "teametrics[grib] @ https://wegcpypi.uni-graz.at/packages/teametrics-0.15.0-py3-none-any.whl"
 ```
 
 ## Usage
