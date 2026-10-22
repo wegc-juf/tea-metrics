@@ -15,12 +15,12 @@ mkvirtualenv <project_name>
 
 Then, install or upgrade the package using `pip`:
 ```bash
-pip install --extra-index-url https://wegcpypi.uni-graz.at/simple teametrics==0.15.0
+pip install https://wegcpypi.uni-graz.at/packages/teametrics-0.15.0.tar.gz
 ```
 
 The core package does not require GRIB support. If you process ICON/GRIB input, install the optional `grib` extra:
 ```bash
-pip install --extra-index-url https://wegcpypi.uni-graz.at/simple "teametrics[grib]==0.15.0"
+pip install "teametrics[grib] @ https://wegcpypi.uni-graz.at/packages/teametrics-0.15.0.tar.gz"
 ```
 
 ## Usage
