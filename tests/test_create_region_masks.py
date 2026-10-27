@@ -3,6 +3,7 @@ from types import SimpleNamespace
 import argparse
 import geopandas as gpd
 import numpy as np
+import pytest
 import xarray as xr
 from shapely.geometry import box
 
@@ -104,3 +105,54 @@ def test_create_mask_file_writes_full_and_filtered_areas(monkeypatch):
     assert np.isfinite(result.area_grid_full.values[0, 1])
     assert np.isfinite(result.mask_full.values[0, 1])
     assert np.isnan(result.mask.values[0, 1])
+
+
+def test_create_sea_mask_preserves_pre_altitude_region_and_areas(monkeypatch, tmp_path):
+    opts = _opts()
+    opts.region = 'SEA'
+    opts.maskpath = str(tmp_path)
+    opts.mask_sub = 'masks'
+    opts.altitude_threshold = 1500
+    opts.calculate_area = True
+    coords = {'lat': [1.0, 0.0], 'lon': [0.0, 1.0]}
+    aut = xr.Dataset({
+        'mask': (('lat', 'lon'), [[1.0, np.nan], [1.0, 1.0]]),
+        'mask_full': (('lat', 'lon'), np.ones((2, 2))),
+    }, coords=coords)
+    sar = xr.Dataset({
+        'mask': (('lat', 'lon'), [[1.0, 1.0], [np.nan, 1.0]]),
+        'mask_full': (('lat', 'lon'), np.ones((2, 2))),
+    }, coords=coords)
+    captured = {}
+
+    def open_mask(path):
+        return aut if 'AUT_mask_' in str(path) else sar
+
+    monkeypatch.setattr(masks.xr, 'open_dataset', open_mask)
+    monkeypatch.setattr(masks, 'create_history_from_cfg', lambda **kwargs: None)
+    monkeypatch.setattr(masks, '_save_output', lambda ds, opts, out_region=None: captured.update(ds=ds))
+
+    masks.create_sea_mask(opts)
+
+    result = captured['ds']
+    assert {'mask', 'mask_full', 'area_grid_full', 'area_grid'} <= set(result.data_vars)
+    assert np.isnan(result.mask.values[0, 1])
+    assert np.isnan(result.mask.values[1, 0])
+    assert np.all(result.mask_full.values == 1)
+    assert np.isfinite(result.area_grid_full.values).all()
+    assert np.isnan(result.area_grid.values[0, 1])
+    assert np.isnan(result.area_grid.values[1, 0])
+
+
+def test_create_sea_mask_requires_full_aut_sar_masks_for_altitude_filter(monkeypatch, tmp_path):
+    opts = _opts()
+    opts.region = 'SEA'
+    opts.maskpath = str(tmp_path)
+    opts.mask_sub = 'masks'
+    opts.altitude_threshold = 1500
+    mask = xr.DataArray(np.ones((2, 2)), dims=('lat', 'lon'), name='mask')
+    mask_ds = mask.to_dataset()
+    monkeypatch.setattr(masks.xr, 'open_dataset', lambda *args, **kwargs: mask_ds)
+
+    with pytest.raises(ValueError, match='mask_full'):
+        masks.create_sea_mask(opts)

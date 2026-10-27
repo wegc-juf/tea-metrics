@@ -130,9 +130,21 @@ def create_sea_mask(opts):
     mask = aut['mask'].where(sar['mask'].notnull())
     mask = mask.rename('mask')
     mask.attrs = {'long_name': 'weighted mask', 'coordinate_sys': f'EPSG:{opts.target_sys}'}
+    aut_full = aut.data_vars.get('mask_full')
+    sar_full = sar.data_vars.get('mask_full')
+    if aut_full is None or sar_full is None:
+        if opts.altitude_threshold:
+            raise ValueError('AUT and SAR mask files must contain mask_full for altitude-filtered SEA masks. '
+                             'Regenerate the AUT and SAR masks first.')
+        aut_full = aut['mask']
+        sar_full = sar['mask']
+    full_mask = aut_full.where(sar_full.notnull()).rename('mask_full')
+    full_mask.attrs = {'long_name': 'weighted mask before altitude filtering',
+                       'coordinate_sys': f'EPSG:{opts.target_sys}'}
     ds = mask.to_dataset()
+    ds['mask_full'] = full_mask
     if getattr(opts, 'calculate_area', False):
-        ds = _add_area_variables(ds, mask, mask, opts)
+        ds = _add_area_variables(ds, full_mask, mask, opts)
 
     create_history_from_cfg(cfg_params=opts, ds=ds)
 
