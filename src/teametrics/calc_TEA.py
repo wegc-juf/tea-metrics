@@ -47,10 +47,11 @@ def calc_tea_indicators(opts):
     
     # load mask if needed
     if 'maskpath' in opts and 'station' not in opts:
-        mask, area_grid = _load_mask_file(opts, include_area=True)
+        mask, area_grid, full_mask = _load_mask_file(opts, include_area=True)
     else:
         mask = None
         area_grid = None
+        full_mask = None
     
     # calculate daily and annual climatic time period indicators
     if not opts.decadal_only:
@@ -82,12 +83,13 @@ def calc_tea_indicators(opts):
         else:
             logger.info('Only one decade requested. Calculating daily/CTP indicators in one process.')
             for p_start, p_end in chunks:
-                _calculate_chunk(opts, mask, threshold_grid, gridded, int(p_start), int(p_end), area_grid)
+                _calculate_chunk(opts, mask, threshold_grid, gridded, int(p_start), int(p_end), area_grid,
+                                 full_mask)
     
     # calculate decadal indicators and amplification factors
     if opts.decadal or opts.decadal_only or opts.recalc_decadal:
         if 'agr' in opts:
-            tea = TEAAgr(mask=mask, gr_grid_res=opts.grg_grid_spacing,
+            tea = TEAAgr(mask=mask, full_mask=full_mask, gr_grid_res=opts.grg_grid_spacing,
                          rounding_decimal_places=opts.rounding_decimal_places, ref_period=opts.ref_period,
                          agr_frac_min=opts.agr_frac_min, min_duration=opts.min_duration,
                          land_frac_min=opts.land_frac_min, zlib_compression=opts.zlib_compression)
@@ -115,15 +117,16 @@ def _calculate_chunk_worker(opts, start, end):
     worker_opts.recalc_threshold = False
     # Chunk-level processes provide the parallelism; avoid nested Dask pools.
     worker_opts.use_dask = False
-    mask, area_grid = _load_mask_file(worker_opts, include_area=True)
+    mask, area_grid, full_mask = _load_mask_file(worker_opts, include_area=True)
     threshold = _get_threshold(worker_opts)
-    _calculate_chunk(worker_opts, mask, threshold, True, start, end, area_grid)
+    _calculate_chunk(worker_opts, mask, threshold, True, start, end, area_grid, full_mask)
 
 
-def _calculate_chunk(opts, mask, threshold, gridded, start, end, area_grid=None):
+def _calculate_chunk(opts, mask, threshold, gridded, start, end, area_grid=None, full_mask=None):
     """Calculate and save daily and CTP results for one time chunk."""
     tea = calc_dbv_indicators(mask=mask, opts=opts, start=start, end=end,
-                              gridded=gridded, threshold=threshold, area_grid=area_grid)
+                              gridded=gridded, threshold=threshold, area_grid=area_grid,
+                              full_mask=full_mask)
     if 'agr' in opts:
         _load_or_generate_gr_grid_static(opts, tea)
     calc_annual_ctp_indicators(tea=tea, opts=opts, start=start, end=end)
@@ -138,7 +141,7 @@ def _get_chunk_workers(chunk_count, max_workers=4):
     return min(chunk_count, max(1, cpu_count // 4), workers_by_memory, max_workers, 4)
 
 
-def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, area_grid=None):
+def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, area_grid=None, full_mask=None):
     """
     calculate daily basis variables for a given time period
     Args:
@@ -237,7 +240,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
         
         # initialize TEA object
         if 'agr' in opts:
-            tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
+            tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask, full_mask=full_mask,
                                 population_grid=population_grid,
                                 min_area=min_area, low_extreme=opts.low_extreme,
                                 unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
@@ -285,7 +288,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
                 data, mask, threshold = reduced
             else:
                 data, mask, threshold, population_grid = reduced
-            tea = TEA_class_obj(threshold=threshold, mask=mask,
+            tea = TEA_class_obj(threshold=threshold, mask=mask, full_mask=full_mask,
                                 low_extreme=opts.low_extreme,
                                  population_grid=population_grid,
                                  unit=opts.unit, land_sea_mask=lsm, gr_grid_res=opts.grg_grid_spacing,
@@ -379,9 +382,9 @@ def _load_mask_file(opts, include_area=False):
         opts: options as defined in CFG-PARAMS-doc.md and TEA_CFG_DEFAULT.yaml
 
     Returns:
-        mask: GR mask (Xarray DataArray), or ``(mask, area_grid)`` when
-            ``include_area`` is true. Older mask files return ``None`` for
-            the area grid.
+        mask: altitude-filtered GR mask. With ``include_area=True``, returns
+            ``(mask, area_grid, mask_full)`` where ``mask_full`` is the region
+            mask before altitude filtering.
 
     """
     if opts.gr_type == 'polygon':
@@ -412,7 +415,15 @@ def _load_mask_file(opts, include_area=False):
     
     mask = mask_file.mask
     if include_area:
-        return mask, mask_file.data_vars.get('area_grid')
+        full_mask = mask_file.data_vars.get('mask_full')
+        if full_mask is None:
+            is_agr = ('agr' in opts if hasattr(opts, '__contains__') else getattr(opts, 'agr', False))
+            if opts.altitude_threshold and is_agr:
+                raise ValueError(
+                    f'Mask file {maskpath} does not contain the pre-altitude mask_full. '
+                    'Regenerate the region mask before calculating AGR areas.')
+            full_mask = mask
+        return mask, mask_file.data_vars.get('area_grid'), full_mask
     return mask
 
 
@@ -542,13 +553,14 @@ def _get_ctp_filepath(start, end, opts, annual_agr=False) -> str:
     return outpath
 
 
-def _save_grg_mask(opts, grg_mask, grg_areas):
+def _save_grg_mask(opts, grg_mask, grg_areas, grg_mask_full):
     """
     save grg mask to netcdf file
     Args:
         opts: CLI parameter
-        grg_mask: mask on grg grid
+        grg_mask: altitude-filtered mask on GRG grid
         grg_areas: area grid on grg grid
+        grg_mask_full: pre-altitude region mask on GRG grid
     """
     grid_token = grg_grid_token(opts)
     create_history_from_cfg(cfg_params=opts, ds=grg_areas)
@@ -561,15 +573,16 @@ def _save_grg_mask(opts, grg_mask, grg_areas):
         grg_areas.to_netcdf(area_grid_file)
     
     # save GRG mask
-    create_history_from_cfg(cfg_params=opts, ds=grg_mask)
+    grg_masks = xr.Dataset({'mask': grg_mask, 'mask_full': grg_mask_full})
+    create_history_from_cfg(cfg_params=opts, ds=grg_masks)
     mask_file = (Path(opts.maskpath) / opts.mask_sub /
                  f'{opts.region}_mask_{grid_token}_{opts.dataset}_{opts.altitude_threshold}.nc')
     logger.info(f'Saving GR mask to {mask_file}')
     try:
-        grg_mask.to_netcdf(mask_file)
+        grg_masks.to_netcdf(mask_file)
     except PermissionError:
         os.remove(mask_file)
-        grg_mask.to_netcdf(mask_file)
+        grg_masks.to_netcdf(mask_file)
 
 
 # noinspection PyProtectedMember
@@ -584,38 +597,46 @@ def _load_or_generate_gr_grid_static(opts, tea):
 
     """
     # load static GR grid files
-    gr_grid_mask, gr_grid_areas = _load_gr_grid_static(opts)
+    gr_grid_mask, gr_grid_areas, gr_grid_mask_full = _load_gr_grid_static(opts)
     if (gr_grid_mask is not None and gr_grid_areas is not None
+            and gr_grid_mask_full is not None
             and not _gr_grid_static_is_usable(gr_grid_mask, gr_grid_areas)):
         logger.warning('Cached GR grid mask/area contain no valid cells; regenerating the static grid.')
         gr_grid_mask.close()
         gr_grid_areas.close()
         gr_grid_mask = None
         gr_grid_areas = None
+        gr_grid_mask_full = None
         if hasattr(opts, 'recalc_decadal'):
             opts.recalc_decadal = True
 
     reference_grid = tea._ref_mean
     cache_covers_reference = True
-    if reference_grid is not None and gr_grid_mask is not None and gr_grid_areas is not None:
+    if (reference_grid is not None and gr_grid_mask is not None and gr_grid_areas is not None
+            and gr_grid_mask_full is not None):
         cache_covers_reference = _gr_grid_static_covers_reference(gr_grid_mask, reference_grid)
         if cache_covers_reference:
             gr_grid_mask = tea._align_spatial_grid(gr_grid_mask, reference_grid)
             gr_grid_areas = tea._align_spatial_grid(gr_grid_areas, reference_grid)
+            gr_grid_mask_full = tea._align_spatial_grid(gr_grid_mask_full, reference_grid)
 
-    if gr_grid_mask is None or gr_grid_areas is None or not cache_covers_reference:
+    if (gr_grid_mask is None or gr_grid_areas is None or gr_grid_mask_full is None
+            or not cache_covers_reference):
         if reference_grid is not None:
             # Static region masks may cover a much broader domain than the
             # CTP reference data. Generate the cached GRG grid on the reference
             # coordinates so later runs can reuse it without extent mismatch.
             tea.mask = tea._align_spatial_grid(tea.mask, reference_grid)
+            tea.full_mask = tea._align_spatial_grid(tea.full_mask, reference_grid)
             tea.area_grid = tea._align_spatial_grid(tea.area_grid, reference_grid)
+        tea.gr_grid_mask = None
         tea.generate_gr_grid_mask()
-        _save_grg_mask(opts, tea.gr_grid_mask, tea.gr_grid_areas)
+        _save_grg_mask(opts, tea.gr_grid_mask, tea.gr_grid_areas, tea.gr_grid_mask_full)
     else:
         # set GR grid mask and area grid
         tea.gr_grid_mask = gr_grid_mask
         tea.gr_grid_areas = gr_grid_areas
+        tea.gr_grid_mask_full = gr_grid_mask_full
     
     # set cell_size
     tea.cell_size_y = opts.grg_cell_size
@@ -918,8 +939,10 @@ def _load_gr_grid_static(opts):
         opts: options as defined in CFG-PARAMS-doc.md and TEA_CFG_DEFAULT.yaml
 
     Returns:
-        gr_grid_areas: area grid (xarray DataArray)
-        gr_grid_mask: mask grid (xarray DataArray)
+        gr_grid_mask: altitude-filtered coverage grid (xarray DataArray)
+        gr_grid_areas: full geometric tile area grid (xarray DataArray)
+        gr_grid_mask_full: pre-altitude region mask grid (xarray DataArray),
+            or ``None`` for older cached files that require regeneration.
 
     """
     grid_token = grg_grid_token(opts)
@@ -927,12 +950,14 @@ def _load_gr_grid_static(opts):
                          f'{opts.region}_mask_{grid_token}_{opts.dataset}_{opts.altitude_threshold}.nc')
     logger.info(f'Loading GR mask from {gr_grid_mask_file}')
     try:
-        gr_grid_mask = xr.open_dataset(gr_grid_mask_file)
-        gr_grid_mask = gr_grid_mask.mask
+        mask_ds = xr.open_dataset(gr_grid_mask_file)
+        gr_grid_mask = mask_ds.data_vars.get('mask')
+        gr_grid_mask_full = mask_ds.data_vars.get('mask_full')
     except FileNotFoundError:
         if opts.decadal_only:
             logger.warning(f'No GR mask found at {gr_grid_mask_file}.')
         gr_grid_mask = None
+        gr_grid_mask_full = None
     gr_grid_areas_file = Path(opts.statpath) / f'area_grid_{grid_token}_{opts.region}_{opts.dataset}.nc'
     logger.info(f'Loading GR area grid from {gr_grid_areas_file}')
     try:
@@ -943,7 +968,7 @@ def _load_gr_grid_static(opts):
             logger.info(
                 f'No GR area grid found at {gr_grid_areas_file}. Trying to generate one')
         gr_grid_areas = None
-    return gr_grid_mask, gr_grid_areas
+    return gr_grid_mask, gr_grid_areas, gr_grid_mask_full
 
 
 def run():

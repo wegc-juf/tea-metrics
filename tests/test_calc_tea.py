@@ -189,6 +189,7 @@ class TestLoadMaskFile:
     def test_load_mask_file_ignores_area_variables(self, tmp_path):
         mask = xr.DataArray(np.ones((2, 2)), dims=('y', 'x'), name='mask')
         ds = mask.to_dataset()
+        ds['mask_full'] = xr.ones_like(mask).rename('mask_full')
         ds['area_grid_full'] = xr.ones_like(mask)
         ds['area_full'] = xr.DataArray(4.0)
         ds['area_grid'] = xr.ones_like(mask)
@@ -199,10 +200,22 @@ class TestLoadMaskFile:
         opts = SimpleNamespace(gr_type='polygon', maskpath=str(tmp_path), mask_sub='masks',
                                region='AUT', dataset='ERA5', altitude_threshold=1500)
 
-        result, area_grid = _load_mask_file(opts, include_area=True)
+        result, area_grid, full_mask = _load_mask_file(opts, include_area=True)
 
         xr.testing.assert_equal(result, mask)
         xr.testing.assert_equal(area_grid, ds.area_grid)
+        xr.testing.assert_equal(full_mask, ds.mask_full)
+
+    def test_altitude_filtered_agr_mask_requires_pre_altitude_mask(self, tmp_path):
+        mask = xr.DataArray(np.ones((2, 2)), dims=('y', 'x'), name='mask')
+        mask_dir = tmp_path / 'masks'
+        mask_dir.mkdir()
+        mask.to_dataset().to_netcdf(mask_dir / 'AUT_mask_ERA5_1500.nc')
+        opts = SimpleNamespace(gr_type='polygon', maskpath=str(tmp_path), mask_sub='masks',
+                               region='AUT', dataset='ERA5', altitude_threshold=1500, agr=True)
+
+        with pytest.raises(ValueError, match='pre-altitude mask_full'):
+            _load_mask_file(opts, include_area=True)
 
     def test_load_mask_file_missing(self, tmp_path):
         from types import SimpleNamespace
@@ -287,9 +300,35 @@ class TestLoadGrGridStatic:
         opts = SimpleNamespace(statpath=statpath, maskpath=str(tmp_path / "masks"), mask_sub="masks",
                                region="test", dataset="ERA5", grg_grid_spacing=0.5, grg_cell_size=2,
                                altitude_threshold=1500, decadal_only=True)
-        mask, areas = _load_gr_grid_static(opts)
+        mask, areas, full_mask = _load_gr_grid_static(opts)
         assert mask is None
         assert areas is None
+        assert full_mask is None
+
+    def test_load_gr_grid_static_reads_full_and_filtered_masks(self, tmp_path):
+        mask_dir = tmp_path / "masks" / "masks"
+        mask_dir.mkdir(parents=True)
+        statpath = tmp_path / "stats"
+        statpath.mkdir()
+        coords = {"lat": [2.0, 1.0], "lon": [3.0, 4.0]}
+        mask = xr.DataArray(np.full((2, 2), 0.5), coords=coords,
+                            dims=("lat", "lon"), name="mask")
+        full_mask = xr.DataArray(np.ones((2, 2)), coords=coords,
+                                 dims=("lat", "lon"), name="mask_full")
+        areas = xr.DataArray(np.ones((2, 2)), coords=coords,
+                             dims=("lat", "lon"), name="area_grid")
+        xr.Dataset({"mask": mask, "mask_full": full_mask}).to_netcdf(
+            mask_dir / "test_mask_0p5_cell0p5_ERA5_1500.nc")
+        areas.to_dataset().to_netcdf(statpath / "area_grid_0p5_cell0p5_test_ERA5.nc")
+        opts = SimpleNamespace(statpath=str(statpath), maskpath=str(tmp_path / "masks"), mask_sub="masks",
+                               region="test", dataset="ERA5", grg_grid_spacing=0.5, grg_cell_size=0.5,
+                               altitude_threshold=1500, decadal_only=True)
+
+        loaded_mask, loaded_areas, loaded_full_mask = _load_gr_grid_static(opts)
+
+        xr.testing.assert_equal(loaded_mask, mask)
+        xr.testing.assert_equal(loaded_full_mask, full_mask)
+        xr.testing.assert_equal(loaded_areas, areas)
 
     def test_load_gr_grid_static_ignores_untagged_legacy_cache(self, tmp_path):
         from argparse import Namespace
@@ -308,10 +347,11 @@ class TestLoadGrGridStatic:
                          region="test", dataset="ERA5", grg_grid_spacing=0.5, grg_cell_size=0.5,
                          altitude_threshold=1500, decadal_only=True)
 
-        mask, areas = _load_gr_grid_static(opts)
+        mask, areas, full_mask = _load_gr_grid_static(opts)
 
         assert mask is None
         assert areas is None
+        assert full_mask is None
 
 
 class TestCompareToCTPRef:

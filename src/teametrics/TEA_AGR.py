@@ -30,7 +30,7 @@ class TEAAgr(TEAIndicators):
     computing threshold-exceedance-amount (TEA) indicators. Supplementary Information (SI) to
     Preprint – April 2025. 40 pp. Wegener Center, University of Graz, Graz, Austria, 2025.
     """
-    def __init__(self, input_data=None, threshold=None, mask=None, min_area=0.0001,
+    def __init__(self, input_data=None, threshold=None, mask=None, full_mask=None, min_area=0.0001,
                  gr_grid_res=0.5, land_sea_mask=None, gr_grid_mask=None, gr_grid_areas=None,
                  land_frac_min=0.25, cell_size_y=2, agr_frac_min=0.25, min_duration=DEFAULT_MIN_DURATION,
                  **kwargs):
@@ -41,6 +41,7 @@ class TEAAgr(TEAIndicators):
             input_data: input data grid
             threshold: threshold grid
             mask: mask grid (needed if data should be masked out by e.g. country borders)
+            full_mask: region mask before altitude filtering, used for A_AGR_full
             min_area: minimum area for valid grid cells in areals (100 km^2). Default: 0.0001 areals or 10 km^2
             gr_grid_res: resolution for grid of GeoRegions (in degrees)
             land_sea_mask: land-sea mask if needed
@@ -51,6 +52,7 @@ class TEAAgr(TEAIndicators):
         """
         super().__init__(input_data=input_data, threshold=threshold,
                          mask=mask, min_area=min_area, apply_mask=False, **kwargs)
+        self.full_mask = mask if full_mask is None else full_mask
         if self.area_grid is not None and not isinstance(self.area_grid, int):
             ref_grid = self.area_grid
         elif self.input_data is not None:
@@ -72,13 +74,16 @@ class TEAAgr(TEAIndicators):
 
         self.gr_grid_mask = gr_grid_mask
         self.gr_grid_areas = gr_grid_areas
+        self.gr_grid_mask_full = None
         
         self.a_agr_full = None
         self.areas_full = None
+        self.agr_area_weights_full = None
         self.a_agr_domain = None
         self.areas_domain = None
         self.a_agr_elig = None
         self.areas_elig = None
+        self.agr_area_weights = None
         self.agr_frac_min = agr_frac_min
         
         self.min_duration = min_duration
@@ -395,8 +400,9 @@ class TEAAgr(TEAIndicators):
         if ((self.gr_grid_mask[self.xdim] != self._ref_mean[self.xdim]).all() or (self.gr_grid_mask[self.ydim] !=
                 self._ref_mean[self.ydim]).all()):
             raise ValueError('GR grid mask and reference mean have different coordinates. Cannot crop to shape.')
-        self.gr_grid_areas = self.gr_grid_areas.where(self.gr_grid_mask > 0)
         self._crop_to_gr_mask_extents()
+        # Keep only centers with mask coverage; fractional boundary weighting
+        # is applied once when calc_a_agr builds agr_area_weights.
         self._ref_mean = self._ref_mean.where(self.gr_grid_mask > 0)
         self._cc_mean = self._cc_mean.where(self.gr_grid_mask > 0)
         self.decadal_results = self.decadal_results.where(self.gr_grid_mask > 0)
@@ -562,9 +568,38 @@ class TEAAgr(TEAIndicators):
         """
         Calculate AGR areas
         """
+        self.agr_area_weights = self._get_agr_area_weights()
+        full_coverage = self.gr_grid_mask_full
+        if full_coverage is None:
+            full_coverage = self.gr_grid_mask
+        self.agr_area_weights_full = self._get_agr_area_weights(full_coverage)
         self._calc_a_agr_elig()
         self._calc_a_agr_domain()
         self._calc_a_agr_full()
+
+    def _get_agr_area_weights(self, coverage_mask=None):
+        """Apply a GRG-tile coverage fraction once to reusable tile areas.
+
+        ``gr_grid_areas`` remains the full, mask-independent spacing-tile area.
+        The supplied coverage grid (altitude-filtered by default) is applied
+        here. Filtered weights are used by AGR means, domain/eligible areas,
+        spreads, and percentiles; full-region weights determine A_AGR_full.
+        Do not multiply by a coverage grid again downstream.
+        """
+        if self.gr_grid_areas is None or self.gr_grid_mask is None:
+            raise ValueError('GRG tile areas and mask are required for AGR area weights.')
+        if coverage_mask is None:
+            coverage_mask = self.gr_grid_mask
+        if coverage_mask is None:
+            raise ValueError('A GRG coverage mask is required for AGR area weights.')
+        coverage = coverage_mask.reindex({
+            self.ydim: self.gr_grid_areas[self.ydim].values,
+            self.xdim: self.gr_grid_areas[self.xdim].values,
+        }).fillna(0)
+        coverage = coverage.clip(min=0, max=1)
+        area_weights = (self.gr_grid_areas * coverage).where(coverage > 0)
+        area_weights.attrs = dict(self.gr_grid_areas.attrs)
+        return area_weights
     
     def _calc_a_agr_elig(self):
         """
@@ -573,10 +608,8 @@ class TEAAgr(TEAIndicators):
         Returns:
 
         """
-        # AGR aggregation consumes the stored spacing-tile area weights as-is.
-        # Any in-region boundary fraction belongs in gr_grid_areas generation
-        # and must not be multiplied by gr_grid_mask again here.
-        self.areas_elig = self.gr_grid_areas.where(self._ref_mean.ED > 0)
+        # agr_area_weights already includes the boundary coverage fraction.
+        self.areas_elig = self.agr_area_weights.where(self._ref_mean.ED > 0)
         self.a_agr_elig = self.areas_elig.sum()
         
     def _calc_a_agr_domain(self):
@@ -586,7 +619,7 @@ class TEAAgr(TEAIndicators):
         Returns:
 
         """
-        self.areas_domain = self.gr_grid_areas.where(~np.isnan(self._ref_mean.threshold_avg))
+        self.areas_domain = self.agr_area_weights.where(~np.isnan(self._ref_mean.threshold_avg))
         self.a_agr_domain = self.areas_domain.sum()
 
     def _calc_a_agr_full(self):
@@ -596,7 +629,7 @@ class TEAAgr(TEAIndicators):
         Returns:
 
         """
-        self.areas_full = self.gr_grid_areas.copy()
+        self.areas_full = self.agr_area_weights_full.copy()
         self.a_agr_full = self.areas_full.sum()
 
     def calc_agr_vars(self, y_range=None, x_range=None, spreads=True, crop_to_shp=False, calc_annual=False):
@@ -849,7 +882,9 @@ class TEAAgr(TEAIndicators):
         """
         ref = ref.rename({var: var.replace('_AGR', '') for var in ref.data_vars})
 
-        areas = self.gr_grid_areas
+        # Equations 38/39 use the same in-region, once-mask-weighted areas as
+        # the AGR means; raw gr_grid_areas would overweight boundary tiles.
+        areas = self.agr_area_weights
 
         # equation 38_1 and 38_4
         c_upp = xr.where(data >= ref, 1, 0)
@@ -995,73 +1030,79 @@ class TEAAgr(TEAIndicators):
         # separate from cell_size_y, which defines the local calculation
         # footprint used by select_sub_gr and may overlap adjacent centers.
         grg_res = self.gr_grid_res
+        self.gr_grid_mask = None
         mask_orig = self.mask
+        full_mask_orig = self._align_spatial_grid(self.full_mask, mask_orig)
         area_orig = self._align_spatial_grid(self.area_grid, mask_orig)
         res_orig = self._y_resolution_in
+        # gr_grid_areas stores full spacing-tile areas; gr_grid_mask stores
+        # altitude-filtered regional coverage; gr_grid_mask_full stores
+        # pre-altitude regional coverage. AGR uses each for its respective area.
         if self.xdim == 'x':
             # try to aggregate using coarsen (vectorized)
             factor = int(round(grg_res / res_orig)) if res_orig is not None else None
             if factor is None or factor < 1:
                 raise ValueError('Invalid grid resolution ratio for cartesian grid')
-            # mask_orig is expected to have dims (y, x)
-            mask_valid = (mask_orig > 0).astype(int)
-            # sum valid cells and area per block
-            valid_count = mask_valid.coarsen({self.ydim: factor, self.xdim: factor}, boundary='trim').sum()
-            cell_area_sum = area_orig.coarsen({self.ydim: factor, self.xdim: factor}, boundary='trim').sum()
-            total_cells = factor * factor
-            vcell_frac = valid_count / total_cells
-            cell_area_sum = cell_area_sum.where(vcell_frac > 0)  # set area to nan for cells with no valid original
-            
-            gr_grid_mask = vcell_frac.rename('mask')
-            gr_grid_areas = cell_area_sum.rename('area_grid')
+            coarsen_dims = {self.ydim: factor, self.xdim: factor}
+            total_area = area_orig.coarsen(coarsen_dims, boundary='trim').sum(skipna=True)
+            gr_grid_mask = self._coverage_fraction_on_projected_grid(
+                mask_orig, area_orig, total_area, coarsen_dims, 'mask')
+            gr_grid_mask_full = self._coverage_fraction_on_projected_grid(
+                full_mask_orig, area_orig, total_area, coarsen_dims, 'mask_full')
+            gr_grid_areas = total_area.rename('area_grid')
         else:
             xcoords, ycoords = self._get_xy()
-            gr_grid_mask = xr.DataArray(data=np.ones((len(ycoords), len(xcoords))) * np.nan,
-                                        coords={self.ydim: ycoords, self.xdim: xcoords},
-                                        dims=(self.ydim, self.xdim), name='mask')
-
             gr_grid_areas = xr.DataArray(data=np.ones((len(ycoords), len(xcoords))) * np.nan,
                                          coords={self.ydim: ycoords, self.xdim: xcoords},
                                          dims=(self.ydim, self.xdim), name='area_grid')
-
-            for ycoord in ycoords:
-                y_indices, y_weights = self._get_axis_overlap(
-                    mask_orig[self.ydim].values, ycoord, grg_res,
-                    latitude=self.ydim.lower() in {'lat', 'latitude'})
-                if len(y_indices) == 0:
-                    continue
-                for xcoord in xcoords:
-                    x_indices, x_weights = self._get_axis_overlap(
-                        mask_orig[self.xdim].values, xcoord, grg_res)
-                    if len(x_indices) == 0:
-                        continue
-
-                    indexers = {self.ydim: y_indices, self.xdim: x_indices}
-                    overlap_weights = xr.DataArray(
-                        np.outer(y_weights, x_weights),
-                        coords={
-                            self.ydim: mask_orig[self.ydim].isel({self.ydim: y_indices}),
-                            self.xdim: mask_orig[self.xdim].isel({self.xdim: x_indices}),
-                        },
-                        dims=(self.ydim, self.xdim),
-                    )
-                    cell_mask = mask_orig.isel(indexers)
-                    cell_area = area_orig.isel(indexers) * overlap_weights
-                    total_area = cell_area.sum(skipna=True)
-                    valid_area = (cell_area * cell_mask).sum(skipna=True)
-                    if (not np.isfinite(total_area).item() or total_area <= 0
-                            or not np.isfinite(valid_area).item() or valid_area <= 0):
-                        continue
-
-                    # Keep geometric tile area and in-region coverage fraction
-                    # distinct. AGR boundary weighting is tracked in TODO.md;
-                    # when implemented, apply valid_area once and do not apply
-                    # this fraction a second time in AGR aggregation.
-                    gr_grid_mask.loc[{self.ydim: ycoord, self.xdim: xcoord}] = (valid_area / total_area).item()
-                    gr_grid_areas.loc[{self.ydim: ycoord, self.xdim: xcoord}] = total_area.item()
+            gr_grid_mask = self._coverage_fraction_on_geographic_grid(
+                mask_orig, area_orig, gr_grid_areas, grg_res, 'mask')
+            gr_grid_mask_full = self._coverage_fraction_on_geographic_grid(
+                full_mask_orig, area_orig, gr_grid_areas, grg_res, 'mask_full')
 
         self.gr_grid_mask = gr_grid_mask
+        self.gr_grid_mask_full = gr_grid_mask_full
         self.gr_grid_areas = gr_grid_areas
+
+    def _coverage_fraction_on_projected_grid(self, mask, area_grid, total_area, coarsen_dims, name):
+        mask_fraction = mask.fillna(0).clip(min=0, max=1)
+        in_region_area = (area_grid * mask_fraction).coarsen(
+            coarsen_dims, boundary='trim').sum(skipna=True)
+        return (in_region_area / total_area).where(total_area > 0).rename(name)
+
+    def _coverage_fraction_on_geographic_grid(self, mask, area_grid, gr_grid_areas, grg_res, name):
+        xcoords = gr_grid_areas[self.xdim].values
+        ycoords = gr_grid_areas[self.ydim].values
+        gr_grid_mask = xr.full_like(gr_grid_areas, np.nan).rename(name)
+        for ycoord in ycoords:
+            y_indices, y_weights = self._get_axis_overlap(
+                mask[self.ydim].values, ycoord, grg_res,
+                latitude=self.ydim.lower() in {'lat', 'latitude'})
+            if len(y_indices) == 0:
+                continue
+            for xcoord in xcoords:
+                x_indices, x_weights = self._get_axis_overlap(
+                    mask[self.xdim].values, xcoord, grg_res)
+                if len(x_indices) == 0:
+                    continue
+
+                indexers = {self.ydim: y_indices, self.xdim: x_indices}
+                overlap_weights = xr.DataArray(
+                    np.outer(y_weights, x_weights),
+                    coords={
+                        self.ydim: mask[self.ydim].isel({self.ydim: y_indices}),
+                        self.xdim: mask[self.xdim].isel({self.xdim: x_indices}),
+                    },
+                    dims=(self.ydim, self.xdim),
+                )
+                cell_area = area_grid.isel(indexers) * overlap_weights
+                total_area = cell_area.sum(skipna=True)
+                valid_area = (cell_area * mask.isel(indexers).fillna(0).clip(min=0, max=1)).sum(skipna=True)
+                if not np.isfinite(total_area).item() or total_area <= 0:
+                    continue
+                gr_grid_areas.loc[{self.ydim: ycoord, self.xdim: xcoord}] = total_area.item()
+                gr_grid_mask.loc[{self.ydim: ycoord, self.xdim: xcoord}] = (valid_area / total_area).item()
+        return gr_grid_mask
 
     def _calc_tea_ctp_at_ycoord(self, ycoord, xcoords=None):
         """

@@ -83,6 +83,78 @@ class TestGRGridGeneration:
         assert (tea.gr_grid_mask > 0).all()
         assert np.isfinite(tea.gr_grid_areas).all()
 
+    def test_geographic_boundary_fraction_is_applied_once_to_agr_area(self):
+        lat = np.array([51.0, 50.75, 50.5, 50.25])
+        lon = np.array([7.25, 7.5, 7.75, 8.0])
+        values = np.ones((len(lat), len(lon)))
+        values[1, 1] = 0.5
+        mask = xr.DataArray(values, coords={"lat": lat, "lon": lon}, dims=("lat", "lon"))
+        tea = TEAAgr(mask=mask, gr_grid_res=0.25, cell_size_y=0.2, land_frac_min=0)
+
+        tea.generate_gr_grid_mask()
+        tea._ref_mean = xr.Dataset({
+            "ED": xr.ones_like(tea.gr_grid_mask),
+            "threshold_avg": xr.ones_like(tea.gr_grid_mask),
+        })
+        tile_area = tea.gr_grid_areas.sel(lat=50.75, lon=7.5).item()
+        coverage = tea.gr_grid_mask.sel(lat=50.75, lon=7.5).item()
+
+        tea.calc_a_agr()
+
+        assert np.isclose(coverage, 0.5)
+        assert np.isclose(tea.agr_area_weights.sel(lat=50.75, lon=7.5).item(), tile_area * coverage)
+        assert np.isclose(tea.areas_elig.sel(lat=50.75, lon=7.5).item(), tile_area * coverage)
+        assert np.isclose(tea.areas_domain.sel(lat=50.75, lon=7.5).item(), tile_area * coverage)
+        assert np.isclose(tea.gr_grid_areas.sel(lat=50.75, lon=7.5).item(), tile_area)
+        assert np.isclose(tea.a_agr_full, tea.agr_area_weights.sum())
+
+    def test_full_area_uses_pre_altitude_coverage_while_domain_uses_filtered_coverage(self):
+        lat = np.array([51.0, 50.75, 50.5, 50.25])
+        lon = np.array([7.25, 7.5, 7.75, 8.0])
+        full_values = np.ones((len(lat), len(lon)))
+        filtered_values = full_values.copy()
+        filtered_values[1, 1] = 0.0
+        coords = {"lat": lat, "lon": lon}
+        full_mask = xr.DataArray(full_values, coords=coords, dims=("lat", "lon"))
+        filtered_mask = xr.DataArray(filtered_values, coords=coords, dims=("lat", "lon"))
+        tea = TEAAgr(mask=filtered_mask, full_mask=full_mask, gr_grid_res=0.25,
+                     cell_size_y=0.2, land_frac_min=0)
+
+        tea.generate_gr_grid_mask()
+        tea._ref_mean = xr.Dataset({
+            "ED": xr.ones_like(tea.gr_grid_mask),
+            "threshold_avg": xr.ones_like(tea.gr_grid_mask),
+        })
+        tile_area = tea.gr_grid_areas.sel(lat=50.75, lon=7.5).item()
+        filtered_coverage = tea.gr_grid_mask.sel(lat=50.75, lon=7.5).item()
+        full_coverage = tea.gr_grid_mask_full.sel(lat=50.75, lon=7.5).item()
+
+        tea.calc_a_agr()
+
+        assert np.isclose(filtered_coverage, 0.0)
+        assert np.isclose(full_coverage, 1.0)
+        assert np.isnan(tea.areas_domain.sel(lat=50.75, lon=7.5).item())
+        assert np.isclose(tea.areas_full.sel(lat=50.75, lon=7.5).item(), tile_area)
+        assert tea.a_agr_full > tea.a_agr_domain
+
+    def test_projected_fractional_mask_contributes_fractional_tile_area(self):
+        mask = xr.DataArray(
+            [[1.0, 0.5], [0.0, 1.0]],
+            coords={"y": [0.25, 0.0], "x": [0.0, 0.25]},
+            dims=("y", "x"),
+        )
+        tea = TEAAgr(mask=mask, gr_grid_res=0.5, cell_size_y=0.2, land_frac_min=0)
+        original_area = tea.area_grid.copy()
+
+        tea.generate_gr_grid_mask()
+
+        coverage = tea.gr_grid_mask.item()
+        tile_area = tea.gr_grid_areas.item()
+        in_region_area = tea._get_agr_area_weights().item()
+        assert np.isclose(coverage, 0.625)
+        assert np.isclose(tile_area, original_area.sum().item())
+        assert np.isclose(in_region_area, tile_area * coverage)
+        xr.testing.assert_equal(tea.gr_grid_areas, xr.ones_like(tea.gr_grid_areas) * tile_area)
 
 class TestCalcAreaWeightedMean:
     @pytest.fixture

@@ -98,7 +98,9 @@ def test_create_mask_file_writes_full_and_filtered_areas(monkeypatch):
     masks.create_mask_file(opts)
 
     result = captured['ds']
-    assert {'mask', 'area_grid_full', 'area_full', 'area_grid', 'area'} <= set(result.data_vars)
+    assert {'mask', 'mask_full', 'area_grid_full', 'area_full', 'area_grid', 'area'} <= set(result.data_vars)
     assert result.area_full.item() > result.area.item()
     assert np.isnan(result.area_grid.values[0, 1])
     assert np.isfinite(result.area_grid_full.values[0, 1])
+    assert np.isfinite(result.mask_full.values[0, 1])
+    assert np.isnan(result.mask.values[0, 1])

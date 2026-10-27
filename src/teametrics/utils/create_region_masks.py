@@ -211,6 +211,7 @@ def create_agr_mask(opts):
     if opts.altitude_threshold != 0:
         mask = _apply_altitude_threshold(mask, opts)
     ds = mask.to_dataset()
+    ds['mask_full'] = full_mask.rename('mask_full')
     if getattr(opts, 'calculate_area', False):
         ds = _add_area_variables(ds, full_mask, mask, opts)
     
@@ -420,6 +421,7 @@ def create_rectangular_gr(opts):
     else:
         full_mask = da_mask.copy()
     ds_mask = da_mask.to_dataset()
+    ds_mask['mask_full'] = full_mask.rename('mask_full')
     if getattr(opts, 'calculate_area', False):
         ds_mask = _add_area_variables(ds_mask, full_mask, da_mask, opts)
 
@@ -519,6 +521,7 @@ def create_mask_file(opts):
         da_mask = _apply_altitude_threshold(da_mask, opts)
         
     ds_mask = da_mask.to_dataset()
+    ds_mask['mask_full'] = full_mask.rename('mask_full')
     if getattr(opts, 'calculate_area', False):
         ds_mask = _add_area_variables(ds_mask, full_mask, da_mask, opts)
     create_history_from_cfg(cfg_params=opts, ds=ds_mask)

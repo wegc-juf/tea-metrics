@@ -10,7 +10,7 @@
 
 ## Older Issues
 - [ ] Load/regenerate AGR static grids before saving amplification factors, avoiding the intermediate AF write – calc_TEA.py:102-109
-- [ ] Apply GRG mask fractions once when deriving AGR area weights (including boundary tiles); keep reusable `gr_grid_areas` mask-independent – TEA_AGR.py:calc_a_agr, calc_agr_vars
+- [x] Apply GRG mask fractions once when deriving AGR area weights (including boundary tiles); keep reusable `gr_grid_areas` mask-independent – TEA_AGR.py:calc_a_agr, calc_agr_vars
 - [ ] Optimize TEA calculations for x y grids (xarray method) – TEA_AGR.py:153
 - [ ] Optimize code performance – TEA_AGR.py:612
 - [ ] Take values directly from file - overview-plots/plot_main-parameter.py:173,268
