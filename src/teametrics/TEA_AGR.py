@@ -153,6 +153,7 @@ class TEAAgr(TEAIndicators):
 
         aligned_area_grid = self._align_spatial_grid(self.area_grid, daily_grid)
         cell_area_grid = aligned_area_grid.isel(indexers) * overlap_weights
+        cell_area_grid.attrs = dict(aligned_area_grid.attrs)
 
         if self.land_frac_min > 0:
             aligned_lsm = self._align_spatial_grid(self.land_sea_mask, daily_grid)
@@ -177,16 +178,47 @@ class TEAAgr(TEAIndicators):
         if self.population_grid is not None:
             aligned_population_grid = self._align_spatial_grid(self.population_grid, daily_grid)
             cell_population_grid = aligned_population_grid.isel(indexers) * overlap_weights
+            cell_population_grid.attrs = dict(aligned_population_grid.attrs)
         else:
             cell_population_grid = None
         
         if len(cell_area_grid[self.ydim]) == 0 or len(cell_area_grid[self.xdim]) == 0:
             return None
 
-        # TODO: optimize for x y grids (xarray method)
-        # two options: either return data itself and stack to xarray then calculate TEA or return individual TEA objects
+        # TODO: optimize for x/y grids (xarray method); either stack the selected
+        # cells or calculate individual child TEA objects.
         tea_sub_gr = TEAIndicators(area_grid=cell_area_grid, min_area=self._min_area, unit=self.unit, ctp=self.CTP,
                                    threshold=cell_threshold_grid, population_grid=cell_population_grid)
+
+        def replace_daily_variable(name, values, attrs=None):
+            if attrs is None:
+                attrs = dict(cell_data[name].attrs) if name in cell_data else {}
+            cell_data[name] = values
+            cell_data[name].attrs = attrs
+
+        # The cached daily fields are extensive over each full source pixel.
+        # Rebuild their area-dependent forms from the fractionally weighted
+        # pixel areas before the child calculates GR-level aggregates.
+        replace_daily_variable('area_grid', cell_area_grid,
+                               dict(self.area_grid.attrs))
+        if 'DTEC' in cell_data:
+            dtea = cell_data.DTEC * cell_area_grid
+            replace_daily_variable('DTEA', dtea)
+            if 'DTEM' in cell_data:
+                replace_daily_variable('DTEMA', cell_data.DTEM * dtea)
+
+        # Population is extensive too. The child helper selects annual
+        # population by each day's year before deriving DTEP and DTEMP.
+        if cell_population_grid is not None:
+            replace_daily_variable('population_grid', cell_population_grid,
+                                   dict(cell_population_grid.attrs))
+            if 'DTEC' in cell_data:
+                population_by_day = tea_sub_gr._population_for_time(cell_data.time)
+                dtep = cell_data.DTEC * population_by_day / 10000
+                replace_daily_variable('DTEP', dtep)
+                if 'DTEM' in cell_data:
+                    replace_daily_variable('DTEMP', cell_data.DTEM * dtep)
+
         tea_sub_gr.set_daily_results(cell_data)
         return tea_sub_gr
 

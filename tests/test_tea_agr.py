@@ -234,6 +234,68 @@ class TestSelectSubGr:
         assert 0 < area_fraction < 1
         assert np.isclose(area_fraction, 0.25, atol=0.002)
         assert np.isclose(tea_sub.population_grid.item(), 100 * area_fraction)
+        xr.testing.assert_allclose(tea_sub.daily_results.area_grid, tea_sub.area_grid)
+        xr.testing.assert_allclose(
+            tea_sub.daily_results.DTEA,
+            tea_sub.daily_results.DTEC * tea_sub.area_grid,
+        )
+        xr.testing.assert_allclose(
+            tea_sub.daily_results.DTEMA,
+            tea_sub.daily_results.DTEM * tea_sub.daily_results.DTEA,
+        )
+        xr.testing.assert_allclose(
+            tea_sub.daily_results.DTEP,
+            tea_sub.daily_results.DTEC * tea_sub.population_grid / 10000,
+        )
+        xr.testing.assert_allclose(
+            tea_sub.daily_results.DTEMP,
+            tea_sub.daily_results.DTEM * tea_sub.daily_results.DTEP,
+        )
+
+    def test_small_cell_recomputes_annual_population_fields_by_year(self):
+        lat = np.arange(4.0, 0.0, -0.5)
+        lon = np.arange(0.0, 4.0, 0.5)
+        times = pd.to_datetime(["2000-01-01", "2001-01-01"])
+        data = xr.DataArray(
+            np.full((len(times), len(lat), len(lon)), 10.0),
+            coords={"time": times, "lat": lat, "lon": lon},
+            dims=("time", "lat", "lon"),
+            attrs={"coordinate_sys": EXPECTED_CRS},
+        )
+        threshold = xr.zeros_like(data.isel(time=0))
+        population = xr.DataArray(
+            np.stack([np.full((len(lat), len(lon)), 100.0),
+                      np.full((len(lat), len(lon)), 200.0)]),
+            coords={"year": [2000, 2001], "lat": lat, "lon": lon},
+            dims=("year", "lat", "lon"),
+            attrs={"units": "persons", "population_representation": "count_per_grid_cell"},
+        )
+        tea = TEAAgr(
+            input_data=data,
+            threshold=threshold,
+            population_grid=population,
+            unit="K",
+            cell_size_y=0.25,
+            land_frac_min=0,
+        )
+        tea.calc_daily_basis_vars(grid=True, gr=True)
+
+        tea_sub = tea.select_sub_gr(ycoord=3.0, xcoord=1.0)
+        daily_population = tea_sub._population_for_time(tea_sub.daily_results.time)
+        original_area = tea.area_grid.sel(lat=3.0, lon=1.0)
+        area_fraction = (tea_sub.area_grid / original_area).item()
+
+        expected_population = population.sel(lat=[3.0], lon=[1.0]) * area_fraction
+        xr.testing.assert_allclose(tea_sub.daily_results.population_grid, expected_population)
+        assert tea_sub.population_grid.attrs == population.attrs
+        xr.testing.assert_allclose(
+            tea_sub.daily_results.DTEP,
+            tea_sub.daily_results.DTEC * daily_population / 10000,
+        )
+        xr.testing.assert_allclose(
+            tea_sub.daily_results.DTEMP,
+            tea_sub.daily_results.DTEM * tea_sub.daily_results.DTEP,
+        )
 
     def test_axis_overlap_is_independent_of_coordinate_direction(self):
         ascending = TEAAgr._get_axis_overlap([0.0, 1.0, 2.0], 1.0, 0.5)
