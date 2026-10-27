@@ -10,6 +10,8 @@
 
 ## Older Issues
 - [ ] Load/regenerate AGR static grids before saving amplification factors, avoiding the intermediate AF write – calc_TEA.py:102-109
+- [ ] Review AGR boundary area weights: store in-region GRG tile area once and do not reapply the mask fraction downstream – TEA_AGR.py:generate_gr_grid_mask, calc_a_agr
+- [ ] Recompute overlap-weighted extensive daily sub-GR fields (`DTEA`, `DTEMA`, `DTEP`, `DTEMP`) before GR aggregation – TEA_AGR.py:select_sub_gr
 - [ ] Optimize TEA calculations for x y grids (xarray method) – TEA_AGR.py:153
 - [ ] Optimize code performance – TEA_AGR.py:612
 - [ ] Take values directly from file - overview-plots/plot_main-parameter.py:173,268

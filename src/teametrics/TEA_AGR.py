@@ -126,6 +126,9 @@ class TEAAgr(TEAIndicators):
         """
 
         daily_grid = self.get_daily_results(grid=True, gr=False)
+        # This is the local TEA calculation footprint centered on this GRG
+        # point. It is controlled by cell_size_y and can overlap neighboring
+        # footprints; AGR weighting later uses separate grg_grid_spacing tiles.
         y_indices, y_weights = self._get_axis_overlap(
             daily_grid[self.ydim].values, ycoord, self.cell_size_y,
             latitude=self.ydim.lower() in {'lat', 'latitude'})
@@ -189,7 +192,12 @@ class TEAAgr(TEAIndicators):
 
     @staticmethod
     def _get_axis_overlap(coordinates, center, cell_size, latitude=False):
-        """Return source pixel indices and fractional overlap with a cell axis."""
+        """Return source-pixel indices and footprint-overlap fractions.
+
+        Coordinates are source-raster pixel centers. The returned fraction for
+        each pixel is the fraction of its footprint covered by the requested
+        cell interval; latitude fractions use sine latitude for spherical area.
+        """
         coordinates = np.asarray(coordinates, dtype=float)
         if coordinates.size == 0:
             return np.array([], dtype=int), np.array([], dtype=float)
@@ -533,6 +541,9 @@ class TEAAgr(TEAIndicators):
         Returns:
 
         """
+        # AGR aggregation consumes the stored spacing-tile area weights as-is.
+        # Any in-region boundary fraction belongs in gr_grid_areas generation
+        # and must not be multiplied by gr_grid_mask again here.
         self.areas_elig = self.gr_grid_areas.where(self._ref_mean.ED > 0)
         self.a_agr_elig = self.areas_elig.sum()
         
@@ -756,7 +767,8 @@ class TEAAgr(TEAIndicators):
         # calculate error estimates for AGR mean (equation 42TODEFINE)
         r_earth = 6371
         u_earth = 2 * np.pi * r_earth
-        # # size of grid cell in 100 km^2
+        # This is the nominal local GR calculation footprint, not the
+        # spacing-tile area weights in gr_grid_areas.
         if self.xdim == 'lon':
             A_GR_full = (u_earth / 360 * self.cell_size_y) ** 2 / 100
         else:
@@ -947,6 +959,9 @@ class TEAAgr(TEAIndicators):
         generate mask for grid of GeoRegions
         """
         logger.info(f'Generating GR grid mask with resolution {self.gr_grid_res} degrees')
+        # grg_res defines each AGR weighting tile around a GRG center. This is
+        # separate from cell_size_y, which defines the local calculation
+        # footprint used by select_sub_gr and may overlap adjacent centers.
         grg_res = self.gr_grid_res
         mask_orig = self.mask
         area_orig = self._align_spatial_grid(self.area_grid, mask_orig)
@@ -1006,6 +1021,10 @@ class TEAAgr(TEAIndicators):
                             or not np.isfinite(valid_area).item() or valid_area <= 0):
                         continue
 
+                    # Keep geometric tile area and in-region coverage fraction
+                    # distinct. AGR boundary weighting is tracked in TODO.md;
+                    # when implemented, apply valid_area once and do not apply
+                    # this fraction a second time in AGR aggregation.
                     gr_grid_mask.loc[{self.ydim: ycoord, self.xdim: xcoord}] = (valid_area / total_area).item()
                     gr_grid_areas.loc[{self.ydim: ycoord, self.xdim: xcoord}] = total_area.item()
 
