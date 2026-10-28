@@ -249,7 +249,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
                                 cell_size_y=opts.grg_cell_size,
                                 rounding_decimal_places=opts.rounding_decimal_places, agr_frac_min=opts.agr_frac_min,
                                 land_frac_min=opts.land_frac_min, min_duration=opts.min_duration,
-                                parallel_workers=opts.parallel_workers,
+                                grg_tile_workers=opts.grg_tile_workers,
                                 zlib_compression=opts.zlib_compression)
         else:
             tea = TEA_class_obj(input_data=data, threshold=threshold, mask=mask,
@@ -297,7 +297,7 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
                                 rounding_decimal_places=opts.rounding_decimal_places,
                                 agr_frac_min=opts.agr_frac_min,
                                 compression_level=opts.compression_level,
-                                parallel_workers=opts.parallel_workers,
+                                  grg_tile_workers=opts.grg_tile_workers,
                                 zlib_compression=opts.zlib_compression)
         else:
             tea = TEA_class_obj(threshold=threshold, mask=mask, low_extreme=opts.low_extreme,

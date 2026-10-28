@@ -540,7 +540,7 @@ class TestParallelGrgTiles:
         mask = xr.ones_like(data.isel(time=0))
         tea = TEAAgr(input_data=data, threshold=xr.zeros_like(mask), mask=mask,
                      full_mask=mask, unit="K", gr_grid_res=0.5, cell_size_y=1.0,
-                     land_frac_min=0, parallel_workers=parallel_workers)
+                     land_frac_min=0, grg_tile_workers=parallel_workers)
         tea.calc_daily_basis_vars(grid=True, gr=True)
         tea.generate_gr_grid_mask()
         return tea

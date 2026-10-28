@@ -213,6 +213,8 @@ def _get_default_opts(fname, opts):
             opts.decadal_only = False
         if 'parallel_workers' not in opts:
             opts.parallel_workers = 1
+        if 'grg_tile_workers' not in opts:
+            opts.grg_tile_workers = 1
         if 'recalc_decadal' not in opts:
             opts.recalc_decadal = True
         if 'hourly' not in opts:
@@ -351,6 +353,7 @@ def check_type(key, value):
         'recalc_decadal': bool,
         'decadal_only': bool,
         'parallel_workers': int,
+        'grg_tile_workers': int,
         'mask_parallel_workers': int,
         'spreads': bool,
         'annual_spreads': bool,

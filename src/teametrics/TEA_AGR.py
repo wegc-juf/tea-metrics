@@ -65,7 +65,7 @@ class TEAAgr(TEAIndicators):
     def __init__(self, input_data=None, threshold=None, mask=None, full_mask=None, min_area=0.0001,
                  gr_grid_res=0.5, land_sea_mask=None, gr_grid_mask=None, gr_grid_areas=None,
                  land_frac_min=0.25, cell_size_y=2, agr_frac_min=0.25, min_duration=DEFAULT_MIN_DURATION,
-                 parallel_workers=1,
+                 grg_tile_workers=1,
                  **kwargs):
         """
         initialize TEA object
@@ -120,7 +120,7 @@ class TEAAgr(TEAIndicators):
         self.agr_frac_min = agr_frac_min
         
         self.min_duration = min_duration
-        self.parallel_workers = max(1, min(int(parallel_workers), 4))
+        self.grg_tile_workers = int(grg_tile_workers)
 
         # filter input data to valid cells
         if self.land_sea_mask is not None and self.input_data is not None:
@@ -478,18 +478,18 @@ class TEAAgr(TEAIndicators):
 
     def _get_grg_tile_workers(self):
         """Bound tile processes by the configured cap and available resources."""
-        if self.parallel_workers <= 1:
+        if self.grg_tile_workers <= 1:
             return 1
         cpu_count = max(1, os.cpu_count() or 1)
         try:
             import psutil
             available_memory = psutil.virtual_memory().available
         except ImportError:
-            return min(self.parallel_workers, cpu_count, 4)
+            return min(self.grg_tile_workers, cpu_count)
         # The cached 10-year daily fields occupy about 3 GiB when materialized;
         # leave room for each worker's local copy and temporary calculation arrays.
         workers_by_memory = max(1, available_memory // (4 * 1024 ** 3))
-        return min(self.parallel_workers, cpu_count, workers_by_memory, 4)
+        return min(self.grg_tile_workers, cpu_count, workers_by_memory)
 
     def _crop_to_shp(self):
         """
