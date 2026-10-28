@@ -281,6 +281,9 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
         # save results
         create_tea_history(cfg_params=opts, tea=tea, dataset='daily_results')
         tea.save_daily_results(filepath=dbv_filename, save_tiff=opts.file_format == 'GeoTiff')
+        if 'agr' in opts and os.path.isfile(dbv_filename):
+            logger.info('Reloading serialized daily basis variables before AGR CTP calculation.')
+            tea = _reload_daily_results_from_cache(tea, dbv_filename)
     else:
         # load existing results
         if 'agr' in opts:
@@ -311,7 +314,19 @@ def calc_dbv_indicators(start, end, threshold, opts, mask=None, gridded=True, ar
             'set --recalc-daily.')
         tea.load_daily_results(dbv_filename)
     tea._daily_cache_path = dbv_filename
-    tea._daily_cache_is_source = not recalculate_daily
+    tea._daily_cache_is_source = os.path.isfile(dbv_filename)
+    return tea
+
+
+def _reload_daily_results_from_cache(tea, dbv_filename):
+    """Use the serialized daily fields as the canonical input to AGR CTPs."""
+    if tea.daily_results is not None:
+        tea.daily_results.close()
+        tea.daily_results = None
+        gc.collect()
+    tea.load_daily_results(dbv_filename)
+    tea._daily_cache_path = dbv_filename
+    tea._daily_cache_is_source = True
     return tea
 
 

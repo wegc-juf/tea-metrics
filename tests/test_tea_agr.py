@@ -562,14 +562,28 @@ class TestParallelGrgTiles:
         serial = self._make_tea(parallel_workers=1)
         parallel = self._make_tea(parallel_workers=2)
         daily_cache = tmp_path / "daily.nc"
-        parallel.daily_results.to_netcdf(daily_cache)
-        parallel._daily_cache_path = str(daily_cache)
-        parallel._daily_cache_is_source = True
+        serial.save_daily_results(str(daily_cache))
+        from teametrics.calc_TEA import _reload_daily_results_from_cache
+        serial = _reload_daily_results_from_cache(serial, str(daily_cache))
+        parallel = _reload_daily_results_from_cache(parallel, str(daily_cache))
 
         serial.calc_annual_ctp_indicators("annual")
         parallel.calc_annual_ctp_indicators("annual")
 
         xr.testing.assert_allclose(serial.ctp_results, parallel.ctp_results)
+
+    def test_reloading_after_save_uses_persisted_daily_fields(self, tmp_path):
+        from teametrics.calc_TEA import _reload_daily_results_from_cache
+
+        tea = self._make_tea(parallel_workers=1)
+        daily_cache = tmp_path / "daily.nc"
+        tea.save_daily_results(str(daily_cache))
+
+        _reload_daily_results_from_cache(tea, str(daily_cache))
+
+        with xr.open_dataset(daily_cache) as persisted:
+            xr.testing.assert_equal(tea.daily_results, persisted.load())
+        assert tea._daily_cache_is_source is True
 
 
 class TestCalcWeightedPerc:
