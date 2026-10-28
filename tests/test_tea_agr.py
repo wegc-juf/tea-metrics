@@ -228,7 +228,7 @@ class TestCalcAreaWeightedMean:
 
 
 class TestSelectSubGr:
-    def test_dask_execution_is_preserved_and_spatially_chunked_in_sub_gr(self):
+    def test_small_sub_gr_uses_eager_numpy_even_when_parent_uses_dask(self):
         lat = np.arange(4.0, 0.0, -0.5)
         lon = np.arange(0.0, 4.0, 0.5)
         times = pd.date_range("2000-01-01", periods=2, freq="D")
@@ -244,11 +244,27 @@ class TestSelectSubGr:
 
         tea_sub = tea.select_sub_gr(ycoord=2.5, xcoord=1.0)
 
-        assert tea_sub.use_dask is True
-        assert all(size == 1 for size in tea_sub.daily_results.DTEC.chunksizes["lat"])
-        assert all(size == 1 for size in tea_sub.daily_results.DTEC.chunksizes["lon"])
-        assert len(tea_sub.daily_results.DTEC.chunksizes["lat"]) > 1
-        assert len(tea_sub.daily_results.DTEC.chunksizes["lon"]) > 1
+        assert tea_sub.use_dask is False
+        assert tea_sub.daily_results.DTEC.chunks is None
+
+    def test_large_sub_gr_uses_eager_numpy_even_when_parent_uses_dask(self):
+        lat = np.arange(4.0, 0.0, -0.5)
+        lon = np.arange(0.0, 4.0, 0.5)
+        times = pd.date_range("2000-01-01", periods=2, freq="D")
+        data = xr.DataArray(
+            np.full((len(times), len(lat), len(lon)), 10.0),
+            coords={"time": times, "lat": lat, "lon": lon},
+            dims=("time", "lat", "lon"),
+            attrs={"coordinate_sys": EXPECTED_CRS},
+        )
+        tea = TEAAgr(input_data=data, threshold=xr.zeros_like(data.isel(time=0)),
+                     unit="K", cell_size_y=2.0, land_frac_min=0, use_dask=True)
+        tea.calc_daily_basis_vars(grid=True, gr=True)
+
+        tea_sub = tea.select_sub_gr(ycoord=2.0, xcoord=1.5)
+
+        assert tea_sub.use_dask is False
+        assert tea_sub.daily_results.DTEC.chunks is None
 
     def test_sub_gr_selection_uses_daily_grid_coordinates(self):
         lat = np.arange(4.0, 0.0, -0.5)
@@ -507,6 +523,40 @@ class TestGetCTPResults:
             input_data=data, threshold=threshold,
             land_sea_mask=lsm, unit="K", gr_grid_res=1.0)
         assert tea.get_ctp_results() is tea.ctp_results
+
+
+class TestParallelGrgTiles:
+    @staticmethod
+    def _make_tea(parallel_workers):
+        lat = np.array([1.0, 0.5])
+        lon = np.array([0.0, 0.5])
+        times = pd.date_range("2000-01-01", periods=5, freq="D")
+        data = xr.DataArray(
+            np.full((len(times), len(lat), len(lon)), 10.0),
+            coords={"time": times, "lat": lat, "lon": lon},
+            dims=("time", "lat", "lon"),
+            attrs={"coordinate_sys": EXPECTED_CRS},
+        )
+        mask = xr.ones_like(data.isel(time=0))
+        tea = TEAAgr(input_data=data, threshold=xr.zeros_like(mask), mask=mask,
+                     full_mask=mask, unit="K", gr_grid_res=0.5, cell_size_y=1.0,
+                     land_frac_min=0, parallel_workers=parallel_workers)
+        tea.calc_daily_basis_vars(grid=True, gr=True)
+        tea.generate_gr_grid_mask()
+        return tea
+
+    def test_parallel_grg_tile_outputs_match_serial(self, tmp_path):
+        serial = self._make_tea(parallel_workers=1)
+        parallel = self._make_tea(parallel_workers=2)
+        daily_cache = tmp_path / "daily.nc"
+        parallel.daily_results.to_netcdf(daily_cache)
+        parallel._daily_cache_path = str(daily_cache)
+        parallel._daily_cache_is_source = True
+
+        serial.calc_annual_ctp_indicators("annual")
+        parallel.calc_annual_ctp_indicators("annual")
+
+        xr.testing.assert_allclose(serial.ctp_results, parallel.ctp_results)
 
 
 class TestCalcWeightedPerc:

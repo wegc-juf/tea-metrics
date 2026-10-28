@@ -6,17 +6,49 @@ Equation numbers refer to Supplementary Notes therin
 import warnings
 import time
 import os
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
+from copy import copy
 from typing import Any
 
 import xarray as xr
 import numpy as np
-from tqdm import trange
+from tqdm import trange, tqdm
 from xarray import Dataset
 
 from .common.var_attrs import get_attrs
 from .common.TEA_logger import logger
 from .TEA import TEAIndicators, DEFAULT_MIN_DURATION
 from .TEA import DEBUG
+
+
+_GRG_TILE_WORKER = None
+
+
+def _initialize_grg_tile_worker(tea, daily_results_path):
+    """Load a worker-local view of cached daily fields and static grids."""
+    global _GRG_TILE_WORKER
+    _GRG_TILE_WORKER = tea
+    _GRG_TILE_WORKER.use_dask = False
+    _GRG_TILE_WORKER.load_daily_results(daily_results_path)
+    _GRG_TILE_WORKER.daily_results.load()
+    _GRG_TILE_WORKER.daily_results.close()
+    _GRG_TILE_WORKER.area_grid.load()
+
+
+def _calculate_grg_tile(coord):
+    """Calculate one independent GRG tile and return its CTP results."""
+    ycoord, xcoord = coord
+    tea_sub = _GRG_TILE_WORKER.select_sub_gr(ycoord=ycoord, xcoord=xcoord)
+    if tea_sub is None:
+        return None
+
+    tea_sub.calc_daily_basis_vars(grid=False, gr=True)
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', message='invalid value encountered in multiply')
+        tea_sub.calc_annual_ctp_indicators(drop_daily_results=True)
+    ctp_results = tea_sub.get_ctp_results(gr=True, grid=False).compute()
+    return xcoord, ycoord, ctp_results
 
 
 class TEAAgr(TEAIndicators):
@@ -33,6 +65,7 @@ class TEAAgr(TEAIndicators):
     def __init__(self, input_data=None, threshold=None, mask=None, full_mask=None, min_area=0.0001,
                  gr_grid_res=0.5, land_sea_mask=None, gr_grid_mask=None, gr_grid_areas=None,
                  land_frac_min=0.25, cell_size_y=2, agr_frac_min=0.25, min_duration=DEFAULT_MIN_DURATION,
+                 parallel_workers=1,
                  **kwargs):
         """
         initialize TEA object
@@ -87,6 +120,7 @@ class TEAAgr(TEAIndicators):
         self.agr_frac_min = agr_frac_min
         
         self.min_duration = min_duration
+        self.parallel_workers = max(1, min(int(parallel_workers), 4))
 
         # filter input data to valid cells
         if self.land_sea_mask is not None and self.input_data is not None:
@@ -194,7 +228,7 @@ class TEAAgr(TEAIndicators):
         # cells or calculate individual child TEA objects.
         tea_sub_gr = TEAIndicators(area_grid=cell_area_grid, min_area=self._min_area, unit=self.unit, ctp=self.CTP,
                                    threshold=cell_threshold_grid, population_grid=cell_population_grid,
-                                   use_dask=self.use_dask)
+                                   use_dask=False)
 
         def replace_daily_variable(name, values, attrs=None):
             if attrs is None:
@@ -225,12 +259,9 @@ class TEAAgr(TEAIndicators):
                 if 'DTEM' in cell_data:
                     replace_daily_variable('DTEMP', cell_data.DTEM * dtep)
 
-        # A GRG cell still contains multiple source pixels. Keep those pixels
-        # as independent Dask chunks so its spatial reductions can execute on
-        # multiple threads. The normal input chunking is sized for a large
-        # domain and can otherwise leave a small GRG footprint as one chunk.
-        if self.use_dask and all(dim in cell_data.dims for dim in (self.ydim, self.xdim)):
-            cell_data = cell_data.chunk({self.ydim: 1, self.xdim: 1})
+        # Tile computations are eager. Materialize only this selected footprint
+        # before its NumPy/xarray reductions (also avoids repeated NetCDF reads).
+        cell_data = cell_data.compute() if self.use_dask else cell_data.load()
 
         tea_sub_gr.set_daily_results(cell_data)
         return tea_sub_gr
@@ -396,12 +427,69 @@ class TEAAgr(TEAIndicators):
         xcoords, ycoords = self._get_xy()
 
         valid_cells_found = False
-        for i_y in trange(len(ycoords), desc='Processing GRG cells'):
-            ycoord = ycoords[i_y]
-            valid_cells_found |= self._calc_tea_ctp_at_ycoord(ycoord, xcoords=xcoords)
+        workers = self._get_grg_tile_workers()
+        daily_results_path = getattr(self, '_daily_cache_path', None)
+        if (workers > 1 and os.name == 'posix'
+                and getattr(self, '_daily_cache_is_source', False)
+                and daily_results_path and os.path.isfile(daily_results_path)):
+            # Each spawned worker opens and loads its own daily cache once.
+            # This avoids copying parent state or forking a Dask-threaded
+            # process, and keeps repeated overlapping-tile reads in memory.
+            worker_tea = copy(self)
+            worker_tea.daily_results = None
+            worker_tea.input_data = None
+            worker_tea.ctp_results = None
+            worker_tea._daily_results_filtered = None
+            worker_tea._CTP_resample_sum = None
+            for name in ('mask', 'full_mask', 'land_sea_mask', 'threshold_grid',
+                         'gr_grid_mask', 'gr_grid_mask_full', 'gr_grid_areas', 'area_grid',
+                         'population_grid'):
+                value = getattr(worker_tea, name, None)
+                if isinstance(value, xr.DataArray):
+                    setattr(worker_tea, name, value.load())
+            coords = ((float(ycoord), float(xcoord)) for ycoord in ycoords for xcoord in xcoords)
+            context = multiprocessing.get_context('spawn')
+            logger.info(f'Calculating GRG tiles with {workers} worker processes.')
+            with ProcessPoolExecutor(
+                    max_workers=workers, mp_context=context,
+                    initializer=_initialize_grg_tile_worker,
+                    initargs=(worker_tea, daily_results_path)) as executor:
+                for result in tqdm(executor.map(_calculate_grg_tile, coords, chunksize=8),
+                                   total=len(ycoords) * len(xcoords), desc='Processing GRG cells'):
+                    if result is None:
+                        continue
+                    xcoord, ycoord, ctp_results = result
+                    self.set_ctp_results(xcoord, ycoord, ctp_results)
+                    valid_cells_found = True
+        else:
+            if workers > 1:
+                if os.name != 'posix':
+                    logger.info('GRG tile process parallelism is unavailable on this platform; '
+                                'calculating tiles serially.')
+                else:
+                    logger.info('GRG tile process parallelism requires a reusable daily cache; '
+                                'calculating tiles serially for this run.')
+            for i_y in trange(len(ycoords), desc='Processing GRG cells'):
+                ycoord = ycoords[i_y]
+                valid_cells_found |= self._calc_tea_ctp_at_ycoord(ycoord, xcoords=xcoords)
         if not valid_cells_found:
             logger.error('No valid cells found for annual CTP calculation. Try to decrease the land_frac_min '
                          'parameter or check the region definition. ')
+
+    def _get_grg_tile_workers(self):
+        """Bound tile processes by the configured cap and available resources."""
+        if self.parallel_workers <= 1:
+            return 1
+        cpu_count = max(1, os.cpu_count() or 1)
+        try:
+            import psutil
+            available_memory = psutil.virtual_memory().available
+        except ImportError:
+            return min(self.parallel_workers, cpu_count, 4)
+        # The cached 10-year daily fields occupy about 3 GiB when materialized;
+        # leave room for each worker's local copy and temporary calculation arrays.
+        workers_by_memory = max(1, available_memory // (4 * 1024 ** 3))
+        return min(self.parallel_workers, cpu_count, workers_by_memory, 4)
 
     def _crop_to_shp(self):
         """
