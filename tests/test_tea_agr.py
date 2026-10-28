@@ -228,6 +228,28 @@ class TestCalcAreaWeightedMean:
 
 
 class TestSelectSubGr:
+    def test_dask_execution_is_preserved_and_spatially_chunked_in_sub_gr(self):
+        lat = np.arange(4.0, 0.0, -0.5)
+        lon = np.arange(0.0, 4.0, 0.5)
+        times = pd.date_range("2000-01-01", periods=2, freq="D")
+        data = xr.DataArray(
+            np.full((len(times), len(lat), len(lon)), 10.0),
+            coords={"time": times, "lat": lat, "lon": lon},
+            dims=("time", "lat", "lon"),
+            attrs={"coordinate_sys": EXPECTED_CRS},
+        )
+        tea = TEAAgr(input_data=data, threshold=xr.zeros_like(data.isel(time=0)),
+                     unit="K", cell_size_y=1.5, land_frac_min=0, use_dask=True)
+        tea.calc_daily_basis_vars(grid=True, gr=True)
+
+        tea_sub = tea.select_sub_gr(ycoord=2.5, xcoord=1.0)
+
+        assert tea_sub.use_dask is True
+        assert all(size == 1 for size in tea_sub.daily_results.DTEC.chunksizes["lat"])
+        assert all(size == 1 for size in tea_sub.daily_results.DTEC.chunksizes["lon"])
+        assert len(tea_sub.daily_results.DTEC.chunksizes["lat"]) > 1
+        assert len(tea_sub.daily_results.DTEC.chunksizes["lon"]) > 1
+
     def test_sub_gr_selection_uses_daily_grid_coordinates(self):
         lat = np.arange(4.0, 0.0, -0.5)
         lon = np.arange(0.0, 4.0, 0.5)

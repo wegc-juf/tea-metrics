@@ -193,7 +193,8 @@ class TEAAgr(TEAIndicators):
         # TODO: optimize for x/y grids (xarray method); either stack the selected
         # cells or calculate individual child TEA objects.
         tea_sub_gr = TEAIndicators(area_grid=cell_area_grid, min_area=self._min_area, unit=self.unit, ctp=self.CTP,
-                                   threshold=cell_threshold_grid, population_grid=cell_population_grid)
+                                   threshold=cell_threshold_grid, population_grid=cell_population_grid,
+                                   use_dask=self.use_dask)
 
         def replace_daily_variable(name, values, attrs=None):
             if attrs is None:
@@ -223,6 +224,13 @@ class TEAAgr(TEAIndicators):
                 replace_daily_variable('DTEP', dtep)
                 if 'DTEM' in cell_data:
                     replace_daily_variable('DTEMP', cell_data.DTEM * dtep)
+
+        # A GRG cell still contains multiple source pixels. Keep those pixels
+        # as independent Dask chunks so its spatial reductions can execute on
+        # multiple threads. The normal input chunking is sized for a large
+        # domain and can otherwise leave a small GRG footprint as one chunk.
+        if self.use_dask and all(dim in cell_data.dims for dim in (self.ydim, self.xdim)):
+            cell_data = cell_data.chunk({self.ydim: 1, self.xdim: 1})
 
         tea_sub_gr.set_daily_results(cell_data)
         return tea_sub_gr
