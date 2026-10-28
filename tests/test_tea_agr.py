@@ -526,6 +526,19 @@ class TestGetCTPResults:
 
 
 class TestParallelGrgTiles:
+    def test_worker_count_above_sixteen_is_bounded_only_by_resources(self, monkeypatch):
+        import psutil
+
+        tea = TEAAgr(grg_tile_workers=40)
+        monkeypatch.setattr("teametrics.TEA_AGR.os.cpu_count", lambda: 64)
+        monkeypatch.setattr(
+            psutil,
+            "virtual_memory",
+            lambda: type("Memory", (), {"available": 256 * 1024 ** 3})(),
+        )
+
+        assert tea._get_grg_tile_workers() == 40
+
     @staticmethod
     def _make_tea(parallel_workers):
         lat = np.array([1.0, 0.5])

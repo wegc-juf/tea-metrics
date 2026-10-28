@@ -54,12 +54,12 @@ class TestParallelChunks:
         assert _get_chunk_workers(20) == 4
         assert _get_chunk_workers(20, max_workers=2) == 2
 
-    def test_grg_tile_worker_limit_accepts_sixteen(self):
+    def test_grg_tile_workers_have_no_fixed_upper_limit(self):
         from teametrics.common.config import check_type
 
-        check_type('grg_tile_workers', 16)
-        with pytest.raises(argparse.ArgumentTypeError, match='grg_tile_workers must be between 1 and 16'):
-            check_type('grg_tile_workers', 17)
+        check_type('grg_tile_workers', 40)
+        with pytest.raises(argparse.ArgumentTypeError, match='grg_tile_workers must be at least 1'):
+            check_type('grg_tile_workers', 0)
 
 
 class TestGetCTPFilepath:

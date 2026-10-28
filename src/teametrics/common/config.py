@@ -413,6 +413,8 @@ def check_type(key, value):
         raise argparse.ArgumentTypeError("compression_level must be between 0 and 9.")
     if key == 'parallel_workers' and not 1 <= value <= 4:
         raise argparse.ArgumentTypeError("parallel_workers must be between 1 and 4.")
+    if key == 'grg_tile_workers' and value < 1:
+        raise argparse.ArgumentTypeError("grg_tile_workers must be at least 1.")
     if key == 'mask_parallel_workers' and not 1 <= value <= 100:
         raise argparse.ArgumentTypeError("mask_parallel_workers must be between 1 and 100.")
     # check for correct unit

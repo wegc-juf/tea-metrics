@@ -64,7 +64,7 @@ calc_TEA:
   spreads: false
   annual_spreads: false
   decadal_only: false
-  grg_tile_workers: 16
+  grg_tile_workers: 40
 
 regrid_SPARTACUS_to_WEGNext:
   <<: *GR
