@@ -106,6 +106,11 @@ class TEAIndicators:
         elif area_grid is not None:
             self._find_dim_names(data=area_grid)
             self._crs = self._read_crs(area_grid)
+        elif input_data is not None:
+            # Area-grid creation below needs the active coordinate names; set
+            # them from input data before choosing geographic/projected logic.
+            self._find_dim_names(data=input_data)
+            self._crs = self._read_crs(input_data)
 
         self.apply_mask = apply_mask
 

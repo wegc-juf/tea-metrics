@@ -137,7 +137,7 @@ class TEAAgr(TEAIndicators):
         y_indices, y_weights = self._get_axis_overlap(
             daily_grid[self.ydim].values, ycoord, self.cell_size_y,
             latitude=self.ydim.lower() in {'lat', 'latitude'})
-        if self.xdim == 'lon':
+        if self._is_geographic_grid():
             cell_size_x = self.cell_size_y / np.cos(np.deg2rad(ycoord))
         else:
             cell_size_x = self.cell_size_y
@@ -266,6 +266,11 @@ class TEAAgr(TEAIndicators):
                               where=pixel_span > 0)
         indices = np.flatnonzero(has_overlap)
         return indices, fractions[indices]
+
+    def _is_geographic_grid(self):
+        """Return whether the active spatial dimensions identify lon/lat coordinates."""
+        return (self.xdim.lower() in {'lon', 'longitude'}
+                and self.ydim.lower() in {'lat', 'latitude'})
 
     def set_ctp_results(self, xcoord, ycoord, ctp_results):
         """
@@ -834,7 +839,7 @@ class TEAAgr(TEAIndicators):
         u_earth = 2 * np.pi * r_earth
         # This is the nominal local GR calculation footprint, not the
         # spacing-tile area weights in gr_grid_areas.
-        if self.xdim == 'lon':
+        if self._is_geographic_grid():
             A_GR_full = (u_earth / 360 * self.cell_size_y) ** 2 / 100
         else:
             A_GR_full = (self.cell_size_y / 1000) ** 2 / 100

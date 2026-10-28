@@ -257,6 +257,36 @@ class TestSelectSubGr:
         assert tea_sub is not None
         assert tea_sub.area_grid.sizes == {"lat": 1, "lon": 1}
 
+    def test_longitude_latitude_alias_uses_geographic_footprint_width(self):
+        latitude = np.arange(61.0, 59.0, -0.25)
+        longitude = np.arange(0.125, 3.0, 0.25)
+        times = pd.date_range("2000-01-01", periods=2, freq="D")
+        data = xr.DataArray(
+            np.full((len(times), len(latitude), len(longitude)), 10.0),
+            coords={"time": times, "latitude": latitude, "longitude": longitude},
+            dims=("time", "latitude", "longitude"),
+            attrs={"coordinate_sys": EXPECTED_CRS},
+        )
+        threshold = xr.zeros_like(data.isel(time=0))
+        tea = TEAAgr(input_data=data, threshold=threshold, unit="K", cell_size_y=0.5,
+                     land_frac_min=0)
+        tea.calc_daily_basis_vars(grid=True, gr=True)
+
+        tea_sub = tea.select_sub_gr(ycoord=60.0, xcoord=1.0)
+
+        assert tea_sub is not None
+        assert tea_sub.area_grid.sizes == {"latitude": 3, "longitude": 4}
+
+    def test_n_dof_uses_geographic_area_for_longitude_latitude_alias(self):
+        tea = TEAAgr()
+        tea.xdim = "longitude"
+        tea.ydim = "latitude"
+        tea.cell_size_y = 1.0
+        tea.a_agr_full = 100.0
+        expected_area = ((2 * np.pi * 6371 / 360) ** 2) / 100
+
+        assert np.isclose(tea._get_N_dof(), max(100.0 / expected_area, 1))
+
     def test_land_mask_is_aligned_by_coordinates_before_indexing(self):
         full_mask = xr.DataArray(
             np.zeros((4, 4)),
