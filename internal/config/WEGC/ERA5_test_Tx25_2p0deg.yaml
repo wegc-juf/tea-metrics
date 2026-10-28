@@ -38,16 +38,16 @@ create_region_masks:
   <<: *TIME
   <<: *GENERAL
   gr_type: polygon
-  sw_corner: null
-  ne_corner: null
-  center: null
-  we_len: null
-  ns_len: null
+  subreg: true
+  mask_parallel_workers: 32
   target_sys: 4326
-  shpfile: /home/pbr/work/python/test_NUTS/NUTS3_shape/AT221_Graz.shp
+  xy_name: lon,lat
+  #shpfile: /data/arsclisys/backup/clim-hydro/TEA-Indicators/shapefiles/AUSTRIA.shp
+  shpfile: /data/arsclisys/backup/clim-hydro/TEA-Indicators/shapefiles/SARext_shape.shp
   orofile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/ERA5_orography.nc
-  lsmfile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/ERA5_LSM.nc
-  outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/masks/
+  lsmfile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/ERA5_LSM.nc
+  outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/static/masks/
+
 
 calc_TEA:
   <<: *GR
@@ -63,7 +63,7 @@ calc_TEA:
   recalc_decadal: false
   spreads: false
   annual_spreads: false
-  decadal_only: true
+  decadal_only: false
 
 regrid_SPARTACUS_to_WEGNext:
   <<: *GR
