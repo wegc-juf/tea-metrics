@@ -388,7 +388,7 @@ class TEAAgr(TEAIndicators):
         xcoords, ycoords = self._get_xy()
 
         valid_cells_found = False
-        for i_y in trange(len(ycoords), desc='Processing AGR cells'):
+        for i_y in trange(len(ycoords), desc='Processing GRG cells'):
             ycoord = ycoords[i_y]
             valid_cells_found |= self._calc_tea_ctp_at_ycoord(ycoord, xcoords=xcoords)
         if not valid_cells_found:

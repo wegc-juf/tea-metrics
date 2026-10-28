@@ -28,7 +28,7 @@ common_params:
     mask_sub: masks/
     outpath: /tank/local/TEA/test/
   general: &GENERAL
-    use_dask: true
+    use_dask: auto
 
 create_region_masks:
   <<: *GR
