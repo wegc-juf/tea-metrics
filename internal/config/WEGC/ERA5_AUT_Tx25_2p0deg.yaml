@@ -7,6 +7,7 @@ common_params:
     agr: AUT
     grg_grid_spacing: 0.25
     grg_cell_size: 2
+    land_frac_min: .25
   parameter: &PARAM
     parameter: Tx
     precip: false
@@ -60,10 +61,10 @@ calc_TEA:
   recalc_daily: false
   hourly: false
   decadal: true
-  recalc_decadal: false
+  recalc_decadal: true
   spreads: false
   annual_spreads: false
-  decadal_only: false
+  decadal_only: true
   grg_tile_workers: 40
 
 regrid_SPARTACUS_to_WEGNext:
