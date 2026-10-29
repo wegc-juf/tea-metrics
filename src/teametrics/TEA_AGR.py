@@ -1133,23 +1133,35 @@ class TEAAgr(TEAIndicators):
         grg_res = self.gr_grid_res
         self.gr_grid_mask = None
         mask_orig = self.mask
-        full_mask_orig = self._align_spatial_grid(self.full_mask, mask_orig)
+        source_mask = self.full_mask
+        full_mask_orig = self._align_spatial_grid(source_mask, mask_orig)
         area_orig = self._align_spatial_grid(self.area_grid, mask_orig)
         res_orig = self._y_resolution_in
         # gr_grid_areas stores full spacing-tile areas; gr_grid_mask stores
         # altitude-filtered regional coverage; gr_grid_mask_full stores
         # pre-altitude regional coverage. AGR uses each for its respective area.
         if self.xdim == 'x':
-            # try to aggregate using coarsen (vectorized)
-            factor = int(round(grg_res / res_orig)) if res_orig is not None else None
-            if factor is None or factor < 1:
+            ratio = grg_res / res_orig if res_orig is not None else np.nan
+            factor = int(round(ratio)) if np.isfinite(ratio) else None
+            if (factor is None or factor < 1
+                    or not np.isclose(ratio, factor, rtol=1e-5, atol=1e-8)):
                 raise ValueError('Invalid grid resolution ratio for cartesian grid')
             coarsen_dims = {self.ydim: factor, self.xdim: factor}
-            total_area = area_orig.coarsen(coarsen_dims, boundary='trim').sum()
+            coarsen_slices = {}
+            for dim in (self.ydim, self.xdim):
+                start, stop = self._get_projected_coarsen_slice(
+                    source_mask[dim].values, mask_orig[dim].values, factor, dim)
+                coarsen_slices[dim] = slice(start, stop)
+            projected_mask = mask_orig.isel(coarsen_slices)
+            projected_full_mask = full_mask_orig.isel(coarsen_slices)
+            projected_area = area_orig.isel(coarsen_slices)
+            if any(projected_area.sizes[dim] == 0 for dim in coarsen_dims):
+                raise ValueError('The projected mask crop does not contain a complete GRG tile.')
+            total_area = projected_area.coarsen(coarsen_dims, boundary='trim').sum()
             gr_grid_mask = self._coverage_fraction_on_projected_grid(
-                mask_orig, area_orig, total_area, coarsen_dims, 'mask')
+                projected_mask, projected_area, total_area, coarsen_dims, 'mask')
             gr_grid_mask_full = self._coverage_fraction_on_projected_grid(
-                full_mask_orig, area_orig, total_area, coarsen_dims, 'mask_full')
+                projected_full_mask, projected_area, total_area, coarsen_dims, 'mask_full')
             gr_grid_areas = total_area.rename('area_grid')
         else:
             xcoords, ycoords = self._get_xy()
@@ -1164,6 +1176,33 @@ class TEAAgr(TEAIndicators):
         self.gr_grid_mask = gr_grid_mask
         self.gr_grid_mask_full = gr_grid_mask_full
         self.gr_grid_areas = gr_grid_areas
+
+    @staticmethod
+    def _get_projected_coarsen_slice(source_coords, crop_coords, factor, dim):
+        """Trim a projected crop to blocks aligned with the source-grid origin."""
+        source_coords = np.asarray(source_coords, dtype=float)
+        crop_coords = np.asarray(crop_coords, dtype=float)
+        if source_coords.size < 2 or crop_coords.size == 0:
+            raise ValueError(f'Cannot align projected coarsening along {dim!r}: insufficient coordinates.')
+
+        source_steps = np.diff(source_coords)
+        source_step = float(source_steps[0])
+        tolerance = max(abs(source_step) * 1e-6, np.finfo(float).eps * max(1, abs(source_coords[0])) * 4)
+        if not np.allclose(source_steps, source_step, rtol=1e-5, atol=tolerance):
+            raise ValueError(f'Projected coarsening requires regular source coordinates along {dim!r}.')
+
+        offset = (crop_coords[0] - source_coords[0]) / source_step
+        start_index = int(round(offset))
+        if (start_index < 0 or start_index + crop_coords.size > source_coords.size
+                or not np.isclose(offset, start_index, rtol=0, atol=tolerance / abs(source_step))
+                or not np.allclose(source_coords[start_index:start_index + crop_coords.size], crop_coords,
+                                   rtol=0, atol=tolerance)):
+            raise ValueError(f'Projected crop coordinates along {dim!r} are not a contiguous subset '
+                             'of the original source grid.')
+
+        start = (-start_index) % factor
+        stop = crop_coords.size - ((crop_coords.size - start) % factor)
+        return start, stop
 
     def _coverage_fraction_on_projected_grid(self, mask, area_grid, total_area, coarsen_dims, name):
         mask_fraction = mask.fillna(0).clip(min=0, max=1)

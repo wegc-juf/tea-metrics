@@ -620,10 +620,13 @@ def _load_or_generate_gr_grid_static(opts, tea):
     gr_grid_mask, gr_grid_areas, gr_grid_mask_full = _load_gr_grid_static(opts)
     if (gr_grid_mask is not None and gr_grid_areas is not None
             and gr_grid_mask_full is not None
-            and not _gr_grid_static_is_usable(gr_grid_mask, gr_grid_areas)):
-        logger.warning('Cached GR grid mask/area contain no valid cells; regenerating the static grid.')
+            and (not _gr_grid_static_is_usable(gr_grid_mask, gr_grid_areas)
+                 or not _gr_grid_static_matches_source_lattice(gr_grid_mask, tea))):
+        logger.warning('Cached GR grid mask/area are invalid or use a shifted projected lattice; '
+                       'regenerating the static grid.')
         gr_grid_mask.close()
         gr_grid_areas.close()
+        gr_grid_mask_full.close()
         gr_grid_mask = None
         gr_grid_areas = None
         gr_grid_mask_full = None
@@ -637,26 +640,37 @@ def _load_or_generate_gr_grid_static(opts, tea):
         # A subregion's static GRG grid is a valid subset of a wider CTP grid.
         # Check coverage only over the tile-coordinate extent needed by its mask,
         # then align the cached subset onto the reference axes below.
-        cache_covers_reference = _gr_grid_static_covers_reference(
-            gr_grid_mask, reference_grid, region_mask=tea.mask,
-            cell_size_y=getattr(opts, 'grg_cell_size', tea.cell_size_y),
+        cache_covers_reference = (
+            _gr_grid_static_matches_source_lattice(gr_grid_mask, tea)
+            and _gr_grid_static_covers_reference(
+                gr_grid_mask, reference_grid, region_mask=tea.mask,
+                cell_size_y=getattr(opts, 'grg_cell_size', tea.cell_size_y),
+            )
         )
         if cache_covers_reference:
-            gr_grid_mask = tea._align_spatial_grid(gr_grid_mask, reference_grid)
-            gr_grid_areas = tea._align_spatial_grid(gr_grid_areas, reference_grid)
-            gr_grid_mask_full = tea._align_spatial_grid(gr_grid_mask_full, reference_grid)
+            gr_grid_mask = _reindex_gr_grid_static_to_reference(gr_grid_mask, reference_grid)
+            gr_grid_areas = _reindex_gr_grid_static_to_reference(gr_grid_areas, reference_grid)
+            gr_grid_mask_full = _reindex_gr_grid_static_to_reference(gr_grid_mask_full, reference_grid)
 
     if (gr_grid_mask is None or gr_grid_areas is None or gr_grid_mask_full is None
             or not cache_covers_reference):
-        if reference_grid is not None:
-            # Static region masks may cover a much broader domain than the
-            # CTP reference data. Generate the cached GRG grid on the reference
-            # coordinates so later runs can reuse it without extent mismatch.
-            tea.mask = tea._align_spatial_grid(tea.mask, reference_grid)
-            tea.full_mask = tea._align_spatial_grid(tea.full_mask, reference_grid)
-            tea.area_grid = tea._align_spatial_grid(tea.area_grid, reference_grid)
+        # Generate from the native-resolution mask/area grids. Aligning these
+        # rasters to the coarser CTP grid before coarsening changes the projected
+        # block origin and can shift GRG centers for subregion crops.
         tea.gr_grid_mask = None
         tea.generate_gr_grid_mask()
+        if reference_grid is not None:
+            cell_size_y = getattr(opts, 'grg_cell_size', tea.cell_size_y)
+            if not _gr_grid_static_covers_reference(
+                    tea.gr_grid_mask, reference_grid,
+                    region_mask=tea.mask, cell_size_y=cell_size_y):
+                raise ValueError(
+                    'Regenerated GRG static grid does not match the CTP reference lattice over the region. '
+                    'Recalculate daily/CTP results to use the source-grid-aligned GRG lattice.')
+            tea.gr_grid_mask = _reindex_gr_grid_static_to_reference(tea.gr_grid_mask, reference_grid)
+            tea.gr_grid_areas = _reindex_gr_grid_static_to_reference(tea.gr_grid_areas, reference_grid)
+            tea.gr_grid_mask_full = _reindex_gr_grid_static_to_reference(
+                tea.gr_grid_mask_full, reference_grid)
         _save_grg_mask(opts, tea.gr_grid_mask, tea.gr_grid_areas, tea.gr_grid_mask_full)
     else:
         # set GR grid mask and area grid
@@ -673,6 +687,29 @@ def _gr_grid_static_is_usable(gr_grid_mask, gr_grid_areas):
     mask_has_cells = bool((gr_grid_mask > 0).any().compute().item())
     area_has_cells = bool((np.isfinite(gr_grid_areas) & (gr_grid_areas > 0)).any().compute().item())
     return mask_has_cells and area_has_cells
+
+
+def _gr_grid_static_matches_source_lattice(gr_grid_mask, tea):
+    """Check that projected static centers use the original source-grid block phase."""
+    if tea.xdim != 'x':
+        return True
+    resolution = tea._y_resolution_in
+    ratio = tea.gr_grid_res / resolution if resolution else np.nan
+    factor = int(round(ratio)) if np.isfinite(ratio) else None
+    if (factor is None or factor < 1
+            or not np.isclose(ratio, factor, rtol=1e-5, atol=1e-8)):
+        return False
+
+    source_grid = tea.full_mask
+    for dim in (tea.ydim, tea.xdim):
+        source_coords = np.asarray(source_grid[dim].values, dtype=float)
+        if source_coords.size < factor:
+            return False
+        complete_size = source_coords.size - source_coords.size % factor
+        expected_coords = source_coords[:complete_size].reshape(-1, factor).mean(axis=1)
+        if not _coordinates_are_covered(expected_coords, gr_grid_mask[dim].values):
+            return False
+    return True
 
 
 def _gr_grid_static_covers_reference(gr_grid_mask, reference_grid, region_mask=None, cell_size_y=None):
@@ -700,6 +737,15 @@ def _gr_grid_static_covers_reference(gr_grid_mask, reference_grid, region_mask=N
         and _coordinates_are_covered(gr_grid_mask[dim].values, required_coords[dim])
         for dim in (xdim, ydim)
     )
+
+
+def _reindex_gr_grid_static_to_reference(static_grid, reference_grid):
+    """Align GRG static values by exact tile coordinates, leaving absent tiles NaN."""
+    xdim, ydim = TEAIndicators.find_dim_names(reference_grid)
+    return static_grid.reindex({
+        xdim: reference_grid[xdim].values,
+        ydim: reference_grid[ydim].values,
+    })
 
 
 def _coordinates_are_covered(available_coords, required_coords):

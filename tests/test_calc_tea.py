@@ -130,6 +130,82 @@ class TestSubregionGrgStaticCoverage:
         assert np.isnan(tea.gr_grid_mask.sel(lat=0.0, lon=0.0))
         assert tea.gr_grid_mask.sel(lat=5.0, lon=10.0).item() == 1.0
 
+    def test_shifted_projected_cache_regenerates_from_native_mask_lattice(self, monkeypatch):
+        import teametrics.calc_TEA as calc_tea_module
+        from teametrics.TEA_AGR import TEAAgr
+
+        source_coords = {
+            "y": np.arange(7000.0, -1.0, -1000.0),
+            "x": np.arange(0.0, 8000.0, 1000.0),
+        }
+        source_mask = xr.DataArray(
+            np.ones((8, 8)), coords=source_coords, dims=("y", "x"), name="mask_full")
+        cropped_mask = source_mask.isel(y=slice(1, 7), x=slice(1, 7)).rename("mask")
+        tea = TEAAgr(mask=cropped_mask, full_mask=source_mask, gr_grid_res=2000,
+                     cell_size_y=1500, land_frac_min=0)
+        expected = TEAAgr(mask=source_mask, full_mask=source_mask, gr_grid_res=2000,
+                          cell_size_y=1500, land_frac_min=0)
+        expected.generate_gr_grid_mask()
+        reference_coords = {
+            "y": expected.gr_grid_mask.y.values[1:3],
+            "x": expected.gr_grid_mask.x.values[1:3],
+        }
+        reference = xr.Dataset(
+            {"ED": ( ("y", "x"), np.ones((2, 2)) )}, coords=reference_coords)
+        tea._ref_mean = reference
+
+        shifted_coords = {
+            "y": reference_coords["y"] + 1000,
+            "x": reference_coords["x"] - 1000,
+        }
+        shifted_mask = xr.DataArray(
+            np.ones((2, 2)), coords=shifted_coords, dims=("y", "x"), name="mask")
+        shifted_full_mask = shifted_mask.rename("mask_full")
+        shifted_areas = shifted_mask.rename("area_grid")
+        saved = {}
+        monkeypatch.setattr(
+            calc_tea_module, "_load_gr_grid_static",
+            lambda opts: (shifted_mask, shifted_areas, shifted_full_mask))
+        monkeypatch.setattr(
+            calc_tea_module, "_save_grg_mask",
+            lambda opts, mask, areas, full_mask: saved.update(mask=mask, areas=areas, full_mask=full_mask))
+
+        calc_tea_module._load_or_generate_gr_grid_static(
+            SimpleNamespace(grg_cell_size=1500, recalc_decadal=False), tea)
+
+        xr.testing.assert_equal(tea.mask.x, cropped_mask.x)
+        xr.testing.assert_equal(tea.gr_grid_mask.x, reference.x)
+        xr.testing.assert_equal(tea.gr_grid_mask.y, reference.y)
+        xr.testing.assert_equal(saved["mask"], tea.gr_grid_mask)
+
+    def test_shifted_projected_cache_rejects_old_shifted_ctp_lattice(self, monkeypatch):
+        import teametrics.calc_TEA as calc_tea_module
+        from teametrics.TEA_AGR import TEAAgr
+
+        source_coords = {
+            "y": np.arange(7000.0, -1.0, -1000.0),
+            "x": np.arange(0.0, 8000.0, 1000.0),
+        }
+        source_mask = xr.DataArray(
+            np.ones((8, 8)), coords=source_coords, dims=("y", "x"), name="mask_full")
+        cropped_mask = source_mask.isel(y=slice(1, 7), x=slice(1, 7)).rename("mask")
+        tea = TEAAgr(mask=cropped_mask, full_mask=source_mask, gr_grid_res=2000,
+                     cell_size_y=1500, land_frac_min=0)
+        shifted_coords = {"y": [5500.0, 3500.0], "x": [1500.0, 3500.0]}
+        shifted_mask = xr.DataArray(
+            np.ones((2, 2)), coords=shifted_coords, dims=("y", "x"), name="mask")
+        shifted_full_mask = shifted_mask.rename("mask_full")
+        shifted_areas = shifted_mask.rename("area_grid")
+        tea._ref_mean = xr.Dataset(
+            {"ED": (("y", "x"), np.ones((2, 2)))}, coords=shifted_coords)
+        monkeypatch.setattr(
+            calc_tea_module, "_load_gr_grid_static",
+            lambda opts: (shifted_mask, shifted_areas, shifted_full_mask))
+
+        with pytest.raises(ValueError, match='Recalculate daily/CTP results'):
+            calc_tea_module._load_or_generate_gr_grid_static(
+                SimpleNamespace(grg_cell_size=1500, recalc_decadal=False), tea)
+
 
 class TestGetCTPFilepath:
     def test_get_ctp_filepath_creates_dir(self, tmp_path):

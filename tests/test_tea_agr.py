@@ -156,6 +156,49 @@ class TestGRGridGeneration:
         assert np.isclose(in_region_area, tile_area * coverage)
         xr.testing.assert_equal(tea.gr_grid_areas, xr.ones_like(tea.gr_grid_areas) * tile_area)
 
+    def test_projected_crop_keeps_source_anchored_grg_lattice(self, monkeypatch):
+        from teametrics.calc_TEA import _reindex_gr_grid_static_to_reference
+
+        source_coords = {
+            "y": np.arange(7000.0, -1.0, -1000.0),
+            "x": np.arange(0.0, 8000.0, 1000.0),
+        }
+        source_mask = xr.DataArray(
+            np.ones((8, 8)), coords=source_coords, dims=("y", "x"), name="mask")
+        cropped_mask = source_mask.isel(y=slice(1, 7), x=slice(1, 7))
+
+        full_tea = TEAAgr(mask=source_mask, full_mask=source_mask, gr_grid_res=2000,
+                          cell_size_y=1500, land_frac_min=0)
+        crop_tea = TEAAgr(mask=cropped_mask, full_mask=source_mask, gr_grid_res=2000,
+                          cell_size_y=1500, land_frac_min=0)
+        full_tea.generate_gr_grid_mask()
+        crop_tea.generate_gr_grid_mask()
+
+        assert np.isin(crop_tea.gr_grid_mask.x, full_tea.gr_grid_mask.x).all()
+        assert np.isin(crop_tea.gr_grid_mask.y, full_tea.gr_grid_mask.y).all()
+        assert np.allclose(crop_tea.gr_grid_mask.x, [2500.0, 4500.0])
+        assert np.allclose(crop_tea.gr_grid_mask.y, [4500.0, 2500.0])
+
+        reference = xr.Dataset(
+            {"ED": xr.ones_like(full_tea.gr_grid_mask)},
+            coords={"y": full_tea.gr_grid_mask.y, "x": full_tea.gr_grid_mask.x},
+        )
+        crop_tea.gr_grid_mask = _reindex_gr_grid_static_to_reference(crop_tea.gr_grid_mask, reference)
+        crop_tea.gr_grid_mask_full = _reindex_gr_grid_static_to_reference(
+            crop_tea.gr_grid_mask_full, reference)
+        crop_tea.gr_grid_areas = _reindex_gr_grid_static_to_reference(crop_tea.gr_grid_areas, reference)
+        crop_tea._ref_mean = reference
+        crop_tea._cc_mean = reference.copy()
+        crop_tea.decadal_results = reference.copy()
+        crop_tea.amplification_factors = reference.copy()
+        crop_tea.ctp_results = reference.copy()
+        monkeypatch.setattr(crop_tea, "_crop_to_gr_mask_extents", lambda: None)
+
+        crop_tea._crop_to_shp()
+
+        xr.testing.assert_equal(crop_tea._ref_mean.x, reference.x)
+        xr.testing.assert_equal(crop_tea._ref_mean.y, reference.y)
+
 class TestCalcAreaWeightedMean:
     @pytest.fixture
     def tea_agr_basic(self):
