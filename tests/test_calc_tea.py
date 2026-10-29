@@ -62,6 +62,75 @@ class TestParallelChunks:
             check_type('grg_tile_workers', 0)
 
 
+class TestSubregionGrgStaticCoverage:
+    @staticmethod
+    def _grids():
+        from teametrics.TEA_AGR import TEAAgr
+
+        lat = np.arange(0.0, 15.0, 0.25)
+        lon = np.arange(0.0, 20.0, 0.25)
+        coords = {"lat": lat, "lon": lon}
+        mask_values = np.zeros((len(lat), len(lon)))
+        mask_values[20:22, 40:42] = 1.0
+        region_mask = xr.DataArray(mask_values, coords=coords, dims=("lat", "lon"))
+        reference = xr.Dataset(
+            {"ED": (("lat", "lon"), np.ones_like(mask_values))},
+            coords=coords,
+        )
+
+        # The region cache is only a subset of the larger CTP coordinate grid,
+        # but it covers the region mask extent plus the two-degree tile margin.
+        cached_lat = lat[(lat >= 3.0) & (lat <= 8.0)]
+        cached_lon = lon[(lon >= 8.0) & (lon <= 13.0)]
+        cached_coords = {"lat": cached_lat, "lon": cached_lon}
+        cached_shape = (len(cached_lat), len(cached_lon))
+        cached_mask = xr.DataArray(
+            np.ones(cached_shape), coords=cached_coords, dims=("lat", "lon"), name="mask"
+        )
+        cached_full_mask = cached_mask.rename("mask_full")
+        cached_areas = xr.DataArray(
+            np.ones(cached_shape), coords=cached_coords, dims=("lat", "lon"), name="area_grid"
+        )
+        tea = TEAAgr(mask=region_mask, full_mask=region_mask, gr_grid_res=0.25,
+                     cell_size_y=2.0, land_frac_min=0)
+        tea._ref_mean = reference
+        return tea, reference, region_mask, cached_mask, cached_full_mask, cached_areas
+
+    def test_subset_static_cache_covers_only_the_region_extent(self):
+        from teametrics.calc_TEA import _gr_grid_static_covers_reference
+
+        tea, reference, region_mask, cached_mask, _, _ = self._grids()
+
+        assert not _gr_grid_static_covers_reference(cached_mask, reference)
+        assert _gr_grid_static_covers_reference(
+            cached_mask, reference, region_mask=region_mask, cell_size_y=2.0
+        )
+
+    def test_subset_cache_is_aligned_without_regenerating(self, monkeypatch):
+        import teametrics.calc_TEA as calc_tea_module
+
+        tea, reference, _, cached_mask, cached_full_mask, cached_areas = self._grids()
+        monkeypatch.setattr(
+            calc_tea_module,
+            "_load_gr_grid_static",
+            lambda opts: (cached_mask, cached_areas, cached_full_mask),
+        )
+        monkeypatch.setattr(
+            tea,
+            "generate_gr_grid_mask",
+            lambda: pytest.fail("A valid subregion cache should not be regenerated."),
+        )
+
+        calc_tea_module._load_or_generate_gr_grid_static(
+            SimpleNamespace(grg_cell_size=2.0, recalc_decadal=False), tea
+        )
+
+        assert tea.gr_grid_mask.sizes == reference.sizes
+        assert tea.gr_grid_areas.sizes == reference.sizes
+        assert np.isnan(tea.gr_grid_mask.sel(lat=0.0, lon=0.0))
+        assert tea.gr_grid_mask.sel(lat=5.0, lon=10.0).item() == 1.0
+
+
 class TestGetCTPFilepath:
     def test_get_ctp_filepath_creates_dir(self, tmp_path):
         from argparse import Namespace

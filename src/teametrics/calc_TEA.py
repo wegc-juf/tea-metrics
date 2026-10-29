@@ -634,7 +634,13 @@ def _load_or_generate_gr_grid_static(opts, tea):
     cache_covers_reference = True
     if (reference_grid is not None and gr_grid_mask is not None and gr_grid_areas is not None
             and gr_grid_mask_full is not None):
-        cache_covers_reference = _gr_grid_static_covers_reference(gr_grid_mask, reference_grid)
+        # A subregion's static GRG grid is a valid subset of a wider CTP grid.
+        # Check coverage only over the tile-coordinate extent needed by its mask,
+        # then align the cached subset onto the reference axes below.
+        cache_covers_reference = _gr_grid_static_covers_reference(
+            gr_grid_mask, reference_grid, region_mask=tea.mask,
+            cell_size_y=getattr(opts, 'grg_cell_size', tea.cell_size_y),
+        )
         if cache_covers_reference:
             gr_grid_mask = tea._align_spatial_grid(gr_grid_mask, reference_grid)
             gr_grid_areas = tea._align_spatial_grid(gr_grid_areas, reference_grid)
@@ -669,12 +675,29 @@ def _gr_grid_static_is_usable(gr_grid_mask, gr_grid_areas):
     return mask_has_cells and area_has_cells
 
 
-def _gr_grid_static_covers_reference(gr_grid_mask, reference_grid):
-    """Check if cached GRG axes contain every coordinate used by CTP data."""
+def _gr_grid_static_covers_reference(gr_grid_mask, reference_grid, region_mask=None, cell_size_y=None):
+    """Check cached GRG axes cover the reference area needed by a region mask.
+
+    When no region mask is supplied, retain the full-reference coverage check.
+    A subregion grid may use fewer coordinates than the CTP reference grid, as
+    long as it covers the region's mask extent and shares the reference lattice.
+    """
     xdim, ydim = TEAIndicators.find_dim_names(reference_grid)
+    required_coords = {xdim: reference_grid[xdim].values, ydim: reference_grid[ydim].values}
+    if region_mask is not None and cell_size_y is not None:
+        try:
+            x_min, y_min, x_max, y_max = _calc_x_y_range(cell_size_y, region_mask)
+        except (ValueError, TypeError, IndexError):
+            return False
+        required_coords = {
+            xdim: required_coords[xdim][(required_coords[xdim] >= x_min)
+                                        & (required_coords[xdim] <= x_max)],
+            ydim: required_coords[ydim][(required_coords[ydim] >= y_min)
+                                        & (required_coords[ydim] <= y_max)],
+        }
     return all(
         dim in gr_grid_mask.coords
-        and _coordinates_are_covered(gr_grid_mask[dim].values, reference_grid[dim].values)
+        and _coordinates_are_covered(gr_grid_mask[dim].values, required_coords[dim])
         for dim in (xdim, ydim)
     )
 
