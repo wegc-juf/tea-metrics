@@ -72,6 +72,9 @@ def test_joint_series_records_the_source_transition():
     assert "Do not use" in result.attrs["trend_use_warning"]
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Use .* matmul instead of .* mul operator for matrix multiplication:PendingDeprecationWarning"
+)
 def test_destination_grid_defines_exact_output_grid_and_conserves_counts(tmp_path):
     population = xr.Dataset(
         {
