@@ -1145,7 +1145,7 @@ class TEAAgr(TEAIndicators):
             if factor is None or factor < 1:
                 raise ValueError('Invalid grid resolution ratio for cartesian grid')
             coarsen_dims = {self.ydim: factor, self.xdim: factor}
-            total_area = area_orig.coarsen(coarsen_dims, boundary='trim').sum(skipna=True)
+            total_area = area_orig.coarsen(coarsen_dims, boundary='trim').sum()
             gr_grid_mask = self._coverage_fraction_on_projected_grid(
                 mask_orig, area_orig, total_area, coarsen_dims, 'mask')
             gr_grid_mask_full = self._coverage_fraction_on_projected_grid(
@@ -1168,7 +1168,7 @@ class TEAAgr(TEAIndicators):
     def _coverage_fraction_on_projected_grid(self, mask, area_grid, total_area, coarsen_dims, name):
         mask_fraction = mask.fillna(0).clip(min=0, max=1)
         in_region_area = (area_grid * mask_fraction).coarsen(
-            coarsen_dims, boundary='trim').sum(skipna=True)
+            coarsen_dims, boundary='trim').sum()
         return (in_region_area / total_area).where(total_area > 0).rename(name)
 
     def _coverage_fraction_on_geographic_grid(self, mask, area_grid, gr_grid_areas, grg_res, name):
