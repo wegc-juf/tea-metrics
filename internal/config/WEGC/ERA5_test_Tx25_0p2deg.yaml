@@ -59,10 +59,11 @@ calc_TEA:
   recalc_daily: false
   hourly: false
   decadal: true
-  recalc_decadal: false
+  recalc_decadal: true
   spreads: false
   annual_spreads: false
   decadal_only: false
+  grg_tile_workers: 40
 
 regrid_SPARTACUS_to_WEGNext:
   <<: *GR
