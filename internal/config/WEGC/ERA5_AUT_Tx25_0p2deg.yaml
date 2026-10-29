@@ -1,0 +1,80 @@
+# Template for gridded data TEA indicators; for details and available options see CFG-PARAMS-doc.md
+common_params:
+  input_data: &DATA
+    dataset: ERA5
+  GeoRegion: &GR
+    region: EUR
+    agr: AUT
+    grg_grid_spacing: 0.25
+    grg_cell_size: .2
+    land_frac_min: .25
+  parameter: &PARAM
+    parameter: Tx
+    precip: false
+    threshold_type: abs
+    threshold: 25
+    unit: degC
+    low_extreme: false
+  time_params: &TIME
+    start: 1961
+    end: 2025
+    period: annual
+    ref_period: 1961-1990
+    cc_period: 2011-2025
+  paths: &PATHS
+    input_data_path: &inputpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/daily/
+    hourly_data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/hourly/single_levels/prepped4TEA/degC/
+    statpath: &statpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/static/
+    maskpath: *statpath
+    mask_sub: masks/
+    outpath: /tank/local/TEA/test/
+  general: &GENERAL
+    use_dask: auto
+
+create_region_masks:
+  <<: *GR
+  <<: *PARAM
+  <<: *DATA
+  <<: *PATHS
+  <<: *TIME
+  <<: *GENERAL
+  gr_type: polygon
+  subreg: true
+  mask_parallel_workers: 32
+  target_sys: 4326
+  xy_name: lon,lat
+  #shpfile: /data/arsclisys/backup/clim-hydro/TEA-Indicators/shapefiles/AUSTRIA.shp
+  shpfile: /data/arsclisys/backup/clim-hydro/TEA-Indicators/shapefiles/SARext_shape.shp
+  orofile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/ERA5_orography.nc
+  lsmfile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/ERA5_LSM.nc
+  outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/static/masks/
+
+
+calc_TEA:
+  <<: *GR
+  <<: *PARAM
+  <<: *TIME
+  <<: *DATA
+  <<: *PATHS
+  <<: *GENERAL
+  recalc_threshold: false
+  recalc_daily: false
+  hourly: false
+  decadal: true
+  recalc_decadal: true
+  spreads: false
+  annual_spreads: false
+  decadal_only: true
+  grg_tile_workers: 40
+
+regrid_SPARTACUS_to_WEGNext:
+  <<: *GR
+  <<: *PARAM
+  <<: *DATA
+  <<: *PATHS
+  <<: *TIME
+  <<: *GENERAL
+  raw_data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS_raw/v2025_v2.1/
+  regridded_data_path: *inputpath
+  wegn_file: /var/wegnet/wegc203058/netcdf/WEA/WN_L2_HHD_v7_UTM_TF1_UTC_2020-08.nc
+  orography: false
