@@ -39,6 +39,26 @@ def test_decadal_and_amplification_paths_include_cell_size(tmp_path):
     assert 'AGR_0p25_cell0p5-SEA' in str(amplification_path)
 
 
+def test_full_grg_and_subregion_agr_outputs_have_distinct_paths(tmp_path):
+    opts = Namespace(
+        outpath=str(tmp_path), region='EUR', agr='AUT', grg_grid_spacing=0.25,
+        grg_cell_size=2, param_str='Tx25.0degC', period='annual', dataset='ERA5',
+        start=1961, end=2025,
+    )
+
+    grg_decadal = get_decadal_outpath(opts, 'EUR', output_type='GRG')
+    agr_decadal = get_decadal_outpath(opts, 'AUT', output_type='AGR')
+    grg_amplification = get_amplification_outpath(opts, 'EUR', output_type='GRG')
+    agr_amplification = get_amplification_outpath(opts, 'AUT', output_type='AGR')
+
+    assert grg_decadal != agr_decadal
+    assert 'GRG_0p25_cell2-EUR' in str(grg_decadal)
+    assert 'AGR_0p25_cell2-AUT' in str(agr_decadal)
+    assert grg_amplification != agr_amplification
+    assert 'GRG_0p25_cell2-EUR' in str(grg_amplification)
+    assert 'AGR_0p25_cell2-AUT' in str(agr_amplification)
+
+
 def test_ctp_loader_does_not_fall_back_to_untagged_legacy_files(tmp_path):
     class FakeAgr:
         pass

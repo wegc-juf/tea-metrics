@@ -105,11 +105,16 @@ def calc_decadal_indicators(opts, tea, outpath=None):
     if outpath is None:
         if 'station' in opts:
             region = opts.station
+            output_type = None
         elif 'agr' in opts:
-            region = opts.agr
+            # This stage calculates decadal fields on the complete GRG grid.
+            # AGR-reduced outputs are written after calc_agr_vars.
+            region = opts.region
+            output_type = 'GRG'
         else:
             region = opts.region
-        outpath = get_decadal_outpath(opts, region)
+            output_type = None
+        outpath = get_decadal_outpath(opts, region, output_type=output_type)
 
     if opts.recalc_decadal or not os.path.exists(outpath):
         load_ctp_data(opts=opts, tea=tea)
@@ -139,13 +144,22 @@ def calc_decadal_indicators(opts, tea, outpath=None):
         compare_to_ref_decadal(tea=tea, filename_ref=file_ref)
 
 
-def get_decadal_outpath(opts, region):
+def get_decadal_outpath(opts, region, output_type=None):
+    """Build a path for full-grid or aggregated decadal data.
+
+    AGR configurations default to AGR output paths for compatibility with
+    callers loading/saving aggregated products. The initial decadal stage
+    passes ``output_type='GRG'`` because it contains the full region grid.
+    """
     if 'agr' in opts:
-        agr_str = f'AGR_{grg_grid_token(opts)}-'
+        output_type = output_type or 'AGR'
+        if output_type not in {'AGR', 'GRG'}:
+            raise ValueError("output_type must be either 'AGR' or 'GRG'.")
+        grid_str = f'{output_type}_{grg_grid_token(opts)}-'
     else:
-        agr_str = ''
+        grid_str = ''
     outpath = Path(f'{opts.outpath}/dec_indicator_variables/'
-                   f'DEC_{opts.param_str}_{agr_str}{region}_{opts.period}_{opts.dataset}'
+                   f'DEC_{opts.param_str}_{grid_str}{region}_{opts.period}_{opts.dataset}'
                    f'_{opts.start}to{opts.end}.nc')
     return outpath
 
@@ -188,11 +202,16 @@ def calc_amplification_factors(opts, tea, outpath=None):
     if outpath is None:
         if 'station' in opts:
             name = opts.station
+            output_type = None
         elif 'agr' in opts:
-            name = opts.agr
+            # Amplification factors here are calculated for the full GRG grid;
+            # the AGR-reduced product is saved after calc_agr_vars.
+            name = opts.region
+            output_type = 'GRG'
         else:
             name = opts.region
-        outpath = get_amplification_outpath(opts, name)
+            output_type = None
+        outpath = get_amplification_outpath(opts, name, output_type=output_type)
 
     # calculate amplification factors
     with warnings.catch_warnings():
@@ -223,7 +242,7 @@ def calc_amplification_factors(opts, tea, outpath=None):
     logger.debug(f"Saved amplification factors in {time.perf_counter() - start:.2f}s")
 
 
-def get_amplification_outpath(opts, region):
+def get_amplification_outpath(opts, region, output_type=None):
     """
     get amplification factors output path
     Args:
@@ -235,10 +254,13 @@ def get_amplification_outpath(opts, region):
 
     """
     if 'agr' in opts:
-        agr_str = f'AGR_{grg_grid_token(opts)}-'
+        output_type = output_type or 'AGR'
+        if output_type not in {'AGR', 'GRG'}:
+            raise ValueError("output_type must be either 'AGR' or 'GRG'.")
+        grid_str = f'{output_type}_{grg_grid_token(opts)}-'
     else:
-        agr_str = ''
+        grid_str = ''
     outpath = Path(f'{opts.outpath}/dec_indicator_variables/amplification/'
-                   f'AF_{opts.param_str}_{agr_str}{region}_{opts.period}_{opts.dataset}'
+                   f'AF_{opts.param_str}_{grid_str}{region}_{opts.period}_{opts.dataset}'
                    f'_{opts.start}to{opts.end}.nc')
     return outpath

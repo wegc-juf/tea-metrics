@@ -938,7 +938,7 @@ def _calc_agr_mean_and_spread(opts, tea):
     
     # save results
     # # decadal
-    outpath_decadal = get_decadal_outpath(opts, opts.agr)
+    outpath_decadal = get_decadal_outpath(opts, opts.agr, output_type='AGR')
     logger.info(f'Saving decadal AGR results to {outpath_decadal}')
     # remove outpath_decadal if it exists
     if os.path.exists(outpath_decadal):
@@ -968,7 +968,7 @@ def _calc_agr_mean_and_spread(opts, tea):
                              )
     
     # # amplification factors
-    outpath_ampl = get_amplification_outpath(opts, opts.agr)
+    outpath_ampl = get_amplification_outpath(opts, opts.agr, output_type='AGR')
     logger.info(f'Saving AGR amplification factors to {outpath_ampl}')
     create_tea_history(cfg_params=opts, tea=tea, dataset='amplification_factors')
     tea.save_amplification_factors(filepath=outpath_ampl)
