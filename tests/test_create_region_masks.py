@@ -38,6 +38,20 @@ def test_mask_parallel_workers_allows_ceiling_100():
         raise AssertionError('mask_parallel_workers should be capped at 100')
 
 
+@pytest.mark.parametrize('column', ['CNTR_ID', 'LAND_NAME'])
+def test_load_shp_rejects_missing_subregion(monkeypatch, column):
+    opts = _opts()
+    opts.subreg = True
+    opts.shpfile = 'regions.shp'
+    shape = gpd.GeoDataFrame(
+        {column: ['AUT'], 'geometry': [box(0, 0, 1, 1)]}, crs='EPSG:4326'
+    )
+    monkeypatch.setattr(masks.gpd, 'read_file', lambda _: shape)
+
+    with pytest.raises(ValueError, match="No shape feature found for region 'TEST'"):
+        masks._load_shp(opts)
+
+
 def test_create_mask_file_includes_last_row_and_column(monkeypatch):
     opts = _opts()
     template = xr.Dataset(coords={'lon': [0.0, 1.0, 2.0], 'lat': [0.0, 1.0, 2.0]})

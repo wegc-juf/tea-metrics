@@ -45,6 +45,9 @@ def _load_shp(opts):
             except AttributeError:
                 raise AttributeError('The given shape file has neither CNTR_ID nor '
                                      'LAND_NAME information.')
+        if shp.empty:
+            raise ValueError(f'No shape feature found for region {opts.region!r} '
+                             f'in {opts.shpfile!r}.')
 
     # Transfer it to the wanted coordinate system
     shp = shp.to_crs(epsg=opts.target_sys)
