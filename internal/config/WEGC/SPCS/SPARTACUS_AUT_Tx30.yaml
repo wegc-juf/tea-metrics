@@ -6,7 +6,7 @@ common_params:
     region: AUT
     agr: AUT
     grg_grid_spacing: 10000
-    grg_cell_size: 100000
+    grg_cell_size: 30000
   parameter: &PARAM
     parameter: Tx
     precip: false
@@ -57,6 +57,7 @@ calc_TEA:
   spreads: false
   annual_spreads: false
   decadal_only: false
+  grg_tile_workers: 20
 
 regrid_SPARTACUS_to_WEGNext:
   <<: *GR
