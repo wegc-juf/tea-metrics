@@ -5,8 +5,8 @@ common_params:
   GeoRegion: &GR
     region: AUT
     agr: Steiermark
-    grg_grid_spacing: 10000
-    grg_cell_size: 30000
+    grg_grid_spacing: 5000
+    grg_cell_size: 20000
   parameter: &PARAM
     parameter: Tx
     precip: false
@@ -56,10 +56,10 @@ calc_TEA:
   recalc_daily: false
   hourly: false
   decadal: true
-  recalc_decadal: true
+  recalc_decadal: false
   spreads: false
   annual_spreads: false
-  decadal_only: true
+  decadal_only: false
   grg_tile_workers: 20
 
 regrid_SPARTACUS_to_WEGNext:
