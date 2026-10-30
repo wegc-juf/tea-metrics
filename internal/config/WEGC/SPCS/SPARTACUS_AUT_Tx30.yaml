@@ -23,31 +23,24 @@ common_params:
   paths: &PATHS
     input_data_path: &inputpath /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS/reproj_UTM33N/v2.1/
     hourly_data_path: /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS/reproj_UTM33N/v2.1/
-    statpath: &statpath /data/users/mop/arsclisys/TEA/static/
+    statpath: &statpath /tank/local/TEA/test/static/
     maskpath: *statpath
     mask_sub: masks/
-    outpath: /data/users/mop/arsclisys/TEA/results/new/
+    outpath: /tank/local/TEA/test/
   general: &GENERAL
-    use_dask: false
+    use_dask: auto
 
 create_region_masks:
   <<: *GR
   <<: *PARAM
+  <<: *TIME
   <<: *DATA
   <<: *PATHS
-  <<: *TIME
-  <<: *GENERAL
   gr_type: polygon
-  sw_corner: null
-  ne_corner: null
-  center: null
-  we_len: null
-  ns_len: null
-  target_sys: 4326
-  shpfile: /data/reloclim/backup/GEO/shapefiles/OEKS15/good/LAND_AT_.shp
-  orofile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/ERA5_orography.nc
-  lsmfile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/ERA5_LSM.nc
-  outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/masks/
+  shpfile: /data/reloclim/backup/GEO/shapefiles/OEKS15/good/AUSTRIA.shp
+  target_sys: 32633
+  orofile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/SPARTACUS/reproj_UTM33N/v2.1/SPARTACUSreg_orography.nc
+  mask_parallel_workers: 40
 
 calc_TEA:
   <<: *GR
@@ -61,9 +54,9 @@ calc_TEA:
   hourly: false
   decadal: true
   recalc_decadal: true
-  spreads: true
-  annual_spreads: true
-  decadal_only: true
+  spreads: false
+  annual_spreads: false
+  decadal_only: false
 
 regrid_SPARTACUS_to_WEGNext:
   <<: *GR
