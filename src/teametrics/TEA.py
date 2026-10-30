@@ -118,6 +118,7 @@ class TEAIndicators:
 
         self.area_grid = None
         self.gr_size = None
+        self.grg_cell_area = None
         self.gridded = None
 
         if input_data is not None:
@@ -2481,6 +2482,19 @@ class TEAIndicators:
             self.decadal_results = xr.merge([self.decadal_results, cc_mean, ref_mean])
             self.decadal_results = self._propagate_crs(self.decadal_results)
 
+        output_dataset = self.decadal_results
+        if self.grg_cell_area is not None and 'grg_cell_area' not in output_dataset:
+            area_grid = self.grg_cell_area
+            for dim in area_grid.dims:
+                if dim not in output_dataset.coords:
+                    raise ValueError(f'Decadal output is missing the GRG area coordinate {dim!r}.')
+                try:
+                    area_grid = area_grid.sel({dim: output_dataset[dim].values})
+                except KeyError as err:
+                    raise ValueError(
+                        f'Decadal output does not cover GRG area coordinates on {dim!r}.') from err
+            output_dataset = output_dataset.assign(grg_cell_area=area_grid)
+
         if os.path.exists(filepath):
             try:
                 os.remove(filepath)
@@ -2496,14 +2510,18 @@ class TEAIndicators:
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
             if save_tiff:
-                self._save_geotiff(filepath, variables, dataset=self.decadal_results, split_by_year=False)
-            self._to_netcdf(self.decadal_results, filepath)
+                self._save_geotiff(filepath, variables, dataset=output_dataset, split_by_year=False)
+            self._to_netcdf(output_dataset, filepath)
 
     def load_decadal_results(self, filepath):
         """
         load all decadal results from filepath
         """
+        self.grg_cell_area = None
         self.decadal_results = xr.open_dataset(filepath)
+        if 'grg_cell_area' in self.decadal_results.data_vars:
+            self.grg_cell_area = self.decadal_results['grg_cell_area'].load().copy(deep=True)
+            self.decadal_results = self.decadal_results.drop_vars('grg_cell_area')
         if 'CTP' in self.decadal_results.attrs:
             self.CTP = self.decadal_results.attrs['CTP']
         self._crs = self._read_crs(self.decadal_results) or self._crs
@@ -2518,6 +2536,10 @@ class TEAIndicators:
             raise ValueError(
                 "For calculating decadal results, CTP results and daily data must contain at least a "
                 "decade of data")
+        self.grg_cell_area = None
+        if 'grg_cell_area' in self.ctp_results.data_vars:
+            self.grg_cell_area = self.ctp_results['grg_cell_area'].load().copy(deep=True)
+            self.ctp_results = self.ctp_results.drop_vars('grg_cell_area')
         for var in self.ctp_results.data_vars:
             var_data = self.ctp_results[var]
             if var == 'population_grid':
@@ -3049,11 +3071,14 @@ class TEAIndicators:
         """
         save amplification factors to filepath
         """
+        amplification_output = self.amplification_factors
+        if 'grg_cell_area' in amplification_output:
+            amplification_output = amplification_output.drop_vars('grg_cell_area')
         with warnings.catch_warnings():
             # ignore warnings due to nan multiplication
             warnings.simplefilter("ignore")
             try:
-                self._to_netcdf(self.amplification_factors, filepath)
+                self._to_netcdf(amplification_output, filepath)
             except PermissionError as err:
                 if not DEBUG:
                     raise err
@@ -3062,7 +3087,7 @@ class TEAIndicators:
                 filepath = os.path.join('/tmp/', filename)
                 if os.path.exists(filepath):
                     os.remove(filepath)
-                self._to_netcdf(self.amplification_factors, filepath)
+                self._to_netcdf(amplification_output, filepath)
                 
     def load_amplification_factors(self, filepath):
         """

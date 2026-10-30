@@ -6,6 +6,45 @@ from teametrics.TEA import TEAIndicators
 
 
 class TestCalcDecadalIndicators:
+    def test_grg_cell_area_is_preserved_in_decadal_output_but_not_af(self, tmp_path):
+        tea = TEAIndicators(unit='K')
+        time = pd.date_range('2000-01-01', periods=10, freq='YS')
+        coords = {'time': time, 'lat': [48.0, 47.75], 'lon': [15.0, 15.25]}
+        ctp_metric = xr.DataArray(
+            np.ones((len(time), 2, 2)), dims=('time', 'lat', 'lon'), coords=coords,
+            attrs={'metric_type': 'basic', 'units': '1'})
+        cell_area = xr.DataArray(
+            np.array([[0.64, 0.64], [0.64, 0.64]]), dims=('lat', 'lon'),
+            coords={'lat': coords['lat'], 'lon': coords['lon']}, name='grg_cell_area',
+            attrs={'long_name': 'Overlap-weighted GRG cell area', 'units': 'areal (100 km2)'})
+        tea.ctp_results = xr.Dataset(
+            {'EF': ctp_metric, 'grg_cell_area': cell_area}, attrs={'CTP': 'annual'})
+
+        tea._calc_decadal_mean((10, 5, 4))
+
+        assert tea.grg_cell_area.equals(cell_area)
+        assert 'grg_cell_area' not in tea.ctp_results
+        assert 'grg_cell_area' not in tea.decadal_results
+
+        dec_path = tmp_path / 'dec.nc'
+        tea.save_decadal_results(dec_path)
+        with xr.open_dataset(dec_path) as decadal_file:
+            xr.testing.assert_allclose(decadal_file.grg_cell_area, cell_area)
+
+        loaded = TEAIndicators()
+        loaded.load_decadal_results(dec_path)
+        xr.testing.assert_allclose(loaded.grg_cell_area, cell_area)
+        assert 'grg_cell_area' not in loaded.decadal_results
+
+        tea.amplification_factors = xr.Dataset({
+            'EF_AF': xr.ones_like(ctp_metric),
+            'grg_cell_area': cell_area,
+        })
+        af_path = tmp_path / 'af.nc'
+        tea.save_amplification_factors(af_path)
+        with xr.open_dataset(af_path) as af_file:
+            assert 'grg_cell_area' not in af_file
+
     def test_decadal_results_populated(self, tea_constant):
         tea_constant.calc_daily_basis_vars(grid=True, gr=True)
         tea_constant.calc_annual_ctp_indicators(ctp="annual")

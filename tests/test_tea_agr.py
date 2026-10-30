@@ -83,6 +83,28 @@ class TestGRGridGeneration:
         assert (tea.gr_grid_mask > 0).all()
         assert np.isfinite(tea.gr_grid_areas).all()
 
+    def test_ctp_results_include_overlap_weighted_grg_cell_area(self, tmp_path):
+        grid = xr.DataArray(
+            np.ones((2, 2)), coords={"lat": [2.0, 1.0], "lon": [3.0, 4.0]},
+            dims=("lat", "lon"), name="mask")
+        tea = TEAAgr(mask=grid, gr_grid_res=1, gr_grid_mask=grid, land_frac_min=0)
+        ctp_results = xr.Dataset({
+            "EF_GR": xr.DataArray([1.0], dims="time", coords={"time": ["2000-01-01"]})
+        })
+
+        tea.set_ctp_results(
+            xcoord=3.0, ycoord=2.0, ctp_results=ctp_results,
+            grg_cell_area=0.42, area_attrs={"units": "areal (100 km2)"})
+
+        assert tea.ctp_results.grg_cell_area.sel(lat=2.0, lon=3.0).item() == 0.42
+        assert tea.ctp_results.grg_cell_area.attrs["units"] == "areal (100 km2)"
+
+        ctp_path = tmp_path / "ctp.nc"
+        tea.save_ctp_results(ctp_path)
+        with xr.open_dataset(ctp_path) as saved:
+            assert "grg_cell_area" in saved.data_vars
+            assert np.isclose(saved.grg_cell_area.sel(lat=2.0, lon=3.0).item(), 0.42)
+
     def test_geographic_boundary_fraction_is_applied_once_to_agr_area(self):
         lat = np.array([51.0, 50.75, 50.5, 50.25])
         lon = np.array([7.25, 7.5, 7.75, 8.0])

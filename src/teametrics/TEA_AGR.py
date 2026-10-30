@@ -48,7 +48,8 @@ def _calculate_grg_tile(coord):
         warnings.filterwarnings('ignore', message='invalid value encountered in multiply')
         tea_sub.calc_annual_ctp_indicators(drop_daily_results=True)
     ctp_results = tea_sub.get_ctp_results(gr=True, grid=False).compute()
-    return xcoord, ycoord, ctp_results
+    cell_area = float(np.asarray(tea_sub.gr_size).item())
+    return xcoord, ycoord, ctp_results, cell_area, dict(tea_sub.area_grid.attrs)
 
 
 class TEAAgr(TEAIndicators):
@@ -311,13 +312,16 @@ class TEAAgr(TEAIndicators):
         return (self.xdim.lower() in {'lon', 'longitude'}
                 and self.ydim.lower() in {'lat', 'latitude'})
 
-    def set_ctp_results(self, xcoord, ycoord, ctp_results):
+    def set_ctp_results(self, xcoord, ycoord, ctp_results,
+                        grg_cell_area=None, area_attrs=None):
         """
         set CTP variables for point
         Args:
             xcoord: x coordinate value
             ycoord: y coordinate value
             ctp_results: CTP GR data for point
+            grg_cell_area: overlap-weighted cell area in areals
+            area_attrs: attributes from the overlap-weighted source area grid
         """
         # remove GR from variable names
         ctp_results = ctp_results.rename({var: var.replace('_GR', '') for var in ctp_results.data_vars})
@@ -341,7 +345,9 @@ class TEAAgr(TEAIndicators):
                                           data_vars=var_dict,
                                           attrs=ctp_results.attrs)
 
-        self.ctp_results.loc[{self.ydim: ycoord, self.xdim: xcoord}] = ctp_results
+        cell_index = {self.ydim: ycoord, self.xdim: xcoord}
+        for var in ctp_results.data_vars:
+            self.ctp_results[var].loc[cell_index] = ctp_results[var]
 
         # set attributes for variables
         for var in ctp_results.data_vars:
@@ -350,6 +356,25 @@ class TEAAgr(TEAIndicators):
                 new_attrs = get_attrs(vname=var)
                 attrs['long_name'] = new_attrs['long_name']
                 self.ctp_results[var].attrs = attrs
+
+        if grg_cell_area is not None:
+            if 'grg_cell_area' not in self.ctp_results:
+                xcoords, ycoords = self._get_xy()
+                cell_area = xr.DataArray(
+                    np.full((len(ycoords), len(xcoords)), np.nan),
+                    coords={self.ydim: ycoords, self.xdim: xcoords},
+                    dims=(self.ydim, self.xdim),
+                    name='grg_cell_area',
+                )
+                attrs = dict(area_attrs or {})
+                attrs['long_name'] = 'Area of GRG cell from fractional source-pixel overlap'
+                attrs['units'] = attrs.get('units', 'areal (100 km2)')
+                attrs['metric_type'] = 'metadata'
+                cell_area.attrs = attrs
+                self.ctp_results['grg_cell_area'] = cell_area
+            self.ctp_results['grg_cell_area'].loc[
+                {self.ydim: ycoord, self.xdim: xcoord}
+            ] = float(np.asarray(grg_cell_area).item())
 
     def get_ctp_results(self, grid=True, gr=True):
         """
@@ -458,8 +483,9 @@ class TEAAgr(TEAIndicators):
                                    total=len(ycoords) * len(xcoords), desc='Processing GRG cells'):
                     if result is None:
                         continue
-                    xcoord, ycoord, ctp_results = result
-                    self.set_ctp_results(xcoord, ycoord, ctp_results)
+                    xcoord, ycoord, ctp_results, grg_cell_area, area_attrs = result
+                    self.set_ctp_results(xcoord, ycoord, ctp_results,
+                                         grg_cell_area=grg_cell_area, area_attrs=area_attrs)
                     valid_cells_found = True
         else:
             if workers > 1:
@@ -1281,7 +1307,9 @@ class TEAAgr(TEAIndicators):
                 # set agr_results for position
                 ctp_results = tea_sub.get_ctp_results(gr=True, grid=False).compute()
 
-            self.set_ctp_results(xcoord, ycoord, ctp_results)
+            self.set_ctp_results(xcoord, ycoord, ctp_results,
+                                 grg_cell_area=float(np.asarray(tea_sub.gr_size).item()),
+                                 area_attrs=tea_sub.area_grid.attrs)
             end_time = time.time()
             logger.debug(f'{self.xdim} {xcoord}, {self.ydim} {ycoord} processed in {end_time - start_time} seconds')
         return valid_cells_found

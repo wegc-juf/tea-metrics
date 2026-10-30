@@ -507,7 +507,7 @@ def _compare_to_ctp_ref(tea, ctp_filename_ref):
         logger.info(f'Comparing results to reference file {ctp_filename_ref}')
         tea_ref = TEAIndicators()
         tea_ref.load_ctp_results(ctp_filename_ref)
-        tea_result = tea.ctp_results
+        tea_result = tea.ctp_results.drop_vars('grg_cell_area', errors='ignore')
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message="invalid value encountered in multiply")
             compare_to_ref(tea_result, tea_ref.ctp_results)
