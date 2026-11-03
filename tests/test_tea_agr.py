@@ -675,3 +675,12 @@ class TestCalcWeightedPerc:
         p5, p95 = TEAAgr._calc_weighted_perc_single(values, weights)
         assert np.isclose(p5, 42.0)
         assert np.isclose(p95, 42.0)
+
+    def test_calc_weighted_perc_single_uses_cumulative_thresholds(self):
+        values = np.array([[30.0, 10.0], [40.0, 20.0]])
+        weights = np.array([[0.90, 0.02], [0.04, 0.04]])
+
+        p5, p95 = TEAAgr._calc_weighted_perc_single(values, weights)
+
+        assert p5 == 10.0
+        assert p95 == 30.0
