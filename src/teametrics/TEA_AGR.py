@@ -623,8 +623,15 @@ class TEAAgr(TEAIndicators):
 
         wgts = areas_3d / areas_3d.sum(dim=(self.ydim, self.xdim))
 
+        # Materialize the whole variable and its weights together. Reading
+        # individual Dask-backed timesteps inside the loop schedules a separate
+        # computation for every year.
+        data_and_weights = xr.Dataset({'data': data, 'weights': wgts}).compute()
+        data_values = data_and_weights['data'].values
+        weights_values = data_and_weights['weights'].values
+
         if 'time' not in data.dims:
-            pval005, pval095 = TEAAgr._calc_weighted_perc_single(data.values, wgts.values)
+            pval005, pval095 = TEAAgr._calc_weighted_perc_single(data_values, weights_values)
             return pval005, pval095
 
         perc005 = xr.DataArray(data=np.ones(len(data.time)) * np.nan,
@@ -635,8 +642,8 @@ class TEAAgr(TEAIndicators):
         for iyr, yr in enumerate(data.time):
             if iyr < 5 and not annual:
                 continue
-            avals = data[iyr, :, :].values
-            wgts_iyr = wgts[iyr, :, :].values
+            avals = data_values[iyr, :, :]
+            wgts_iyr = weights_values[iyr, :, :]
 
             pval005, pval095 = TEAAgr._calc_weighted_perc_single(avals, wgts_iyr)
 
@@ -657,39 +664,28 @@ class TEAAgr(TEAIndicators):
             pval005, pval095: 5th and 95th percentile
 
         """
-        # stack arrays along a new dimension and reshape to a 2D array
-        # (rows contain two values to sort together)
-
-        combined = np.stack((avals, wgts), axis=-1)
-        combined_reshaped = combined.reshape(-1, 2)
-        # sort combined array by avals
-        combined_sorted = combined_reshaped[combined_reshaped[:, 0].argsort()]
-        # split the sorted array back into separate ones
-        avals_ordered = combined_sorted[:, 0]
-        wgts_ordered = combined_sorted[:, 1]
-        # calculate cumsum of weights to find percentiles
+        # Sort values and weights together without allocating an (N, 2) array.
+        avals_flat = np.asarray(avals).ravel()
+        wgts_flat = np.asarray(wgts).ravel()
+        sort_indices = np.argsort(avals_flat)
+        avals_ordered = avals_flat[sort_indices]
+        wgts_ordered = wgts_flat[sort_indices]
         wgts_cumsum = np.nancumsum(wgts_ordered)
-        wgts_diff_005 = np.abs(wgts_cumsum - 0.05)
-        wgts_diff_095 = np.abs(wgts_cumsum - 0.95)
-        # find index of wgts_cumsum that is closest to 0.05 (but smaller or equal than 0.05)
-        try:
-            p005_index = np.nanargmin(wgts_diff_005)
-            if wgts_cumsum[p005_index] > 0.05 and p005_index > 0:
-                while wgts_cumsum[p005_index] > 0.05:
-                    p005_index -= 1
-            pval005 = avals_ordered[p005_index]
-        except ValueError:
-            pval005 = np.nan
-        # find index of wgts_cumsum that is closest to 0.95 (but greater or equal than 0.95)
-        try:
-            p095_index = np.nanargmin(wgts_diff_095)
-            if wgts_cumsum[p095_index] < 0.95:
-                while wgts_cumsum[p095_index] < 0.95 and p095_index < len(wgts_cumsum) - 1:
-                    p095_index += 1
-            pval095 = avals_ordered[p095_index]
-        except ValueError:
-            pval095 = np.nan
-        return pval005, pval095
+
+        if not len(wgts_cumsum):
+            return np.nan, np.nan
+
+        # Match the original threshold convention: choose the first exact
+        # cumulative-weight match at 0.05, otherwise the nearest lower entry;
+        # for 0.95 choose the first entry at or above the threshold.
+        p005_index = np.searchsorted(wgts_cumsum, 0.05, side='left')
+        if p005_index == len(wgts_cumsum) or wgts_cumsum[p005_index] > 0.05:
+            p005_index -= 1
+        p005_index = max(p005_index, 0)
+        p095_index = np.searchsorted(wgts_cumsum, 0.95, side='left')
+        p095_index = min(p095_index, len(wgts_cumsum) - 1)
+
+        return avals_ordered[p005_index], avals_ordered[p095_index]
     
     def calc_a_agr(self):
         """
@@ -1051,8 +1047,10 @@ class TEAAgr(TEAIndicators):
             xarray dataset with upper and lower spread estimates
 
         """
-        logger.info(f'Calculating 5th and 95th percentiles')
+        percentile_start = time.perf_counter()
+        logger.info('Calculating 5th and 95th percentiles')
         areas = self.areas_elig
+        percentile_variable_count = len(data.data_vars)
 
         for var in data.data_vars:
             # calculate 5th and 95th percentiles for each variable
@@ -1076,6 +1074,9 @@ class TEAAgr(TEAIndicators):
             data[f'{var}_p95'] = p95
             data[f'{var}_p05'].attrs = get_attrs(vname=f'{var}', spread='5th percentile')
             data[f'{var}_p95'].attrs = get_attrs(vname=f'{var}', spread='95th percentile')
+
+        logger.info('Calculated 5th and 95th percentiles for %d variables in %.2fs',
+                    percentile_variable_count, time.perf_counter() - percentile_start)
 
     @staticmethod
     def _grid_centers_from_source_axis(coordinates, grid_spacing):
