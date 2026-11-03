@@ -606,7 +606,7 @@ def _save_grg_mask(opts, grg_mask, grg_areas, grg_mask_full):
 
 
 # noinspection PyProtectedMember
-def _load_or_generate_gr_grid_static(opts, tea):
+def _load_or_generate_gr_grid_static(opts, tea, force_regenerate=False):
     """
     load or generate grid of GRs mask and area grid for AGR calculation
     Args:
@@ -617,7 +617,12 @@ def _load_or_generate_gr_grid_static(opts, tea):
 
     """
     # load static GR grid files
-    gr_grid_mask, gr_grid_areas, gr_grid_mask_full = _load_gr_grid_static(opts)
+    if force_regenerate:
+        # Legacy static files may have been generated from a different region's
+        # full mask while sharing the same source/reference grid.
+        gr_grid_mask, gr_grid_areas, gr_grid_mask_full = None, None, None
+    else:
+        gr_grid_mask, gr_grid_areas, gr_grid_mask_full = _load_gr_grid_static(opts)
     if (gr_grid_mask is not None and gr_grid_areas is not None
             and gr_grid_mask_full is not None
             and (not _gr_grid_static_is_usable(gr_grid_mask, gr_grid_areas)
@@ -974,13 +979,26 @@ def _calc_agr_mean_and_spread(opts, tea):
         # load mask for the specified region
         agr_opts = deepcopy(opts)
         agr_opts.region = opts.agr
-        mask_file = _load_mask_file(agr_opts)
+        mask_file, _, full_mask = _load_mask_file(agr_opts, include_area=True)
         tea.mask = mask_file
-        _load_or_generate_gr_grid_static(agr_opts, tea)
+        tea.full_mask = full_mask
+        _load_or_generate_gr_grid_static(agr_opts, tea, force_regenerate=True)
         crop_to_shp = True
     
     tea.calc_agr_vars(y_range=agr_y_range, x_range=agr_x_range, spreads=opts.spreads, crop_to_shp=crop_to_shp,
                       calc_annual=opts.annual_spreads)
+
+    # Store the scalar AGR area totals with the decadal AGR product.
+    area_units = tea.agr_area_weights.attrs.get('units', 'areal (100 km2)')
+    for name, long_name in (
+            ('a_agr_full', 'Full area used for AGR calculation'),
+            ('a_agr_elig', 'Eligible area used for AGR calculation'),
+            ('a_agr_domain', 'Domain area used for AGR calculation')):
+        tea.decadal_results[name] = getattr(tea, name)
+        tea.decadal_results[name].attrs = {
+            'long_name': long_name,
+            'units': area_units,
+        }
     
     # save results
     # # decadal
