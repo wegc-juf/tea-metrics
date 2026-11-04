@@ -130,6 +130,40 @@ class TestSubregionGrgStaticCoverage:
         assert np.isnan(tea.gr_grid_mask.sel(lat=0.0, lon=0.0))
         assert tea.gr_grid_mask.sel(lat=5.0, lon=10.0).item() == 1.0
 
+    def test_force_regenerate_uses_current_agr_full_mask(self, monkeypatch):
+        import teametrics.calc_TEA as calc_tea_module
+
+        tea, _, region_mask, cached_mask, _, cached_areas = self._grids()
+        full_mask = xr.where(region_mask > 0, 0.5, 0.0).rename("mask_full")
+        tea.mask = region_mask
+        tea.full_mask = full_mask
+        generated = {}
+
+        monkeypatch.setattr(
+            calc_tea_module, "_load_gr_grid_static",
+            lambda opts: pytest.fail("Forced regeneration must not reuse the old cache."),
+        )
+
+        def generate():
+            xr.testing.assert_equal(tea.full_mask, full_mask)
+            generated["called"] = True
+            tea.gr_grid_mask = cached_mask
+            tea.gr_grid_mask_full = (cached_mask * 0.5).rename("mask_full")
+            tea.gr_grid_areas = cached_areas
+
+        monkeypatch.setattr(tea, "generate_gr_grid_mask", generate)
+        monkeypatch.setattr(calc_tea_module, "_save_grg_mask", lambda *args: None)
+
+        calc_tea_module._load_or_generate_gr_grid_static(
+            SimpleNamespace(grg_cell_size=2.0, recalc_decadal=False),
+            tea,
+            force_regenerate=True,
+        )
+
+        assert generated["called"]
+        assert tea.gr_grid_mask_full.sel(lat=5.0, lon=10.0).item() == 0.5
+        assert np.isnan(tea.gr_grid_mask_full.sel(lat=0.0, lon=0.0).item())
+
     def test_shifted_projected_cache_regenerates_from_native_mask_lattice(self, monkeypatch):
         import teametrics.calc_TEA as calc_tea_module
         from teametrics.TEA_AGR import TEAAgr
