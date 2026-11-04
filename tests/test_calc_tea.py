@@ -195,6 +195,41 @@ class TestSubregionGrgStaticCoverage:
         assert saved
         assert opts.recalc_decadal
 
+    def test_recalc_grg_static_is_honored_when_agr_equals_region(self, monkeypatch, tmp_path):
+        import teametrics.calc_TEA as calc_tea_module
+
+        calls = []
+        monkeypatch.setattr(
+            calc_tea_module, '_load_or_generate_gr_grid_static',
+            lambda opts, tea, force_regenerate=False: calls.append(force_regenerate),
+        )
+        monkeypatch.setattr(calc_tea_module, 'get_decadal_outpath', lambda *args, **kwargs: str(tmp_path / 'd.nc'))
+        monkeypatch.setattr(
+            calc_tea_module, 'get_amplification_outpath',
+            lambda *args, **kwargs: str(tmp_path / 'af.nc'),
+        )
+        monkeypatch.setattr(calc_tea_module, 'create_tea_history', lambda **kwargs: None)
+
+        from types import SimpleNamespace
+        tea = SimpleNamespace(
+            agr_area_weights=xr.DataArray(1.0, attrs={'units': 'areal (100 km2)'}),
+            a_agr_full=1.0,
+            a_agr_elig=1.0,
+            a_agr_domain=1.0,
+            decadal_results=xr.Dataset(),
+            calc_agr_vars=lambda **kwargs: None,
+            save_decadal_results=lambda **kwargs: None,
+            save_amplification_factors=lambda **kwargs: None,
+        )
+        opts = SimpleNamespace(
+            agr_range=None, agr='SEA', region='SEA', recalc_grg_static=True,
+            spreads=False, annual_spreads=False, file_format='NetCDF',
+        )
+
+        calc_tea_module._calc_agr_mean_and_spread(opts, tea)
+
+        assert calls == [True]
+
     def test_shifted_projected_cache_regenerates_from_native_mask_lattice(self, monkeypatch):
         import teametrics.calc_TEA as calc_tea_module
         from teametrics.TEA_AGR import TEAAgr
