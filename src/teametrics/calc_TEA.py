@@ -106,7 +106,6 @@ def calc_tea_indicators(opts):
         
         # calculate AGR variables
         if 'agr' in opts:
-            _load_or_generate_gr_grid_static(opts, tea)
             # TODO calc also for annual data
             _calc_agr_mean_and_spread(opts=opts, tea=tea)
 
@@ -999,9 +998,13 @@ def _calc_agr_mean_and_spread(opts, tea):
         mask_file, _, full_mask = _load_mask_file(agr_opts, include_area=True)
         tea.mask = mask_file
         tea.full_mask = full_mask
+        crop_to_shp = True
+    else:
+        agr_opts = opts
+
+    if opts.agr_range is None:
         _load_or_generate_gr_grid_static(
             agr_opts, tea, force_regenerate=getattr(opts, 'recalc_grg_static', False))
-        crop_to_shp = True
     
     tea.calc_agr_vars(y_range=agr_y_range, x_range=agr_x_range, spreads=opts.spreads, crop_to_shp=crop_to_shp,
                       calc_annual=opts.annual_spreads)
