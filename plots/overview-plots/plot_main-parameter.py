@@ -6,6 +6,7 @@ import argparse
 import logging
 import matplotlib.pyplot as plt
 import pandas as pd
+from pathlib import Path
 from matplotlib.ticker import FormatStrFormatter, FixedLocator
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
@@ -14,6 +15,7 @@ from scipy.stats import gmean
 import xarray as xr
 
 from teametrics.common.config import load_opts
+from teametrics.common.map_boundaries import draw_austrian_boundaries, load_austrian_boundaries
 from teametrics.utils.calc_decadal_indicators import get_amplification_outpath, get_decadal_outpath
 
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
@@ -34,6 +36,12 @@ def _getopts():
                         type=str,
                         default='../TEA_CFG.yaml',
                         help='TEA configuration file (default: TEA_CFG.yaml)')
+    parser.add_argument('--major-borders', type=Path,
+                        help='Major-border shapefile (defaults to LAND_AT_.shp beside the configured shapefile).')
+    parser.add_argument('--minor-borders', type=__import__('pathlib').Path,
+                        help='Minor/district-border shapefile (defaults to GEM_AT_.shp beside the configured shapefile).')
+    parser.add_argument('--no-borders', action='store_true',
+                        help='Do not draw shapefile boundaries.')
 
     # parser.add_argument('--version', '-v',
     #                     action='version',
@@ -294,7 +302,7 @@ def plot_tex_es(opts, ax, data, ddata):
             fontsize=9, zorder=2)
 
 
-def plot_map(opts, fig, ax, data):
+def plot_map(opts, fig, ax, data, boundary_layers=None):
     """
     create maps of EF, ED, and EM
     Args:
@@ -333,6 +341,8 @@ def plot_map(opts, fig, ax, data):
     data = data.sortby(ydim)
     map_vals = ax.contourf(data[xdim], data[ydim], data.values,
                            cmap=props['cmap'], extend=ext, levels=lvls, vmin=cn, vmax=cx)
+    if boundary_layers is not None:
+        draw_austrian_boundaries(ax, boundary_layers)
 
     ax.axis('off')
     divider = make_axes_locatable(ax)
@@ -389,8 +399,14 @@ def plot_main_parameter(opts):
                      ddata=dec_data[gr_var.split('_AF')[0]])
 
     map_vars = ['EF_AF_CC', 'ED_avg_AF_CC', 'EM_avg_AF_CC']
+    boundary_layers = None
+    if not opts.no_borders:
+        boundary_layers = load_austrian_boundaries(
+            opts.cfg_file, data[map_vars[0]].attrs.get('coordinate_sys'),
+            major_path=opts.major_borders, minor_path=opts.minor_borders)
     for irow, map_var in enumerate(map_vars):
-        plot_map(opts=opts, fig=fig, ax=axs[irow, 1], data=data[map_var])
+        plot_map(opts=opts, fig=fig, ax=axs[irow, 1], data=data[map_var],
+                 boundary_layers=boundary_layers)
 
     if 'agr' in opts:
         plot_tex_es(opts=opts, ax=axs[3, 1],
@@ -432,6 +448,9 @@ def plot_main_parameter(opts):
 if __name__ == '__main__':
     cmd_opts = _getopts()
     opts = load_opts(fname=__file__, config_file=cmd_opts.config_file)
+    opts.major_borders = cmd_opts.major_borders
+    opts.minor_borders = cmd_opts.minor_borders
+    opts.no_borders = cmd_opts.no_borders
     # check and create output path
     plt_outpath = f'{opts.outpath}/plots'
     if not os.path.exists(plt_outpath):

@@ -16,6 +16,7 @@ import xarray as xr
 
 from teametrics.common.config import load_opts
 from teametrics.common.general_functions import ref_cc_params
+from teametrics.common.map_boundaries import draw_austrian_boundaries, load_austrian_boundaries
 
 INPUT_DATA_PATH = Path('/home/wegnet/results/TEA_indicators_test/')
 MASK_PATH = Path('/data/arsclisys/normal/clim-hydro/TEA-Indicators/masks/')
@@ -308,7 +309,7 @@ def map_plot_params(vname):
     return params[vname]
 
 
-def plot_map(fig, ax, data, region, mask_path=None):
+def plot_map(fig, ax, data, region, mask_path=None, boundary_layers=None):
     props = map_plot_params(vname=data.name)
 
     if mask_path is not None:
@@ -332,6 +333,8 @@ def plot_map(fig, ax, data, region, mask_path=None):
 
     map = ax.contourf(data.x, data.y, data, cmap=props['cmap'],
                       levels=props['lvls'], extend=ext)
+    if boundary_layers is not None:
+        draw_austrian_boundaries(ax, boundary_layers)
     ax.axis('off')
     divider = make_axes_locatable(ax)
     cax = divider.append_axes('right', size='5%', pad=0.05)
@@ -349,7 +352,8 @@ def plot_map(fig, ax, data, region, mask_path=None):
 
 
 def run(run_name=None, config_file=None, region=None, tex_variable='TEX_HW_max_GR',
-        output_dir=Path('.'), show=True, csv=False):
+        output_dir=Path('.'), show=True, csv=False, major_borders=None,
+        minor_borders=None, no_borders=False):
     global TEXT_BOX_CLEARANCE
     global START_YEAR, END_YEAR
 
@@ -363,12 +367,14 @@ def run(run_name=None, config_file=None, region=None, tex_variable='TEX_HW_max_G
         dataset = opts.dataset
         START_YEAR = opts.start
         END_YEAR = opts.end
+        boundary_config = config_file
     else:
         region = 'AUT' if region is None else region
         varname = 'Tx30.0degC'
         dataset = 'SPARTACUS'
         START_YEAR = 1961
         END_YEAR = 2026
+        boundary_config = Path(__file__).resolve().parents[2] / 'internal/config/WEGC/TEA_CFG.yaml'
 
     run_name = run_name.replace('-', '_')
     LOGGER.info('Starting Figure 5: run=%s, region=%s, extremity=%s',
@@ -436,6 +442,11 @@ def run(run_name=None, config_file=None, region=None, tex_variable='TEX_HW_max_G
                              output_path=output_dir / f'Figure5_data_{run_name}_{region}.csv')
 
     mask_path = find_mask(region, input_data_path, data=dec)
+    boundary_layers = None
+    if not no_borders:
+        boundary_layers = load_austrian_boundaries(
+            boundary_config, dec.attrs.get('coordinate_sys'),
+            major_path=major_borders, minor_path=minor_borders)
     map_vars = ['EF', 'ED_avg', 'EM_avg']
     LOGGER.info('Preparing %d map panels', len(map_vars))
     for irow, map_var in enumerate(map_vars):
@@ -444,7 +455,7 @@ def run(run_name=None, config_file=None, region=None, tex_variable='TEX_HW_max_G
         mdata = xr.DataArray(data=mdata, coords={'y': (['y'], dec.y.values),
                                                  'x': (['x'], dec.x.values)}, name=map_var)
         plot_map(fig=fig, ax=axs[irow, 1], data=mdata, region=region,
-                 mask_path=mask_path)
+                 mask_path=mask_path, boundary_layers=boundary_layers)
 
     axs[2, 1].text(0, 0, 'Alpine data at z > 1500m excluded.',
                    horizontalalignment='left', verticalalignment='center',
@@ -493,6 +504,12 @@ def parse_args():
     parser.add_argument('--log-level', default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                         help='Logging verbosity (default: INFO).')
+    parser.add_argument('--major-borders', type=Path,
+                        help='Major-border shapefile (defaults to LAND_AT_.shp beside the configured shapefile).')
+    parser.add_argument('--minor-borders', type=Path,
+                        help='Minor/district-border shapefile (defaults to GEM_AT_.shp beside the configured shapefile).')
+    parser.add_argument('--no-borders', action='store_true',
+                        help='Do not draw shapefile boundaries.')
     return parser.parse_args()
 
 
@@ -504,4 +521,5 @@ if __name__ == '__main__':
     run(run_name=args.run_name, config_file=args.config_file, region=args.region,
         tex_variable=args.tex_variable,
         output_dir=args.output_dir, csv=args.csv,
-        show=not args.no_show)
+        show=not args.no_show, major_borders=args.major_borders,
+        minor_borders=args.minor_borders, no_borders=args.no_borders)
