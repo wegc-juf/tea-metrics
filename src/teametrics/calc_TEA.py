@@ -593,6 +593,10 @@ def _save_grg_mask(opts, grg_mask, grg_areas, grg_mask_full):
         grg_areas.to_netcdf(area_grid_file)
     
     # save GRG mask
+    grg_mask_full.attrs = {
+        **grg_mask_full.attrs,
+        'source_region': str(opts.region),
+    }
     grg_masks = xr.Dataset({'mask': grg_mask, 'mask_full': grg_mask_full})
     create_history_from_cfg(cfg_params=opts, ds=grg_masks)
     mask_file = (Path(opts.maskpath) / opts.mask_sub /
@@ -623,6 +627,19 @@ def _load_or_generate_gr_grid_static(opts, tea, force_regenerate=False):
         gr_grid_mask, gr_grid_areas, gr_grid_mask_full = None, None, None
     else:
         gr_grid_mask, gr_grid_areas, gr_grid_mask_full = _load_gr_grid_static(opts)
+    if (gr_grid_mask is not None and gr_grid_mask_full is not None
+            and getattr(opts, 'region', None) is not None
+            and gr_grid_mask_full.attrs.get('source_region') != str(opts.region)):
+        logger.warning('Cached GRG mask has no matching source-region metadata; regenerating it.')
+        gr_grid_mask.close()
+        if gr_grid_areas is not None:
+            gr_grid_areas.close()
+        gr_grid_mask_full.close()
+        gr_grid_mask = None
+        gr_grid_areas = None
+        gr_grid_mask_full = None
+        if hasattr(opts, 'recalc_decadal'):
+            opts.recalc_decadal = True
     if (gr_grid_mask is not None and gr_grid_areas is not None
             and gr_grid_mask_full is not None
             and (not _gr_grid_static_is_usable(gr_grid_mask, gr_grid_areas)
@@ -982,7 +999,8 @@ def _calc_agr_mean_and_spread(opts, tea):
         mask_file, _, full_mask = _load_mask_file(agr_opts, include_area=True)
         tea.mask = mask_file
         tea.full_mask = full_mask
-        _load_or_generate_gr_grid_static(agr_opts, tea, force_regenerate=True)
+        _load_or_generate_gr_grid_static(
+            agr_opts, tea, force_regenerate=getattr(opts, 'recalc_grg_static', False))
         crop_to_shp = True
     
     tea.calc_agr_vars(y_range=agr_y_range, x_range=agr_x_range, spreads=opts.spreads, crop_to_shp=crop_to_shp,

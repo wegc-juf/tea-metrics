@@ -217,6 +217,8 @@ def _get_default_opts(fname, opts):
             opts.grg_tile_workers = 1
         if 'recalc_decadal' not in opts:
             opts.recalc_decadal = True
+        if 'recalc_grg_static' not in opts:
+            opts.recalc_grg_static = False
         if 'hourly' not in opts:
             opts.hourly = False
         if 'compare_to_ref' not in opts:
@@ -351,6 +353,7 @@ def check_type(key, value):
         'recalc_daily': bool,
         'decadal': bool,
         'recalc_decadal': bool,
+        'recalc_grg_static': bool,
         'decadal_only': bool,
         'parallel_workers': int,
         'grg_tile_workers': int,

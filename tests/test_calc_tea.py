@@ -110,6 +110,7 @@ class TestSubregionGrgStaticCoverage:
         import teametrics.calc_TEA as calc_tea_module
 
         tea, reference, _, cached_mask, cached_full_mask, cached_areas = self._grids()
+        cached_full_mask.attrs['source_region'] = 'SEA'
         monkeypatch.setattr(
             calc_tea_module,
             "_load_gr_grid_static",
@@ -122,7 +123,7 @@ class TestSubregionGrgStaticCoverage:
         )
 
         calc_tea_module._load_or_generate_gr_grid_static(
-            SimpleNamespace(grg_cell_size=2.0, recalc_decadal=False), tea
+            SimpleNamespace(grg_cell_size=2.0, recalc_decadal=False, region='SEA'), tea
         )
 
         assert tea.gr_grid_mask.sizes == reference.sizes
@@ -163,6 +164,36 @@ class TestSubregionGrgStaticCoverage:
         assert generated["called"]
         assert tea.gr_grid_mask_full.sel(lat=5.0, lon=10.0).item() == 0.5
         assert np.isnan(tea.gr_grid_mask_full.sel(lat=0.0, lon=0.0).item())
+
+    def test_legacy_cache_without_region_metadata_is_regenerated(self, monkeypatch):
+        import teametrics.calc_TEA as calc_tea_module
+
+        tea, _, region_mask, cached_mask, _, cached_areas = self._grids()
+        full_mask = region_mask.rename('mask_full')
+        tea.full_mask = full_mask
+        generated = []
+        saved = []
+
+        monkeypatch.setattr(
+            calc_tea_module, '_load_gr_grid_static',
+            lambda opts: (cached_mask, cached_areas, cached_mask.rename('mask_full')),
+        )
+
+        def generate():
+            generated.append(True)
+            tea.gr_grid_mask = cached_mask
+            tea.gr_grid_mask_full = cached_mask.rename('mask_full')
+            tea.gr_grid_areas = cached_areas
+
+        monkeypatch.setattr(tea, 'generate_gr_grid_mask', generate)
+        monkeypatch.setattr(calc_tea_module, '_save_grg_mask', lambda *args: saved.append(args))
+
+        opts = SimpleNamespace(grg_cell_size=2.0, recalc_decadal=False, region='SEA')
+        calc_tea_module._load_or_generate_gr_grid_static(opts, tea)
+
+        assert generated
+        assert saved
+        assert opts.recalc_decadal
 
     def test_shifted_projected_cache_regenerates_from_native_mask_lattice(self, monkeypatch):
         import teametrics.calc_TEA as calc_tea_module
