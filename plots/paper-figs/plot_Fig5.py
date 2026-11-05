@@ -6,6 +6,7 @@ Plot Figure 5
 import argparse
 import csv
 import logging
+import sys
 from pathlib import Path
 import matplotlib.pyplot as plt
 from matplotlib.ticker import FormatStrFormatter, FixedLocator
@@ -13,6 +14,10 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 import numpy as np
 from scipy.stats import gmean
 import xarray as xr
+
+# Ensure direct script execution uses this worktree's source tree.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT / 'src'))
 
 from teametrics.common.config import load_opts
 from teametrics.common.general_functions import ref_cc_params
@@ -504,10 +509,10 @@ def parse_args():
     parser.add_argument('--log-level', default='INFO',
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                         help='Logging verbosity (default: INFO).')
-    parser.add_argument('--major-borders', type=Path,
-                        help='Major-border shapefile (defaults to LAND_AT_.shp beside the configured shapefile).')
-    parser.add_argument('--minor-borders', type=Path,
-                        help='Minor/district-border shapefile (defaults to GEM_AT_.shp beside the configured shapefile).')
+    parser.add_argument('--major-borders', nargs='?', const=True, type=Path,
+                        help='Draw major borders (default LAND_AT_.shp); optionally specify a shapefile path.')
+    parser.add_argument('--minor-borders', nargs='?', const=True, type=Path,
+                        help='Draw minor/district borders (default GEM_AT_.shp); optionally specify a shapefile path.')
     parser.add_argument('--no-borders', action='store_true',
                         help='Do not draw shapefile boundaries.')
     return parser.parse_args()

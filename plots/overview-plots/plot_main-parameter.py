@@ -4,6 +4,7 @@ Plot main parameter (GR and CC map)
 """
 import argparse
 import logging
+import sys
 import matplotlib.pyplot as plt
 import pandas as pd
 from pathlib import Path
@@ -13,6 +14,10 @@ import numpy as np
 import os
 from scipy.stats import gmean
 import xarray as xr
+
+# Ensure direct script execution uses this worktree's source tree.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT / 'src'))
 
 from teametrics.common.config import load_opts
 from teametrics.common.map_boundaries import draw_austrian_boundaries, load_austrian_boundaries
@@ -36,10 +41,10 @@ def _getopts():
                         type=str,
                         default='../TEA_CFG.yaml',
                         help='TEA configuration file (default: TEA_CFG.yaml)')
-    parser.add_argument('--major-borders', type=Path,
-                        help='Major-border shapefile (defaults to LAND_AT_.shp beside the configured shapefile).')
-    parser.add_argument('--minor-borders', type=__import__('pathlib').Path,
-                        help='Minor/district-border shapefile (defaults to GEM_AT_.shp beside the configured shapefile).')
+    parser.add_argument('--major-borders', nargs='?', const=True, type=Path,
+                        help='Draw major borders (default LAND_AT_.shp); optionally specify a shapefile path.')
+    parser.add_argument('--minor-borders', nargs='?', const=True, type=Path,
+                        help='Draw minor/district borders (default GEM_AT_.shp); optionally specify a shapefile path.')
     parser.add_argument('--no-borders', action='store_true',
                         help='Do not draw shapefile boundaries.')
 
