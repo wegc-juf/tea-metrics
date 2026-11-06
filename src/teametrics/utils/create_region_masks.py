@@ -324,10 +324,23 @@ def _save_output(ds, opts, out_region=None):
     if out_region is None:
         out_region = opts.region
     outpath = Path(opts.maskpath) / opts.mask_sub / f'{out_region}_mask_{opts.dataset}_{opts.altitude_threshold}.nc'
+    if outpath.exists():
+        if getattr(opts, 'only_missing', False):
+            logger.info(f'Skipping existing mask (--only-missing): {outpath}')
+            return False
+        if not getattr(opts, 'overwrite', False):
+            try:
+                answer = input(f'Mask already exists: {outpath}\nOverwrite? [y/N] ').strip().lower()
+            except EOFError:
+                answer = ''
+            if answer not in {'y', 'yes'}:
+                logger.info(f'Keeping existing mask: {outpath}')
+                return False
     start = time.perf_counter()
     logger.info(f'Saving mask file to {outpath}')
     ds.to_netcdf(outpath)
     logger.info(f'Saved mask file in {time.perf_counter() - start:.2f}s')
+    return True
 
 
 def create_rectangular_gr(opts):
@@ -553,14 +566,27 @@ def run():
     logger.info(f'Starting create_region_masks for region {opts.region}, '
                 f'dataset {opts.dataset}, gr_type {opts.gr_type}')
     
-    if opts.gr_type != 'polygon':
-        create_rectangular_gr(opts=opts)
-    elif opts.region == 'SEA':
-        create_sea_mask(opts=opts)
-    elif opts.region in ['EUR', 'AFR', 'GLO']:
-        create_agr_mask(opts=opts)
-    else:
-        create_mask_file(opts)
+    def create_for_region(region):
+        original_region, original_subreg = opts.region, opts.subreg
+        opts.region = region
+        if original_subreg:
+            opts.subreg = region
+        try:
+            if opts.gr_type != 'polygon':
+                create_rectangular_gr(opts=opts)
+            elif region == 'SEA':
+                create_sea_mask(opts=opts)
+            elif region in ['EUR', 'AFR', 'GLO']:
+                create_agr_mask(opts=opts)
+            else:
+                create_mask_file(opts)
+        finally:
+            opts.region, opts.subreg = original_region, original_subreg
+
+    create_for_region(opts.region)
+    agr = getattr(opts, 'agr', None)
+    if agr and agr != opts.region:
+        create_for_region(agr)
 
     logger.info('create_region_masks completed successfully')
 

@@ -942,6 +942,11 @@ def _getopts():
                         default='INFO',
                         help='set logging level (default: INFO)')
 
+    parser.add_argument('--only-missing', action='store_true',
+                        help='only create masks whose output files do not exist')
+    parser.add_argument('--overwrite', action='store_true',
+                        help='overwrite existing masks without asking for confirmation')
+
     myopts = parser.parse_args()
     
     return myopts
