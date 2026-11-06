@@ -39,12 +39,11 @@ create_region_masks:
   <<: *TIME
   <<: *GENERAL
   gr_type: polygon
-  subreg: true
   mask_parallel_workers: 32
   target_sys: 4326
   xy_name: lon,lat
-  #shpfile: /data/arsclisys/backup/clim-hydro/TEA-Indicators/shapefiles/AUSTRIA.shp
-  shpfile: /data/arsclisys/backup/clim-hydro/TEA-Indicators/shapefiles/SARext_shape.shp
+  shpfile: /data/arsclisys/backup/clim-hydro/TEA-Indicators/shapefiles/AUSTRIA.shp
+  agr_shpfile: /data/arsclisys/backup/clim-hydro/TEA-Indicators/shapefiles/AUSTRIA.shp
   orofile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/ERA5_orography.nc
   lsmfile: /data/arsclisys/normal/clim-hydro/TEA-Indicators/ERA5/EUR/ERA5_LSM.nc
   outpath: /data/arsclisys/normal/clim-hydro/TEA-Indicators/static/masks/
