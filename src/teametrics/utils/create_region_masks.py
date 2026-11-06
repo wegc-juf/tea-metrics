@@ -36,18 +36,17 @@ def _load_shp(opts):
     logger.info(f'Loading shape file {opts.shpfile}')
     shp = gpd.read_file(opts.shpfile)
 
-    if opts.subreg:
-        try:
-            shp = shp[(shp.CNTR_ID == opts.region)]
-        except AttributeError:
-            try:
-                shp = shp[(shp.LAND_NAME == opts.region)]
-            except AttributeError:
-                raise AttributeError('The given shape file has neither CNTR_ID nor '
-                                     'LAND_NAME information.')
-        if shp.empty:
+    # Infer whether this is a multi-region shapefile from its identifying
+    # attributes instead of requiring users to set the legacy `subreg` flag.
+    region_columns = [column for column in ('CNTR_ID', 'LAND_NAME') if column in shp.columns]
+    if region_columns:
+        matching = next((shp[shp[column] == opts.region]
+                         for column in region_columns
+                         if not shp[shp[column] == opts.region].empty), None)
+        if matching is None:
             raise ValueError(f'No shape feature found for region {opts.region!r} '
-                             f'in {opts.shpfile!r}.')
+                             f'in {opts.shpfile!r} (checked {", ".join(region_columns)}).')
+        shp = matching
 
     # Transfer it to the wanted coordinate system
     shp = shp.to_crs(epsg=opts.target_sys)
