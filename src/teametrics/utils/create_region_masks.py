@@ -327,7 +327,8 @@ def _save_output(ds, opts, out_region=None):
         if getattr(opts, 'only_missing', False):
             logger.info(f'Skipping existing mask (--only-missing): {outpath}')
             return False
-        if not getattr(opts, 'overwrite', False):
+        approved = getattr(opts, '_approved_output_path', None) == outpath
+        if not approved and not getattr(opts, 'overwrite', False):
             try:
                 answer = input(f'Mask already exists: {outpath}\nOverwrite? [y/N] ').strip().lower()
             except EOFError:
@@ -339,6 +340,51 @@ def _save_output(ds, opts, out_region=None):
     logger.info(f'Saving mask file to {outpath}')
     ds.to_netcdf(outpath)
     logger.info(f'Saved mask file in {time.perf_counter() - start:.2f}s')
+    return True
+
+
+def _rectangular_corners(opts):
+    """Return southwest and northeast corners from the configured geometry."""
+    if opts.gr_type == 'corners':
+        sw = [float(value) for value in opts.sw_corner.split(',')]
+        ne = [float(value) for value in opts.ne_corner.split(',')]
+    elif opts.gr_type == 'center':
+        center = [float(value) for value in opts.center.split(',')]
+        sw = [center[0] - float(opts.we_len) / 2,
+              center[1] - float(opts.ns_len) / 2]
+        ne = [center[0] + float(opts.we_len) / 2,
+              center[1] + float(opts.ns_len) / 2]
+    else:
+        raise ValueError('gr_type must be either "polygon", "corners", or "center".')
+    return sw, ne
+
+
+def _rectangular_out_region(opts):
+    """Return the output token for the configured rectangular geometry."""
+    sw, ne = _rectangular_corners(opts)
+    return f'SW_{sw[0]:.1f}_{sw[1]:.1f}-NE_{ne[0]:.1f}_{ne[1]:.1f}'
+
+
+def _prepare_output(opts, out_region):
+    """Decide whether to generate a mask before doing any mask calculations."""
+    outpath = Path(opts.maskpath) / opts.mask_sub / f'{out_region}_mask_{opts.dataset}_{opts.altitude_threshold}.nc'
+    opts._approved_output_path = None
+    if not outpath.exists():
+        return True
+    if getattr(opts, 'only_missing', False):
+        logger.info(f'Skipping existing mask (--only-missing): {outpath}')
+        return False
+    if getattr(opts, 'overwrite', False):
+        opts._approved_output_path = outpath
+        return True
+    try:
+        answer = input(f'Mask already exists: {outpath}\nOverwrite? [y/N] ').strip().lower()
+    except EOFError:
+        answer = ''
+    if answer not in {'y', 'yes'}:
+        logger.info(f'Keeping existing mask: {outpath}')
+        return False
+    opts._approved_output_path = outpath
     return True
 
 
@@ -362,19 +408,7 @@ def create_rectangular_gr(opts):
     dx = template_file[x][1] - template_file[x][0]
     dy = abs(template_file[y][1] - template_file[y][0])
 
-    # get corners from CFG file
-    if opts.gr_type == 'corners':
-        sw_coords = opts.sw_corner.split(',')
-        ne_coords = opts.ne_corner.split(',')
-        sw_coords = [float(ii) for ii in sw_coords]
-        ne_coords = [float(ii) for ii in ne_coords]
-    elif opts.gr_type == 'center':
-        center_coords = opts.center.split(',')
-        center_coords = [float(ii) for ii in center_coords]
-        sw_coords = [center_coords[0] - float(opts.we_len) / 2, center_coords[1] - float(opts.ns_len) / 2]
-        ne_coords = [center_coords[0] + float(opts.we_len) / 2, center_coords[1] + float(opts.ns_len) / 2]
-    else:
-        raise ValueError('gr_type must be either "polygon", "corners", or "center".')
+    sw_coords, ne_coords = _rectangular_corners(opts)
 
     if 'ERA5' in opts.dataset:
         yidxn, yidxx = -1, 0
@@ -454,7 +488,7 @@ def create_rectangular_gr(opts):
 
     create_history_from_cfg(cfg_params=opts, ds=ds_mask)
 
-    out_region = f'SW_{xn:.1f}_{yn:.1f}-NE_{xx:.1f}_{yx:.1f}'
+    out_region = _rectangular_out_region(opts)
     logger.info(f'Created rectangular mask in {time.perf_counter() - start:.2f}s')
     _save_output(ds_mask, opts, out_region)
 
@@ -573,6 +607,10 @@ def run():
         if original_subreg:
             opts.subreg = region
         try:
+            out_region = (_rectangular_out_region(opts) if opts.gr_type != 'polygon'
+                          else region)
+            if not _prepare_output(opts, out_region):
+                return
             if opts.gr_type != 'polygon':
                 create_rectangular_gr(opts=opts)
             elif region == 'SEA':
