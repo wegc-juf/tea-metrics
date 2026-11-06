@@ -567,8 +567,10 @@ def run():
                 f'dataset {opts.dataset}, gr_type {opts.gr_type}')
     
     def create_for_region(region):
-        original_region, original_subreg = opts.region, opts.subreg
+        original_region, original_subreg, original_shpfile = opts.region, opts.subreg, opts.shpfile
         opts.region = region
+        if region == getattr(opts, 'agr', None) and region != original_region:
+            opts.shpfile = getattr(opts, 'agr_shpfile', None) or original_shpfile
         if original_subreg:
             opts.subreg = region
         try:
@@ -581,7 +583,7 @@ def run():
             else:
                 create_mask_file(opts)
         finally:
-            opts.region, opts.subreg = original_region, original_subreg
+            opts.region, opts.subreg, opts.shpfile = original_region, original_subreg, original_shpfile
 
     create_for_region(opts.region)
     agr = getattr(opts, 'agr', None)
