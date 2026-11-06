@@ -36,18 +36,17 @@ def _load_shp(opts):
     logger.info(f'Loading shape file {opts.shpfile}')
     shp = gpd.read_file(opts.shpfile)
 
-    if opts.subreg:
-        try:
-            shp = shp[(shp.CNTR_ID == opts.region)]
-        except AttributeError:
-            try:
-                shp = shp[(shp.LAND_NAME == opts.region)]
-            except AttributeError:
-                raise AttributeError('The given shape file has neither CNTR_ID nor '
-                                     'LAND_NAME information.')
-        if shp.empty:
+    # Infer whether this is a multi-region shapefile from its identifying
+    # attributes instead of requiring users to set the legacy `subreg` flag.
+    region_columns = [column for column in ('CNTR_ID', 'LAND_NAME') if column in shp.columns]
+    if region_columns:
+        matching = next((shp[shp[column] == opts.region]
+                         for column in region_columns
+                         if not shp[shp[column] == opts.region].empty), None)
+        if matching is None:
             raise ValueError(f'No shape feature found for region {opts.region!r} '
-                             f'in {opts.shpfile!r}.')
+                             f'in {opts.shpfile!r} (checked {", ".join(region_columns)}).')
+        shp = matching
 
     # Transfer it to the wanted coordinate system
     shp = shp.to_crs(epsg=opts.target_sys)
@@ -324,10 +323,69 @@ def _save_output(ds, opts, out_region=None):
     if out_region is None:
         out_region = opts.region
     outpath = Path(opts.maskpath) / opts.mask_sub / f'{out_region}_mask_{opts.dataset}_{opts.altitude_threshold}.nc'
+    if outpath.exists():
+        if getattr(opts, 'only_missing', False):
+            logger.info(f'Skipping existing mask (--only-missing): {outpath}')
+            return False
+        approved = getattr(opts, '_approved_output_path', None) == outpath
+        if not approved and not getattr(opts, 'overwrite', False):
+            try:
+                answer = input(f'Mask already exists: {outpath}\nOverwrite? [y/N] ').strip().lower()
+            except EOFError:
+                answer = ''
+            if answer not in {'y', 'yes'}:
+                logger.info(f'Keeping existing mask: {outpath}')
+                return False
     start = time.perf_counter()
     logger.info(f'Saving mask file to {outpath}')
     ds.to_netcdf(outpath)
     logger.info(f'Saved mask file in {time.perf_counter() - start:.2f}s')
+    return True
+
+
+def _rectangular_corners(opts):
+    """Return southwest and northeast corners from the configured geometry."""
+    if opts.gr_type == 'corners':
+        sw = [float(value) for value in opts.sw_corner.split(',')]
+        ne = [float(value) for value in opts.ne_corner.split(',')]
+    elif opts.gr_type == 'center':
+        center = [float(value) for value in opts.center.split(',')]
+        sw = [center[0] - float(opts.we_len) / 2,
+              center[1] - float(opts.ns_len) / 2]
+        ne = [center[0] + float(opts.we_len) / 2,
+              center[1] + float(opts.ns_len) / 2]
+    else:
+        raise ValueError('gr_type must be either "polygon", "corners", or "center".')
+    return sw, ne
+
+
+def _rectangular_out_region(opts):
+    """Return the output token for the configured rectangular geometry."""
+    sw, ne = _rectangular_corners(opts)
+    return f'SW_{sw[0]:.1f}_{sw[1]:.1f}-NE_{ne[0]:.1f}_{ne[1]:.1f}'
+
+
+def _prepare_output(opts, out_region):
+    """Decide whether to generate a mask before doing any mask calculations."""
+    outpath = Path(opts.maskpath) / opts.mask_sub / f'{out_region}_mask_{opts.dataset}_{opts.altitude_threshold}.nc'
+    opts._approved_output_path = None
+    if not outpath.exists():
+        return True
+    if getattr(opts, 'only_missing', False):
+        logger.info(f'Skipping existing mask (--only-missing): {outpath}')
+        return False
+    if getattr(opts, 'overwrite', False):
+        opts._approved_output_path = outpath
+        return True
+    try:
+        answer = input(f'Mask already exists: {outpath}\nOverwrite? [y/N] ').strip().lower()
+    except EOFError:
+        answer = ''
+    if answer not in {'y', 'yes'}:
+        logger.info(f'Keeping existing mask: {outpath}')
+        return False
+    opts._approved_output_path = outpath
+    return True
 
 
 def create_rectangular_gr(opts):
@@ -350,19 +408,7 @@ def create_rectangular_gr(opts):
     dx = template_file[x][1] - template_file[x][0]
     dy = abs(template_file[y][1] - template_file[y][0])
 
-    # get corners from CFG file
-    if opts.gr_type == 'corners':
-        sw_coords = opts.sw_corner.split(',')
-        ne_coords = opts.ne_corner.split(',')
-        sw_coords = [float(ii) for ii in sw_coords]
-        ne_coords = [float(ii) for ii in ne_coords]
-    elif opts.gr_type == 'center':
-        center_coords = opts.center.split(',')
-        center_coords = [float(ii) for ii in center_coords]
-        sw_coords = [center_coords[0] - float(opts.we_len) / 2, center_coords[1] - float(opts.ns_len) / 2]
-        ne_coords = [center_coords[0] + float(opts.we_len) / 2, center_coords[1] + float(opts.ns_len) / 2]
-    else:
-        raise ValueError('gr_type must be either "polygon", "corners", or "center".')
+    sw_coords, ne_coords = _rectangular_corners(opts)
 
     if 'ERA5' in opts.dataset:
         yidxn, yidxx = -1, 0
@@ -442,7 +488,7 @@ def create_rectangular_gr(opts):
 
     create_history_from_cfg(cfg_params=opts, ds=ds_mask)
 
-    out_region = f'SW_{xn:.1f}_{yn:.1f}-NE_{xx:.1f}_{yx:.1f}'
+    out_region = _rectangular_out_region(opts)
     logger.info(f'Created rectangular mask in {time.perf_counter() - start:.2f}s')
     _save_output(ds_mask, opts, out_region)
 
@@ -553,14 +599,33 @@ def run():
     logger.info(f'Starting create_region_masks for region {opts.region}, '
                 f'dataset {opts.dataset}, gr_type {opts.gr_type}')
     
-    if opts.gr_type != 'polygon':
-        create_rectangular_gr(opts=opts)
-    elif opts.region == 'SEA':
-        create_sea_mask(opts=opts)
-    elif opts.region in ['EUR', 'AFR', 'GLO']:
-        create_agr_mask(opts=opts)
-    else:
-        create_mask_file(opts)
+    def create_for_region(region):
+        original_region, original_subreg, original_shpfile = opts.region, opts.subreg, opts.shpfile
+        opts.region = region
+        if region == getattr(opts, 'agr', None) and region != original_region:
+            opts.shpfile = getattr(opts, 'agr_shpfile', None) or original_shpfile
+        if original_subreg:
+            opts.subreg = region
+        try:
+            out_region = (_rectangular_out_region(opts) if opts.gr_type != 'polygon'
+                          else region)
+            if not _prepare_output(opts, out_region):
+                return
+            if opts.gr_type != 'polygon':
+                create_rectangular_gr(opts=opts)
+            elif region == 'SEA':
+                create_sea_mask(opts=opts)
+            elif region in ['EUR', 'AFR', 'GLO']:
+                create_agr_mask(opts=opts)
+            else:
+                create_mask_file(opts)
+        finally:
+            opts.region, opts.subreg, opts.shpfile = original_region, original_subreg, original_shpfile
+
+    create_for_region(opts.region)
+    agr = getattr(opts, 'agr', None)
+    if agr and agr != opts.region:
+        create_for_region(agr)
 
     logger.info('create_region_masks completed successfully')
 

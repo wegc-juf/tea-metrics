@@ -373,6 +373,7 @@ def check_type(key, value):
         'target_sys': int,
         'xy_name': str,
         'shpfile': 'path',
+        'agr_shpfile': 'path',
         'orofile': 'path',
         'altitude_threshold': int,
         'calculate_area': bool,

@@ -52,6 +52,23 @@ def test_load_shp_rejects_missing_subregion(monkeypatch, column):
         masks._load_shp(opts)
 
 
+def test_load_shp_infers_subregion_from_available_attributes(monkeypatch):
+    opts = _opts()
+    opts.subreg = False
+    opts.shpfile = 'regions.shp'
+    shape = gpd.GeoDataFrame(
+        {'CNTR_ID': ['AUT', 'DEU'], 'geometry': [box(0, 0, 1, 1), box(1, 0, 2, 1)]},
+        crs='EPSG:4326',
+    )
+    opts.region = 'DEU'
+    monkeypatch.setattr(masks.gpd, 'read_file', lambda _: shape)
+
+    result = masks._load_shp(opts)
+
+    assert len(result) == 1
+    assert result.iloc[0].CNTR_ID == 'DEU'
+
+
 def test_create_mask_file_includes_last_row_and_column(monkeypatch):
     opts = _opts()
     template = xr.Dataset(coords={'lon': [0.0, 1.0, 2.0], 'lat': [0.0, 1.0, 2.0]})
